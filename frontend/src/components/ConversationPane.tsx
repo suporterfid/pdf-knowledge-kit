@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import MarkdownIt from 'markdown-it';
 import DOMPurify from 'dompurify';
 import { Message } from '../chat';
@@ -10,8 +10,30 @@ interface Props {
 }
 
 export default function ConversationPane({ messages }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const atBottom =
+        el.scrollTop + el.clientHeight >= el.scrollHeight - 10;
+      setAutoScroll(atBottom);
+    };
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (autoScroll) {
+      const el = containerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+  }, [messages, autoScroll]);
+
   return (
-    <div className="conversation">
+    <div className="conversation" ref={containerRef}>
       {messages.map((m, i) => (
         <div key={i} className={`msg ${m.role}`}>
           <div
@@ -19,6 +41,9 @@ export default function ConversationPane({ messages }: Props) {
               __html: DOMPurify.sanitize(md.render(m.content)),
             }}
           />
+          {m.status === 'streaming' && (
+            <div className="typing-indicator">Digitando...</div>
+          )}
         </div>
       ))}
     </div>
