@@ -1,0 +1,46 @@
+:root {
+  --brand-bg: #ffffff;
+  --brand-fg: #000000;
+  --brand-accent: #007bff;
+}
+
+body {
+  margin: 0;
+  background-color: var(--brand-bg);
+  color: var(--brand-fg);
+  font-family: sans-serif;
+}
+
+header,
+footer {
+  background-color: var(--brand-accent);
+  color: var(--brand-bg);
+  padding: 1rem;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+header img.logo {
+  height: 40px;
+}
+
+button {
+  background-color: var(--brand-accent);
+  color: var(--brand-bg);
+  border: none;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+.composer textarea {
+  background-color: var(--brand-bg);
+  color: var(--brand-fg);
+}
+
+a {
+  color: var(--brand-accent);
+}

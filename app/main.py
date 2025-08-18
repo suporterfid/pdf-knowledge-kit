@@ -55,6 +55,17 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/api/config")
+async def config():
+    return {
+        "BRAND_NAME": os.getenv("BRAND_NAME", "PDF Knowledge Kit"),
+        "POWERED_BY_LABEL": os.getenv(
+            "POWERED_BY_LABEL", "Powered by PDF Knowledge Kit"
+        ),
+        "LOGO_URL": os.getenv("LOGO_URL", ""),
+    }
+
+
 @app.post("/api/upload")
 async def upload(
     background_tasks: BackgroundTasks, file: UploadFile = File(...)
