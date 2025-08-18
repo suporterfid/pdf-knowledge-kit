@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 
 interface Props {
   onSend: (text: string, file?: File | null) => void;
+  onCancel: () => void;
+  isStreaming: boolean;
 }
 
-export default function Composer({ onSend }: Props) {
+export default function Composer({ onSend, onCancel, isStreaming }: Props) {
   const [input, setInput] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
@@ -36,7 +38,13 @@ export default function Composer({ onSend }: Props) {
           </button>
         </div>
       )}
-      <button type="submit">Enviar</button>
+      {!isStreaming ? (
+        <button type="submit">Enviar</button>
+      ) : (
+        <button type="button" onClick={onCancel}>
+          Cancelar
+        </button>
+      )}
     </form>
   );
 }

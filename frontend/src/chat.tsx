@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -12,6 +18,9 @@ interface ChatContextValue {
   sessionId: string;
   isStreaming: boolean;
   send: (text: string, file?: File | null) => void;
+  cancel: () => void;
+  error: string | null;
+  clearError: () => void;
 }
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
@@ -24,6 +33,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [notices, setNotices] = useState<any>(null);
   const [sessionId, setSessionId] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let id = localStorage.getItem('sessionId');
@@ -68,9 +79,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         }
       }
       formData.append('attachments', JSON.stringify(attachments));
+      controllerRef.current = new AbortController();
       const res = await fetch('/api/chat', {
         method: 'POST',
         body: formData,
+        signal: controllerRef.current.signal,
       });
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
@@ -111,16 +124,57 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               updated[updated.length - 1] = { ...last, status: 'done' };
               return updated;
             });
+            controllerRef.current = null;
           }
         }
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        setError('Falha de rede ou timeout');
+        setMessages((msgs) => {
+          const updated = [...msgs];
+          const last = updated[updated.length - 1];
+          if (last && last.status === 'streaming') {
+            updated[updated.length - 1] = { ...last, status: 'done' };
+          }
+          return updated;
+        });
+      }
       setIsStreaming(false);
+      controllerRef.current = null;
     }
   };
 
+  const cancel = () => {
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+    }
+    setIsStreaming(false);
+    setMessages((msgs) => {
+      const updated = [...msgs];
+      const last = updated[updated.length - 1];
+      if (last && last.status === 'streaming') {
+        updated[updated.length - 1] = { ...last, status: 'done' };
+      }
+      return updated;
+    });
+  };
+
+  const clearError = () => setError(null);
+
   return (
-    <ChatContext.Provider value={{ messages, notices, sessionId, isStreaming, send }}>
+    <ChatContext.Provider
+      value={{
+        messages,
+        notices,
+        sessionId,
+        isStreaming,
+        send,
+        cancel,
+        error,
+        clearError,
+      }}
+    >
       {children}
     </ChatContext.Provider>
   );
