@@ -33,9 +33,18 @@ export default function ConversationPane({ messages }: Props) {
   }, [messages, autoScroll]);
 
   return (
-    <div className="conversation" ref={containerRef}>
+    <div className="conversation" ref={containerRef} role="list">
       {messages.map((m, i) => (
-        <div key={i} className={`msg ${m.role}`}>
+        <div
+          key={i}
+          className={`msg ${m.role}`}
+          role="listitem"
+          aria-live={
+            m.role === 'assistant' && m.status === 'streaming'
+              ? 'polite'
+              : undefined
+          }
+        >
           <div
             dangerouslySetInnerHTML={{
               __html: DOMPurify.sanitize(md.render(m.content)),
