@@ -83,24 +83,26 @@ async def ask(req: AskRequest):
 async def chat(
     q: str = Form(...),
     k: int = Form(5),
-    attachments: List[UploadFile] = File([]),
+    attachments: str = Form("[]"),
+    files: List[UploadFile] = File([]),
 ):
-    return await chat_stream(q, k, attachments)
+    return await chat_stream(q, k, files, json.loads(attachments))
 
 
 @app.get("/api/chat")
 async def chat_get(q: str, k: int = 5):
-    return await chat_stream(q, k, [])
+    return await chat_stream(q, k, [], [])
 
 
 async def chat_stream(
     q: str,
     k: int,
-    attachments: List[UploadFile],
+    files: List[UploadFile],
+    attachments_meta: List[Dict],
 ):
     attachment_texts: List[str] = []
     attachment_sources: List[Dict] = []
-    for f in attachments:
+    for f in files:
         if f.content_type != "application/pdf":
             continue
         data = await f.read()
@@ -115,6 +117,28 @@ async def chat_stream(
                 "distance": None,
             }
         )
+
+    for item in attachments_meta:
+        url = item.get("url")
+        name = item.get("name", url)
+        if not url:
+            continue
+        file_path = os.path.join(UPLOAD_DIR, os.path.basename(url))
+        try:
+            with open(file_path, "rb") as f:
+                reader = PdfReader(f)
+                text = "".join(page.extract_text() or "" for page in reader.pages)
+            attachment_texts.append(text)
+            attachment_sources.append(
+                {
+                    "path": name,
+                    "chunk_index": None,
+                    "content": text,
+                    "distance": None,
+                }
+            )
+        except OSError:
+            continue
     attachment_context = "\n\n".join(attachment_texts)
     combined_q = q if not attachment_context else f"{q}\n\n{attachment_context}"
 
