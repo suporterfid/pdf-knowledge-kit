@@ -1,7 +1,7 @@
 import React from 'react';
 import MarkdownIt from 'markdown-it';
 import DOMPurify from 'dompurify';
-import { Message } from '../App';
+import { Message } from '../chat';
 
 const md = new MarkdownIt();
 
