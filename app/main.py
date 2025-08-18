@@ -4,28 +4,20 @@ from sse_starlette.sse import EventSourceResponse
 import os
 import json
 from dotenv import load_dotenv
-import psycopg
-from pgvector.psycopg import register_vector
-from fastembed import TextEmbedding
+from typing import Dict
+
+from .rag import build_context
+
+try:
+    from openai import OpenAI
+except Exception:  # pragma: no cover - openai optional
+    OpenAI = None  # type: ignore
 
 load_dotenv()
 
 app = FastAPI()
 
-embedder = TextEmbedding(model_name="intfloat/multilingual-e5-small")
-
-
-def get_conn():
-    dsn = (
-        f"host={os.getenv('PGHOST','localhost')} "
-        f"port={os.getenv('PGPORT','5432')} "
-        f"dbname={os.getenv('PGDATABASE','pdfkb')} "
-        f"user={os.getenv('PGUSER','pdfkb')} "
-        f"password={os.getenv('PGPASSWORD','pdfkb')}"
-    )
-    conn = psycopg.connect(dsn)
-    register_vector(conn)
-    return conn
+client = OpenAI() if (OpenAI and os.getenv("OPENAI_API_KEY")) else None
 
 
 class AskRequest(BaseModel):
@@ -45,29 +37,7 @@ async def health():
 
 @app.post("/api/ask")
 async def ask(req: AskRequest):
-    conn = get_conn()
-    qvec = list(embedder.embed([f"query: {req.q}"]))[0]
-    sql = """
-    SELECT d.path, c.chunk_index, c.content, (c.embedding <-> %s) AS distance
-    FROM chunks c
-    JOIN documents d ON d.id = c.doc_id
-    WHERE c.embedding IS NOT NULL
-    ORDER BY c.embedding <-> %s
-    LIMIT %s;
-    """
-    with conn.cursor() as cur:
-        cur.execute(sql, (qvec, qvec, req.k))
-        rows = cur.fetchall()
-    conn.close()
-    results = [
-        {
-            "path": path,
-            "chunk_index": idx,
-            "content": content,
-            "distance": dist,
-        }
-        for path, idx, content, dist in rows
-    ]
+    _, results = build_context(req.q, req.k)
     return {"results": results}
 
 
@@ -80,34 +50,60 @@ class ChatRequest(BaseModel):
 async def chat(req: ChatRequest):
     async def event_gen():
         try:
-            conn = get_conn()
-            qvec = list(embedder.embed([f"query: {req.q}"]))[0]
-            sql = """
-            SELECT d.path, c.chunk_index, c.content, (c.embedding <-> %s) AS distance
-            FROM chunks c
-            JOIN documents d ON d.id = c.doc_id
-            WHERE c.embedding IS NOT NULL
-            ORDER BY c.embedding <-> %s
-            LIMIT %s;
-            """
-            with conn.cursor() as cur:
-                cur.execute(sql, (qvec, qvec, req.k))
-                rows = cur.fetchall()
-            conn.close()
-            sources = [
-                {
-                    "path": path,
-                    "chunk_index": idx,
-                    "content": content,
-                    "distance": dist,
+            context, sources = build_context(req.q, req.k)
+            usage: Dict = {}
+            if client:
+                try:
+                    completion = client.chat.completions.create(
+                        model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "Responda à pergunta com base no contexto fornecido.",
+                            },
+                            {
+                                "role": "user",
+                                "content": f"Contexto:\n{context}\n\nPergunta:\n{req.q}",
+                            },
+                        ],
+                        stream=True,
+                    )
+                    for chunk in completion:
+                        if chunk.choices:
+                            delta = chunk.choices[0].delta
+                            token = getattr(delta, "content", None)
+                            if token:
+                                yield {"event": "token", "data": token}
+                        if getattr(chunk, "usage", None):
+                            u = chunk.usage
+                            usage = {
+                                "prompt_tokens": u.prompt_tokens,
+                                "completion_tokens": u.completion_tokens,
+                                "total_tokens": u.total_tokens,
+                            }
+                except Exception:
+                    answer = context or f"Você perguntou: {req.q}"
+                    for token in answer.split():
+                        yield {"event": "token", "data": token}
+                    n = len(answer.split())
+                    usage = {
+                        "prompt_tokens": 0,
+                        "completion_tokens": n,
+                        "total_tokens": n,
+                    }
+            else:
+                answer = context or f"Você perguntou: {req.q}"
+                for token in answer.split():
+                    yield {"event": "token", "data": token}
+                n = len(answer.split())
+                usage = {
+                    "prompt_tokens": 0,
+                    "completion_tokens": n,
+                    "total_tokens": n,
                 }
-                for path, idx, content, dist in rows
-            ]
-            answer = f"Você perguntou: {req.q}"
-            for token in answer.split():
-                yield {"event": "token", "data": token}
             yield {"event": "sources", "data": json.dumps(sources)}
-            yield {"event": "done", "data": ""}
+            yield {"event": "done", "data": json.dumps({"usage": usage})}
         except Exception as e:
             yield {"event": "error", "data": str(e)}
+
     return EventSourceResponse(event_gen())

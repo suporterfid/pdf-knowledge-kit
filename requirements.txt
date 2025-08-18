@@ -6,3 +6,4 @@ fastembed>=0.3.3
 tqdm>=4.66
 fastapi>=0.110
 sse-starlette>=1.6
+openai>=1.0
