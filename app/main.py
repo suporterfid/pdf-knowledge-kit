@@ -1,4 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi.staticfiles import StaticFiles
+from uuid import uuid4
+import asyncio
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 import os
@@ -15,9 +18,25 @@ except Exception:  # pragma: no cover - openai optional
 
 load_dotenv()
 
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "tmp/uploads")
+UPLOAD_TTL = int(os.getenv("UPLOAD_TTL", "3600"))
+UPLOAD_MAX_SIZE = int(os.getenv("UPLOAD_MAX_SIZE", str(5 * 1024 * 1024)))
+UPLOAD_ALLOWED_MIME_TYPES = os.getenv("UPLOAD_ALLOWED_MIME_TYPES", "application/pdf").split(",")
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 app = FastAPI()
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 client = OpenAI() if (OpenAI and os.getenv("OPENAI_API_KEY")) else None
+
+
+async def remove_file_after_ttl(path: str, ttl: int) -> None:
+    await asyncio.sleep(ttl)
+    try:
+        os.remove(path)
+    except OSError:
+        pass
 
 
 class AskRequest(BaseModel):
@@ -33,6 +52,24 @@ async def root():
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.post("/api/upload")
+async def upload(
+    background_tasks: BackgroundTasks, file: UploadFile = File(...)
+):
+    if file.content_type not in UPLOAD_ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+    contents = await file.read()
+    if len(contents) > UPLOAD_MAX_SIZE:
+        raise HTTPException(status_code=400, detail="File too large")
+    filename = f"{uuid4().hex}-{file.filename}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    with open(file_path, "wb") as f:
+        f.write(contents)
+    background_tasks.add_task(remove_file_after_ttl, file_path, UPLOAD_TTL)
+    url = f"/uploads/{filename}"
+    return {"url": url}
 
 
 @app.post("/api/ask")
