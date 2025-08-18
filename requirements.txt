@@ -4,3 +4,5 @@ pypdf>=4.2
 python-dotenv>=1.0
 fastembed>=0.3.3
 tqdm>=4.66
+fastapi>=0.110
+sse-starlette>=1.6
