@@ -1,0 +1,6 @@
+example.com {
+    reverse_proxy app:8000
+    header {
+        Cache-Control "no-transform"
+    }
+}
