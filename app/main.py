@@ -29,6 +29,11 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI()
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+app.mount(
+    "/",
+    StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static"), html=True),
+    name="static",
+)
 
 client = OpenAI() if (OpenAI and os.getenv("OPENAI_API_KEY")) else None
 
@@ -44,12 +49,6 @@ async def remove_file_after_ttl(path: str, ttl: int) -> None:
 class AskRequest(BaseModel):
     q: str
     k: int = 5
-
-
-@app.get("/")
-async def root():
-    return {"message": "PDF Knowledge Kit API"}
-
 
 @app.get("/api/health")
 async def health():
@@ -85,6 +84,19 @@ async def chat(
     q: str = Form(...),
     k: int = Form(5),
     attachments: List[UploadFile] = File([]),
+):
+    return await chat_stream(q, k, attachments)
+
+
+@app.get("/api/chat")
+async def chat_get(q: str, k: int = 5):
+    return await chat_stream(q, k, [])
+
+
+async def chat_stream(
+    q: str,
+    k: int,
+    attachments: List[UploadFile],
 ):
     attachment_texts: List[str] = []
     attachment_sources: List[Dict] = []
