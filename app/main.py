@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Form
 from fastapi.staticfiles import StaticFiles
 from uuid import uuid4
 import asyncio
@@ -7,7 +7,9 @@ from sse_starlette.sse import EventSourceResponse
 import os
 import json
 from dotenv import load_dotenv
-from typing import Dict
+from typing import Dict, List
+from io import BytesIO
+from pypdf import PdfReader
 
 from .rag import build_context
 
@@ -78,16 +80,40 @@ async def ask(req: AskRequest):
     return {"results": results}
 
 
-class ChatRequest(BaseModel):
-    q: str
-    k: int = 5
-
-
 @app.post("/api/chat")
-async def chat(req: ChatRequest):
+async def chat(
+    q: str = Form(...),
+    k: int = Form(5),
+    attachments: List[UploadFile] = File([]),
+):
+    attachment_texts: List[str] = []
+    attachment_sources: List[Dict] = []
+    for f in attachments:
+        if f.content_type != "application/pdf":
+            continue
+        data = await f.read()
+        reader = PdfReader(BytesIO(data))
+        text = "".join(page.extract_text() or "" for page in reader.pages)
+        attachment_texts.append(text)
+        attachment_sources.append(
+            {
+                "path": f.filename,
+                "chunk_index": None,
+                "content": text,
+                "distance": None,
+            }
+        )
+    attachment_context = "\n\n".join(attachment_texts)
+    combined_q = q if not attachment_context else f"{q}\n\n{attachment_context}"
+
     async def event_gen():
         try:
-            context, sources = build_context(req.q, req.k)
+            context_db, sources = build_context(combined_q, k)
+            if attachment_context:
+                context = attachment_context + ("\n\n" + context_db if context_db else "")
+                sources = attachment_sources + sources
+            else:
+                context = context_db
             usage: Dict = {}
             if client:
                 try:
@@ -100,7 +126,7 @@ async def chat(req: ChatRequest):
                             },
                             {
                                 "role": "user",
-                                "content": f"Contexto:\n{context}\n\nPergunta:\n{req.q}",
+                                "content": f"Contexto:\n{context}\n\nPergunta:\n{q}",
                             },
                         ],
                         stream=True,
@@ -119,7 +145,7 @@ async def chat(req: ChatRequest):
                                 "total_tokens": u.total_tokens,
                             }
                 except Exception:
-                    answer = context or f"Você perguntou: {req.q}"
+                    answer = context or f"Você perguntou: {q}"
                     for token in answer.split():
                         yield {"event": "token", "data": token}
                     n = len(answer.split())
@@ -129,7 +155,7 @@ async def chat(req: ChatRequest):
                         "total_tokens": n,
                     }
             else:
-                answer = context or f"Você perguntou: {req.q}"
+                answer = context or f"Você perguntou: {q}"
                 for token in answer.split():
                     yield {"event": "token", "data": token}
                 n = len(answer.split())
