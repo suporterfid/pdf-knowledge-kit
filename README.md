@@ -16,6 +16,7 @@ Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** e **Markd
 ## Requisitos
 - **Docker** + **Docker Compose** (para o Postgres com pgvector).
 - **Python 3.10+** com `pip`.
+- *(Opcional p/ OCR)* `tesseract-ocr`, pacotes de idioma (`tesseract-ocr-por`, `tesseract-ocr-eng`, etc.) e `poppler-utils`.
 
 ## Passo a passo (rápido)
 ```bash
@@ -117,6 +118,36 @@ Copie `.env.example` para `.env` e ajuste conforme necessário:
 - **CORS_ALLOW_ORIGINS**, **BRAND_NAME**, **POWERED_BY_LABEL**, **LOGO_URL** – personalização da UI.
 - **ENABLE_OCR** – habilita OCR em execuções não interativas (override de `--ocr`).
 - **OCR_LANG** – idioma do Tesseract (por exemplo, `por`, `eng`).
+
+## OCR (Tesseract)
+
+### Instalação
+
+Para PDFs escaneados, instale o mecanismo de OCR e os conversores de PDF:
+
+```bash
+# Ubuntu/Debian
+sudo apt install tesseract-ocr tesseract-ocr-por tesseract-ocr-eng poppler-utils
+# macOS (Homebrew)
+brew install tesseract poppler
+# Ver idiomas disponíveis
+tesseract --list-langs
+```
+
+### Como habilitar
+
+- **Linha de comando:** `python ingest.py --ocr --docs ./docs`
+- **Variáveis de ambiente:** `ENABLE_OCR=1 OCR_LANG=por+eng python ingest.py --docs ./docs`
+
+### Desempenho e suporte a idiomas
+
+- OCR aumenta o tempo de ingestão (cada página é renderizada e processada).
+- `OCR_LANG` aceita múltiplos códigos (ex.: `por+eng`). Certifique-se de instalar os pacotes correspondentes.
+
+### Solução de problemas
+
+- `tesseract: command not found` ou `pdftoppm: command not found` → instale `tesseract-ocr` e `poppler-utils` e verifique o `PATH`.
+- `Error opening data file` ou `Failed loading language` → o pacote de idioma não está instalado. Rode `tesseract --list-langs` e instale, por exemplo, `sudo apt install tesseract-ocr-spa`.
 
 ## Uso do chat
 1. Garanta que o backend esteja rodando (com `uvicorn` ou Docker).
