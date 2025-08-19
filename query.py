@@ -15,7 +15,7 @@ def main():
     parser.add_argument("--k", type=int, default=5, help="Número de trechos retornados")
     args = parser.parse_args()
 
-    dsn = f"host={os.getenv('PGHOST','localhost')} port={os.getenv('PGPORT','5432')} dbname={os.getenv('PGDATABASE','pdfkb')} user={os.getenv('PGUSER','pdfkb')} password={os.getenv('PGPASSWORD','pdfkb')}"
+    dsn = f"host={os.getenv('PGHOST','db')} port={os.getenv('PGPORT','5432')} dbname={os.getenv('PGDATABASE','pdfkb')} user={os.getenv('PGUSER','pdfkb')} password={os.getenv('PGPASSWORD','pdfkb')}"
     conn = psycopg.connect(dsn)
     register_vector(conn)
 
