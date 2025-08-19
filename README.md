@@ -38,6 +38,7 @@ pip install -r requirements.txt
 cp .env.example .env  # edite se quiser
 
 # 4) Coloque seus PDFs e arquivos Markdown (.md) na pasta ./docs/
+#    Arquivos .md nessa pasta são ingeridos junto com os PDFs
 #    (ou aponte outra pasta com --docs / DOCS_DIR)
 
 # 5) Ingestão
@@ -115,16 +116,24 @@ npm run build  # gera os arquivos em app/static
 ```
 
 ## Variáveis de ambiente
-Copie `.env.example` para `.env` e ajuste conforme necessário:
+Copie `.env.example` para `.env` e ajuste conforme necessário. Exemplo mínimo:
+
+```env
+DOCS_DIR=./docs           # PDFs e Markdown (.md) lidos desta pasta
+ENABLE_OCR=0              # OCR só para PDFs escaneados (não afeta .md)
+OCR_LANG=eng+por+spa      # ex.: PDFs em inglês, português e espanhol
+```
+
+Principais chaves disponíveis:
 
 - **PGHOST**, **PGPORT**, **PGDATABASE**, **PGUSER**, **PGPASSWORD** – conexão com o Postgres/pgvector.
-- **DOCS_DIR** – pasta padrão para os arquivos (PDF/MD).
+- **DOCS_DIR** – pasta padrão para os arquivos. Qualquer `.md` nessa pasta é ingerido junto com os PDFs.
 - **OPENAI_API_KEY**, **OPENAI_MODEL**, **USE_LLM** – integrações com LLM (opcional).
 - **TOP_K**, **MAX_CONTEXT_CHARS** – ajustes de recuperação de trechos.
 - **UPLOAD_DIR**, **UPLOAD_TTL**, **UPLOAD_MAX_SIZE**, **UPLOAD_ALLOWED_MIME_TYPES** – controle de uploads temporários.
 - **CORS_ALLOW_ORIGINS**, **BRAND_NAME**, **POWERED_BY_LABEL**, **LOGO_URL** – personalização da UI.
 - **ENABLE_OCR** – habilita OCR em execuções não interativas (override de `--ocr`).
-- **OCR_LANG** – idiomas do Tesseract para OCR (padrão: `eng+por+spa`; ex.: `eng+por`).
+- **OCR_LANG** – idiomas do Tesseract para OCR. Combine múltiplos códigos com `+` (ex.: `eng+por`).
 
 ## OCR (Tesseract)
 
