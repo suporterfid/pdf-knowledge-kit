@@ -22,6 +22,7 @@ services:
       - "8000:8000"
     volumes:
       - ./docs:/app/docs:ro
+      - ./logs:/var/log/app  # Persist application logs
       # - ./tessdata:/usr/share/tesseract-ocr/tessdata:ro  # Uncomment to provide custom language data
 volumes:
   pgdata:

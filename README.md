@@ -100,6 +100,20 @@ python query.py --q "Como configuro potência de leitura?" --k 5
      app python ingest.py --docs /app/docs  # adicione --ocr ou ENABLE_OCR=1 se preciso
    ```
 
+
+## Logs
+
+Os logs da aplicação são gravados em `/var/log/app` dentro do container.
+Para mantê-los no host, mapeie um volume:
+
+```yaml
+  app:
+    volumes:
+      - ./logs:/var/log/app
+```
+
+O diretório `./logs` passará a conter os arquivos de log.
+
 ## Build do chat e frontend
 
 ```bash
