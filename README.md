@@ -39,6 +39,58 @@ python ingest.py --docs ./docs
 python query.py --q "Como configuro potência de leitura?" --k 5
 ```
 
+## Ingestão de PDFs com Docker
+
+1. **Tornar os PDFs acessíveis ao container**
+
+   - Coloque os arquivos na pasta `docs/` do projeto.
+   - Essa pasta já está mapeada dentro do container; tudo nela ficará disponível em `/app/docs` quando o serviço subir.
+
+2. **Ingerir os PDFs no banco**
+
+   No diretório raiz do projeto, execute:
+
+   ```bash
+   docker compose run --rm app python ingest.py --docs /app/docs
+   ```
+
+   Esse script lê os PDFs e grava os vetores no **PostgreSQL/pgvector**.
+
+3. **Subir a aplicação**
+
+   Inicie os serviços normalmente:
+
+   ```bash
+   docker compose up --build
+   ```
+
+   Isso lança o backend e o frontend, que já podem consultar os PDFs ingeridos.
+
+4. **(Opcional) Usar outra pasta local**
+
+   Se preferir outra pasta, **antes** de subir os containers, altere o mapeamento de volume em `docker-compose.yml` para apontar para o diretório desejado.
+
+   Exemplo para Windows:
+
+   ```yaml
+   volumes:
+     - C:/Users/alexa/Dropbox/Delivery/Impinj/R700/FAQ:/app/docs:ro
+   ```
+
+   Depois, rode a ingestão:
+
+   ```bash
+   docker compose run --rm app python ingest.py --docs /app/docs
+   ```
+
+   Ou mapeie o volume diretamente na execução:
+
+   ```bash
+   docker compose run --rm \
+     -v "C:/Users/alexa/Dropbox/Delivery/Impinj/R700/FAQ:/app/docs:ro" \
+     app python ingest.py --docs /app/docs
+   ```
+
 ## Build do chat e frontend
 
 ```bash
