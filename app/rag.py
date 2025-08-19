@@ -10,7 +10,7 @@ embedder = TextEmbedding(model_name="sentence-transformers/paraphrase-multilingu
 
 def get_conn():
     dsn = (
-        f"host={os.getenv('PGHOST','localhost')} "
+        f"host={os.getenv('PGHOST','db')} "
         f"port={os.getenv('PGPORT','5432')} "
         f"dbname={os.getenv('PGDATABASE','pdfkb')} "
         f"user={os.getenv('PGUSER','pdfkb')} "
