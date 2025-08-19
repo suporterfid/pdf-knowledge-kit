@@ -40,9 +40,17 @@ def read_pdf_text(pdf_path: Path, use_ocr: bool = False, ocr_lang: str | None = 
 
         if use_ocr:
             try:
+                ocr_lang = ocr_lang or os.getenv("OCR_LANG") or "eng+por+spa"
+                available_langs = set(pytesseract.get_languages(config=""))
+                requested_langs = {lang.strip() for lang in ocr_lang.split("+") if lang.strip()}
+                missing_langs = requested_langs - available_langs
+                if missing_langs:
+                    print(
+                        f"[WARN] Missing OCR language(s): {', '.join(sorted(missing_langs))}"
+                    )
+
                 images = convert_from_path(str(pdf_path))
                 ocr_texts = []
-                ocr_lang = ocr_lang or os.getenv("OCR_LANG") or "eng+por+spa"
                 for img in images:
                     try:
                         txt = pytesseract.image_to_string(img, lang=ocr_lang)
