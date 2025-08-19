@@ -6,6 +6,7 @@ fastembed>=0.3.3
 tqdm>=4.66
 fastapi>=0.110
 sse-starlette>=1.6
+uvicorn>=0.29
 openai>=1.0
 python-multipart>=0.0.7
 pytest>=8.0
