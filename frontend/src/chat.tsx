@@ -52,6 +52,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [messages]);
 
   const send = async (text: string, file?: File | null) => {
+    if (text.length > 5000) {
+      setError('Mensagem muito longa');
+      return;
+    }
     lastRequestRef.current = { text, file };
     setMessages((msgs) => [
       ...msgs,

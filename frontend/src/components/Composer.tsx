@@ -37,6 +37,7 @@ export default function Composer({ onSend, onCancel, isStreaming }: Props) {
         onChange={(e) => setInput(e.target.value)}
         placeholder="Pergunte algo"
         onKeyDown={handleKeyDown}
+        maxLength={5000}
       />
       <label htmlFor="composer-file">Arquivo PDF</label>
       <input
