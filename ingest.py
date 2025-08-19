@@ -104,8 +104,8 @@ def main():
 
     dsn = f"host={os.getenv('PGHOST','db')} port={os.getenv('PGPORT','5432')} dbname={os.getenv('PGDATABASE','pdfkb')} user={os.getenv('PGUSER','pdfkb')} password={os.getenv('PGPASSWORD','pdfkb')}"
     conn = psycopg.connect(dsn)
-    register_vector(conn)
     ensure_schema(conn, Path(__file__).with_name("schema.sql"))
+    register_vector(conn)
 
     docs_dir = Path(args.docs)
     pdf_files = sorted(list(docs_dir.rglob("*.pdf")))
