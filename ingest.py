@@ -24,7 +24,7 @@ def read_md_text(md_path: Path) -> str:
         print(f"[WARN] Falha ao ler {md_path}: {e}")
         return ""
 
-def read_pdf_text(pdf_path: Path, use_ocr: bool = False) -> str:
+def read_pdf_text(pdf_path: Path, use_ocr: bool = False, ocr_lang: str | None = None) -> str:
     try:
         reader = PdfReader(str(pdf_path))
         pages_text = []
@@ -42,13 +42,10 @@ def read_pdf_text(pdf_path: Path, use_ocr: bool = False) -> str:
             try:
                 images = convert_from_path(str(pdf_path))
                 ocr_texts = []
-                ocr_lang = os.getenv("OCR_LANG")
+                ocr_lang = ocr_lang or os.getenv("OCR_LANG") or "eng+por+spa"
                 for img in images:
                     try:
-                        if ocr_lang:
-                            txt = pytesseract.image_to_string(img, lang=ocr_lang)
-                        else:
-                            txt = pytesseract.image_to_string(img)
+                        txt = pytesseract.image_to_string(img, lang=ocr_lang)
                     except Exception:
                         txt = ""
                     ocr_texts.append(txt)
@@ -134,6 +131,7 @@ def main():
     parser.add_argument("--batch", type=int, default=64, help="Tamanho do batch para embeddings")
     parser.add_argument("--reindex", action="store_true", help="Recria índice vetorial após ingestão")
     parser.add_argument("--ocr", action="store_true", help="Habilita OCR para PDFs escaneados")
+    parser.add_argument("--ocr-lang", type=str, help="Idiomas do Tesseract (ex.: 'eng+por'; padrão: 'eng+por+spa')")
     args = parser.parse_args()
 
     if not sys.stdin.isatty():
@@ -159,7 +157,7 @@ def main():
         try:
             suffix = doc_path.suffix.lower()
             if suffix == ".pdf":
-                text = read_pdf_text(doc_path, use_ocr=args.ocr)
+                text = read_pdf_text(doc_path, use_ocr=args.ocr, ocr_lang=args.ocr_lang)
             elif suffix == ".md":
                 text = read_md_text(doc_path)
             else:
