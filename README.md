@@ -16,7 +16,8 @@ Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** e **Markd
 ## Requisitos
 - **Docker** + **Docker Compose** (para o Postgres com pgvector).
 - **Python 3.10+** com `pip`.
-- *(Opcional p/ OCR)* `tesseract-ocr`, pacotes de idioma (`tesseract-ocr-por`, `tesseract-ocr-eng`, etc.) e `poppler-utils`.
+- *(Opcional p/ OCR)* `tesseract-ocr`, pacotes de idioma (`tesseract-ocr-eng`, `tesseract-ocr-por`, `tesseract-ocr-spa`) e `poppler-utils`.
+  O `Dockerfile` já instala esses pacotes.
 
 ## Passo a passo (rápido)
 ```bash
@@ -121,15 +122,15 @@ Copie `.env.example` para `.env` e ajuste conforme necessário:
 
 ## OCR (Tesseract)
 
-Por padrão, o OCR usa `eng+por+spa`. Ajuste os idiomas com `--ocr-lang` ou a variável `OCR_LANG`.
+Por padrão, o OCR usa `OCR_LANG=eng+por+spa` (Inglês, Português e Espanhol). Altere os idiomas com `--ocr-lang` ou definindo a variável `OCR_LANG` antes da execução.
 
 ### Instalação
 
-Para PDFs escaneados, instale o mecanismo de OCR e os conversores de PDF:
+Para PDFs escaneados, instale o mecanismo de OCR, os pacotes de idioma e os conversores de PDF (o `Dockerfile` já inclui `tesseract-ocr-eng`, `tesseract-ocr-por` e `tesseract-ocr-spa`):
 
 ```bash
 # Ubuntu/Debian
-sudo apt install tesseract-ocr tesseract-ocr-por tesseract-ocr-eng poppler-utils
+sudo apt install tesseract-ocr tesseract-ocr-eng tesseract-ocr-por tesseract-ocr-spa poppler-utils
 # macOS (Homebrew)
 brew install tesseract poppler
 # Ver idiomas disponíveis
@@ -138,13 +139,22 @@ tesseract --list-langs
 
 ### Como habilitar
 
-- **Linha de comando:** `python ingest.py --ocr --ocr-lang eng+por --docs ./docs`
-- **Variáveis de ambiente:** `ENABLE_OCR=1 OCR_LANG=eng+por python ingest.py --docs ./docs`
+- **Linha de comando (override):**
+
+  ```bash
+  python ingest.py --ocr --ocr-lang eng --docs ./docs
+  ```
+
+- **Variáveis de ambiente (override):**
+
+  ```bash
+  ENABLE_OCR=1 OCR_LANG=spa+por python ingest.py --docs ./docs
+  ```
 
 ### Desempenho e suporte a idiomas
 
 - OCR aumenta o tempo de ingestão (cada página é renderizada e processada).
-- `OCR_LANG` e `--ocr-lang` aceitam múltiplos códigos (ex.: `eng+por+spa`). Certifique-se de instalar os pacotes correspondentes.
+- `OCR_LANG` e `--ocr-lang` aceitam múltiplos códigos (ex.: `eng+por+spa`). Cada idioma extra deixa o processamento mais lento, mas pode melhorar a precisão em documentos multilíngues; instale os pacotes correspondentes.
 
 ### Solução de problemas
 
