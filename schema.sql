@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 
 -- Tabela de chunks
--- Dimensão 384 para o modelo 'intfloat/multilingual-e5-small'
+-- Dimensão 384 para o modelo 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
 CREATE TABLE IF NOT EXISTS chunks (
   id BIGSERIAL PRIMARY KEY,
   doc_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,

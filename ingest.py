@@ -113,7 +113,8 @@ def main():
         print(f"[INFO] Nenhum PDF encontrado em {docs_dir.resolve()}")
         return
 
-    embedder = TextEmbedding(model_name="intfloat/multilingual-e5-small")
+    # Use a supported multilingual embedding model
+    embedder = TextEmbedding(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
     for pdf_path in tqdm(pdf_files, desc="Processando PDFs"):
         try:
