@@ -75,6 +75,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             body: up,
           });
           const dataUp = await resUp.json();
+          if (!resUp.ok) {
+            throw new Error(dataUp.detail || 'Erro no upload');
+          }
           attachments.push({ name: file.name, url: dataUp.url });
         }
       }
@@ -85,6 +88,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         body: formData,
         signal: controllerRef.current.signal,
       });
+      if (!res.ok) {
+        if (res.status === 429) {
+          throw new Error('Limite de taxa atingido. Tente novamente mais tarde.');
+        }
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Erro na requisição');
+      }
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       if (!reader) throw new Error('No reader');
@@ -130,7 +140,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e: any) {
       if (e.name !== 'AbortError') {
-        setError('Falha de rede ou timeout');
+        setError(e.message || 'Falha de rede ou timeout');
         setMessages((msgs) => {
           const updated = [...msgs];
           const last = updated[updated.length - 1];
