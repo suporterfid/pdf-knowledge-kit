@@ -101,18 +101,45 @@ python query.py --q "Como configuro potência de leitura?" --k 5
    ```
 
 
-## Logs
+## Logging
 
-Os logs da aplicação são gravados em `/var/log/app` dentro do container.
-Para mantê-los no host, mapeie um volume:
+A aplicação grava dois arquivos de log em `LOG_DIR` (padrão `logs/` localmente):
 
-```yaml
-  app:
-    volumes:
-      - ./logs:/var/log/app
+- `app.log` – eventos da aplicação.
+- `access.log` – requisições/respostas HTTP.
+
+Os arquivos são **rotacionados diariamente à meia-noite** e mantidos por `LOG_RETENTION_DAYS` dias (padrão: 7).
+Defina `LOG_ROTATE_UTC=true` para rotacionar em UTC.
+
+Principais variáveis de ambiente:
+
+| Variável              | Padrão    | Descrição |
+|----------------------|-----------|-----------|
+| `LOG_DIR`            | `logs/`   | Diretório dos arquivos de log (no Docker: `/var/log/app`). |
+| `LOG_LEVEL`          | `INFO`    | Nível mínimo de log. |
+| `LOG_JSON`           | `false`   | Saída em formato JSON. |
+| `LOG_REQUEST_BODIES` | `false`   | Inclui corpo da requisição no access log. |
+| `LOG_RETENTION_DAYS` | `7`       | Quantidade de dias mantidos após rotação. |
+| `LOG_ROTATE_UTC`     | `false`   | Rotaciona usando UTC. |
+
+### Tailing logs
+
+```bash
+# Local
+tail -f logs/app.log
+
+# Docker
+docker compose logs -f app
+docker compose exec app tail -f /var/log/app/app.log
 ```
 
-O diretório `./logs` passará a conter os arquivos de log.
+Para persistir os logs dos containers no host, mapeie um volume:
+
+```yaml
+app:
+  volumes:
+    - ./logs:/var/log/app
+```
 
 ## Build do chat e frontend
 
