@@ -11,10 +11,17 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - path: Dockerfile
+          action: rebuild
     ports:
       - "8000:8000"
     volumes:
       - ./docs:/app/docs:ro
+      # - ./tessdata:/usr/share/tesseract-ocr/tessdata:ro  # Uncomment to provide custom language data
 volumes:
   pgdata:
