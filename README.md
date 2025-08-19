@@ -39,6 +39,37 @@ python ingest.py --docs ./docs
 python query.py --q "Como configuro potência de leitura?" --k 5
 ```
 
+## Build do chat e frontend
+
+```bash
+# Backend standalone
+uvicorn app.main:app --reload  # roda em http://localhost:8000
+
+# ou construa tudo com Docker
+docker compose up --build
+
+# Frontend (opcional para alterar a interface)
+cd frontend
+npm install
+npm run build  # gera os arquivos em app/static
+```
+
+## Variáveis de ambiente
+Copie `.env.example` para `.env` e ajuste conforme necessário:
+
+- **PGHOST**, **PGPORT**, **PGDATABASE**, **PGUSER**, **PGPASSWORD** – conexão com o Postgres/pgvector.
+- **DOCS_DIR** – pasta padrão para os PDFs.
+- **OPENAI_API_KEY**, **OPENAI_MODEL**, **USE_LLM** – integrações com LLM (opcional).
+- **TOP_K**, **MAX_CONTEXT_CHARS** – ajustes de recuperação de trechos.
+- **UPLOAD_DIR**, **UPLOAD_TTL**, **UPLOAD_MAX_SIZE**, **UPLOAD_ALLOWED_MIME_TYPES** – controle de uploads temporários.
+- **CORS_ALLOW_ORIGINS**, **BRAND_NAME**, **POWERED_BY_LABEL**, **LOGO_URL** – personalização da UI.
+
+## Uso do chat
+1. Garanta que o backend esteja rodando (com `uvicorn` ou Docker).
+2. Acesse `http://localhost:8000` no navegador.
+3. Envie mensagens pelo campo de texto. Opcionalmente, anexe um PDF pequeno para enriquecer o contexto.
+4. Durante a geração da resposta, use **Cancelar** para interromper o streaming e **Enviar** novamente para retomar.
+
 ## Estrutura
 ```
 pdf_knowledge_kit/
@@ -61,6 +92,13 @@ pdf_knowledge_kit/
 - PDFs escaneados (sem texto) exigem **OCR** (ex.: Tesseract). Este kit não faz OCR por padrão — adicione se precisar.
 - Para lotes grandes (milhares de páginas), rode ingestão em *batches* e crie o índice **depois**.
 - Se já usa Postgres no seu stack, pgvector é simples e barato. Se quiser um serviço dedicado, olhe **Qdrant** ou **Weaviate**.
+ 
+## Critérios de acessibilidade e desempenho
+- Texto alternativo e rótulos ARIA para componentes interativos.
+- Navegação total por teclado e foco visível.
+- Contraste mínimo de 4.5:1 nas cores da interface.
+- Respostas transmitidas via **SSE** para reduzir latência.
+- Limpeza automática de uploads e limites de tamanho para preservar recursos.
 
 Boa construção! 🚀
 (gerado em 2025-08-18)
