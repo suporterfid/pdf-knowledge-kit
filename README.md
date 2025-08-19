@@ -33,7 +33,7 @@ cp .env.example .env  # edite se quiser
 #    (ou aponte outra pasta com --docs / DOCS_DIR)
 
 # 5) Ingestão
-python ingest.py --docs ./docs
+python ingest.py --docs ./docs  # use --ocr ou ENABLE_OCR=1 para PDFs escaneados
 
 # 6) Consulta (exemplo)
 python query.py --q "Como configuro potência de leitura?" --k 5
@@ -51,7 +51,7 @@ python query.py --q "Como configuro potência de leitura?" --k 5
    No diretório raiz do projeto, execute:
 
    ```bash
-   docker compose run --rm app python ingest.py --docs /app/docs
+   docker compose run --rm app python ingest.py --docs /app/docs  # adicione --ocr ou ENABLE_OCR=1 se preciso
    ```
 
    Esse script lê os PDFs e arquivos Markdown e grava os vetores no **PostgreSQL/pgvector**.
@@ -80,7 +80,7 @@ python query.py --q "Como configuro potência de leitura?" --k 5
    Depois, rode a ingestão:
 
    ```bash
-   docker compose run --rm app python ingest.py --docs /app/docs
+   docker compose run --rm app python ingest.py --docs /app/docs  # adicione --ocr ou ENABLE_OCR=1 se preciso
    ```
 
    Ou mapeie o volume diretamente na execução:
@@ -88,7 +88,7 @@ python query.py --q "Como configuro potência de leitura?" --k 5
    ```bash
    docker compose run --rm \
      -v "C:/Users/alexa/Dropbox/Delivery/Impinj/R700/FAQ:/app/docs:ro" \
-     app python ingest.py --docs /app/docs
+     app python ingest.py --docs /app/docs  # adicione --ocr ou ENABLE_OCR=1 se preciso
    ```
 
 ## Build do chat e frontend
@@ -115,6 +115,8 @@ Copie `.env.example` para `.env` e ajuste conforme necessário:
 - **TOP_K**, **MAX_CONTEXT_CHARS** – ajustes de recuperação de trechos.
 - **UPLOAD_DIR**, **UPLOAD_TTL**, **UPLOAD_MAX_SIZE**, **UPLOAD_ALLOWED_MIME_TYPES** – controle de uploads temporários.
 - **CORS_ALLOW_ORIGINS**, **BRAND_NAME**, **POWERED_BY_LABEL**, **LOGO_URL** – personalização da UI.
+- **ENABLE_OCR** – habilita OCR em execuções não interativas (override de `--ocr`).
+- **OCR_LANG** – idioma do Tesseract (por exemplo, `por`, `eng`).
 
 ## Uso do chat
 1. Garanta que o backend esteja rodando (com `uvicorn` ou Docker).
@@ -141,7 +143,7 @@ pdf_knowledge_kit/
 - Para respostas fiéis, **mostre as fontes** (caminho do arquivo e página, quando houver).
 
 ## Dicas francas
-- PDFs escaneados (sem texto) exigem **OCR** (ex.: Tesseract). Este kit não faz OCR por padrão — adicione se precisar.
+- PDFs escaneados (sem texto) exigem **OCR** (ex.: Tesseract). Habilite com `--ocr` ou `ENABLE_OCR=1` (opcionalmente `OCR_LANG`).
 - Para lotes grandes (milhares de páginas), rode ingestão em *batches* e crie o índice **depois**.
 - Se já usa Postgres no seu stack, pgvector é simples e barato. Se quiser um serviço dedicado, olhe **Qdrant** ou **Weaviate**.
  

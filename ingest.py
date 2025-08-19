@@ -1,5 +1,6 @@
 import os
 import argparse
+import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -23,7 +24,7 @@ def read_md_text(md_path: Path) -> str:
         print(f"[WARN] Falha ao ler {md_path}: {e}")
         return ""
 
-def read_pdf_text(pdf_path: Path) -> str:
+def read_pdf_text(pdf_path: Path, use_ocr: bool = False) -> str:
     try:
         reader = PdfReader(str(pdf_path))
         pages_text = []
@@ -37,24 +38,25 @@ def read_pdf_text(pdf_path: Path) -> str:
         if any(t.strip() for t in pages_text):
             return "\n".join(pages_text)
 
-        # Fallback to OCR if no text extracted from any page
-        try:
-            images = convert_from_path(str(pdf_path))
-            ocr_texts = []
-            ocr_lang = os.getenv("OCR_LANG")
-            for img in images:
-                try:
-                    if ocr_lang:
-                        txt = pytesseract.image_to_string(img, lang=ocr_lang)
-                    else:
-                        txt = pytesseract.image_to_string(img)
-                except Exception:
-                    txt = ""
-                ocr_texts.append(txt)
-            return "\n".join(ocr_texts)
-        except Exception as e:
-            print(f"[WARN] Falha no OCR para {pdf_path}: {e}")
-            return ""
+        if use_ocr:
+            try:
+                images = convert_from_path(str(pdf_path))
+                ocr_texts = []
+                ocr_lang = os.getenv("OCR_LANG")
+                for img in images:
+                    try:
+                        if ocr_lang:
+                            txt = pytesseract.image_to_string(img, lang=ocr_lang)
+                        else:
+                            txt = pytesseract.image_to_string(img)
+                    except Exception:
+                        txt = ""
+                    ocr_texts.append(txt)
+                return "\n".join(ocr_texts)
+            except Exception as e:
+                print(f"[WARN] Falha no OCR para {pdf_path}: {e}")
+                return ""
+        return ""
     except Exception as e:
         print(f"[WARN] Falha ao ler {pdf_path}: {e}")
         return ""
@@ -131,7 +133,13 @@ def main():
     parser.add_argument("--docs", type=str, default=os.getenv("DOCS_DIR", "./docs"), help="Pasta com PDFs/MD")
     parser.add_argument("--batch", type=int, default=64, help="Tamanho do batch para embeddings")
     parser.add_argument("--reindex", action="store_true", help="Recria índice vetorial após ingestão")
+    parser.add_argument("--ocr", action="store_true", help="Habilita OCR para PDFs escaneados")
     args = parser.parse_args()
+
+    if not sys.stdin.isatty():
+        env_ocr = os.getenv("ENABLE_OCR")
+        if env_ocr is not None:
+            args.ocr = env_ocr.lower() not in ("0", "false", "no")
 
     dsn = f"host={os.getenv('PGHOST','db')} port={os.getenv('PGPORT','5432')} dbname={os.getenv('PGDATABASE','pdfkb')} user={os.getenv('PGUSER','pdfkb')} password={os.getenv('PGPASSWORD','pdfkb')}"
     conn = psycopg.connect(dsn)
@@ -151,7 +159,7 @@ def main():
         try:
             suffix = doc_path.suffix.lower()
             if suffix == ".pdf":
-                text = read_pdf_text(doc_path)
+                text = read_pdf_text(doc_path, use_ocr=args.ocr)
             elif suffix == ".md":
                 text = read_md_text(doc_path)
             else:
