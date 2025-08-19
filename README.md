@@ -34,7 +34,7 @@ cp .env.example .env  # edite se quiser
 #    (ou aponte outra pasta com --docs / DOCS_DIR)
 
 # 5) Ingestão
-python ingest.py --docs ./docs  # use --ocr ou ENABLE_OCR=1 para PDFs escaneados
+python ingest.py --docs ./docs  # use --ocr (ex.: --ocr-lang eng+por) ou ENABLE_OCR=1 para PDFs escaneados
 
 # 6) Consulta (exemplo)
 python query.py --q "Como configuro potência de leitura?" --k 5
@@ -52,7 +52,7 @@ python query.py --q "Como configuro potência de leitura?" --k 5
    No diretório raiz do projeto, execute:
 
    ```bash
-   docker compose run --rm app python ingest.py --docs /app/docs  # adicione --ocr ou ENABLE_OCR=1 se preciso
+   docker compose run --rm app python ingest.py --docs /app/docs  # adicione --ocr/--ocr-lang ou ENABLE_OCR=1 se preciso
    ```
 
    Esse script lê os PDFs e arquivos Markdown e grava os vetores no **PostgreSQL/pgvector**.
@@ -81,7 +81,7 @@ python query.py --q "Como configuro potência de leitura?" --k 5
    Depois, rode a ingestão:
 
    ```bash
-   docker compose run --rm app python ingest.py --docs /app/docs  # adicione --ocr ou ENABLE_OCR=1 se preciso
+   docker compose run --rm app python ingest.py --docs /app/docs  # adicione --ocr/--ocr-lang ou ENABLE_OCR=1 se preciso
    ```
 
    Ou mapeie o volume diretamente na execução:
@@ -117,9 +117,11 @@ Copie `.env.example` para `.env` e ajuste conforme necessário:
 - **UPLOAD_DIR**, **UPLOAD_TTL**, **UPLOAD_MAX_SIZE**, **UPLOAD_ALLOWED_MIME_TYPES** – controle de uploads temporários.
 - **CORS_ALLOW_ORIGINS**, **BRAND_NAME**, **POWERED_BY_LABEL**, **LOGO_URL** – personalização da UI.
 - **ENABLE_OCR** – habilita OCR em execuções não interativas (override de `--ocr`).
-- **OCR_LANG** – idioma do Tesseract (por exemplo, `por`, `eng`).
+- **OCR_LANG** – idiomas do Tesseract para OCR (padrão: `eng+por+spa`; ex.: `eng+por`).
 
 ## OCR (Tesseract)
+
+Por padrão, o OCR usa `eng+por+spa`. Ajuste os idiomas com `--ocr-lang` ou a variável `OCR_LANG`.
 
 ### Instalação
 
@@ -136,13 +138,13 @@ tesseract --list-langs
 
 ### Como habilitar
 
-- **Linha de comando:** `python ingest.py --ocr --docs ./docs`
-- **Variáveis de ambiente:** `ENABLE_OCR=1 OCR_LANG=por+eng python ingest.py --docs ./docs`
+- **Linha de comando:** `python ingest.py --ocr --ocr-lang eng+por --docs ./docs`
+- **Variáveis de ambiente:** `ENABLE_OCR=1 OCR_LANG=eng+por python ingest.py --docs ./docs`
 
 ### Desempenho e suporte a idiomas
 
 - OCR aumenta o tempo de ingestão (cada página é renderizada e processada).
-- `OCR_LANG` aceita múltiplos códigos (ex.: `por+eng`). Certifique-se de instalar os pacotes correspondentes.
+- `OCR_LANG` e `--ocr-lang` aceitam múltiplos códigos (ex.: `eng+por+spa`). Certifique-se de instalar os pacotes correspondentes.
 
 ### Solução de problemas
 
@@ -174,7 +176,7 @@ pdf_knowledge_kit/
 - Para respostas fiéis, **mostre as fontes** (caminho do arquivo e página, quando houver).
 
 ## Dicas francas
-- PDFs escaneados (sem texto) exigem **OCR** (ex.: Tesseract). Habilite com `--ocr` ou `ENABLE_OCR=1` (opcionalmente `OCR_LANG`).
+- PDFs escaneados (sem texto) exigem **OCR** (ex.: Tesseract). Habilite com `--ocr` (opcionalmente `--ocr-lang`) ou `ENABLE_OCR=1`/`OCR_LANG`.
 - Para lotes grandes (milhares de páginas), rode ingestão em *batches* e crie o índice **depois**.
 - Se já usa Postgres no seu stack, pgvector é simples e barato. Se quiser um serviço dedicado, olhe **Qdrant** ou **Weaviate**.
  
