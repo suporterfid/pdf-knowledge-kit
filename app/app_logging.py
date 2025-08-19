@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from logging.handlers import TimedRotatingFileHandler
-from typing import Optional
+from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 
 class JsonFormatter(logging.Formatter):
@@ -27,6 +28,87 @@ def _get_formatter(log_json: bool) -> logging.Formatter:
     if log_json:
         return JsonFormatter()
     return logging.Formatter("[%(asctime)s] %(levelname)s in %(name)s: %(message)s")
+
+
+SENSITIVE_FIELDS = {
+    "authorization",
+    "cookie",
+    "set-cookie",
+    "password",
+    "token",
+    "access_token",
+    "refresh_token",
+}
+
+
+def _scrub(data: object) -> object:
+    """Recursively scrub sensitive fields from dictionaries and lists."""
+
+    if isinstance(data, dict):
+        return {
+            k: ("***" if k.lower() in SENSITIVE_FIELDS else _scrub(v))
+            for k, v in data.items()
+        }
+    if isinstance(data, list):
+        return [_scrub(v) for v in data]
+    return data
+
+
+def _install_access_logging(app: FastAPI) -> None:
+    """Install request/response access logging middleware."""
+
+    log_request_bodies = os.getenv("LOG_REQUEST_BODIES", "false").lower() == "true"
+    skip_paths = {"/api/health", "/api/metrics"}
+    access_logger = logging.getLogger("uvicorn.access")
+
+    @app.middleware("http")
+    async def log_requests(request: Request, call_next):
+        if request.url.path in skip_paths:
+            return await call_next(request)
+
+        request_id = request.headers.get("X-Request-Id") or uuid4().hex
+        request.state.request_id = request_id
+
+        start = time.time()
+
+        body_content = None
+        if log_request_bodies:
+            body_bytes = await request.body()
+
+            async def receive() -> dict:  # pragma: no cover - internal
+                return {"type": "http.request", "body": body_bytes, "more_body": False}
+
+            request._receive = receive  # type: ignore[attr-defined]
+
+            if body_bytes:
+                try:
+                    body_json = json.loads(body_bytes)
+                    body_content = _scrub(body_json)
+                except Exception:
+                    body_content = body_bytes.decode("utf-8", errors="replace")
+
+        response = await call_next(request)
+
+        process_time_ms = (time.time() - start) * 1000
+        client_ip = request.headers.get("X-Forwarded-For", request.client.host)
+
+        log_data = {
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "status": response.status_code,
+            "latency_ms": round(process_time_ms, 2),
+            "client_ip": client_ip,
+            "headers": _scrub(dict(request.headers)),
+        }
+
+        if body_content is not None:
+            log_data["body"] = body_content
+
+        response.headers["X-Request-Id"] = request_id
+
+        access_logger.info(json.dumps(log_data, default=str))
+        return response
 
 
 def init_logging(app: FastAPI | None = None) -> None:
@@ -69,3 +151,4 @@ def init_logging(app: FastAPI | None = None) -> None:
 
     if app is not None:
         app.logger = app_logger
+        _install_access_logging(app)
