@@ -122,6 +122,12 @@ Principais variáveis de ambiente:
 | `LOG_RETENTION_DAYS` | `7`       | Quantidade de dias mantidos após rotação. |
 | `LOG_ROTATE_UTC`     | `false`   | Rotaciona usando UTC. |
 
+Para verificar rapidamente os valores efetivos dessas configurações, execute:
+
+```bash
+python -m tools.print_log_config
+```
+
 ### Tailing logs
 
 ```bash
