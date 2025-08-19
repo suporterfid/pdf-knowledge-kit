@@ -20,7 +20,7 @@ import pathlib
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
-from app.main import app
+from app.main import app, CHAT_MAX_MESSAGE_LENGTH, SESSION_ID_MAX_LENGTH
 from starlette.routing import Mount
 
 # Remove static mount to access API routes during tests
@@ -65,30 +65,81 @@ def client():
 
 
 def test_chat_without_attachment(client):
+    headers = {"X-Forwarded-For": "1.1.1.1"}
     with patch("app.main.build_context", dummy_build_context):
-        with client.stream("POST", "/api/chat", data={"q": "hi", "k": "1"}) as resp:
+        data = {"q": "hi", "k": "1", "sessionId": "s1"}
+        with client.stream("POST", "/api/chat", data=data, headers=headers) as resp:
             events = _parse_events(resp)
     assert any(e[0] == "token" for e in events)
     assert any(e[0] == "done" for e in events)
 
 
 def test_chat_with_pdf_attachment(client):
+    headers = {"X-Forwarded-For": "1.1.1.2"}
     files = {"files": ("test.pdf", _pdf_bytes(), "application/pdf")}
-    data = {"q": "hi", "k": "1", "attachments": "[]"}
+    data = {"q": "hi", "k": "1", "attachments": "[]", "sessionId": "s2"}
     with patch("app.main.build_context", dummy_build_context):
-        with client.stream("POST", "/api/chat", data=data, files=files) as resp:
+        with client.stream("POST", "/api/chat", data=data, files=files, headers=headers) as resp:
             events = _parse_events(resp)
     assert any(e[0] == "token" for e in events)
     assert any(e[0] == "done" for e in events)
 
 
 def test_cancel_and_reconnect(client):
+    headers = {"X-Forwarded-For": "1.1.1.3"}
     with patch("app.main.build_context", dummy_build_context):
-        with client.stream("POST", "/api/chat", data={"q": "hi", "k": "1"}) as resp:
+        with client.stream(
+            "POST",
+            "/api/chat",
+            data={"q": "hi", "k": "1", "sessionId": "s3"},
+            headers=headers,
+        ) as resp:
             for _ in resp.iter_lines():
                 break  # cancel early
-        with client.stream("POST", "/api/chat", data={"q": "again", "k": "1"}) as resp2:
+        with client.stream(
+            "POST",
+            "/api/chat",
+            data={"q": "again", "k": "1", "sessionId": "s3"},
+            headers=headers,
+        ) as resp2:
             events = _parse_events(resp2)
     assert any(e[0] == "token" for e in events)
     assert any(e[0] == "done" for e in events)
+
+
+def test_invalid_mime_type(client):
+    headers = {"X-Forwarded-For": "1.1.1.4"}
+    files = {"files": ("evil.txt", b"hello", "text/plain")}
+    data = {"q": "hi", "k": "1", "attachments": "[]", "sessionId": "s4"}
+    resp = client.post("/api/chat", data=data, files=files, headers=headers)
+    assert resp.status_code == 400
+
+
+def test_message_and_session_validation(client):
+    headers = {"X-Forwarded-For": "1.1.1.5"}
+    long_msg = "a" * (CHAT_MAX_MESSAGE_LENGTH + 1)
+    resp_msg = client.post(
+        "/api/chat",
+        data={"q": long_msg, "k": "1", "sessionId": "s5"},
+        headers=headers,
+    )
+    assert resp_msg.status_code == 400
+    long_session = "s" * (SESSION_ID_MAX_LENGTH + 1)
+    resp_sess = client.post(
+        "/api/chat",
+        data={"q": "hi", "k": "1", "sessionId": long_session},
+        headers=headers,
+    )
+    assert resp_sess.status_code == 400
+
+
+def test_rate_limit(client):
+    headers = {"X-Forwarded-For": "2.2.2.2"}
+    data = {"q": "hi", "k": "1", "sessionId": "rl"}
+    with patch("app.main.build_context", dummy_build_context):
+        for _ in range(5):
+            resp_ok = client.post("/api/chat", data=data, headers=headers)
+            assert resp_ok.status_code == 200
+        resp = client.post("/api/chat", data=data, headers=headers)
+    assert resp.status_code == 429
 

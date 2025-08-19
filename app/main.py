@@ -1,4 +1,12 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Form
+from fastapi import (
+    FastAPI,
+    UploadFile,
+    File,
+    HTTPException,
+    BackgroundTasks,
+    Form,
+    Request,
+)
 from fastapi.staticfiles import StaticFiles
 from uuid import uuid4
 import asyncio
@@ -10,6 +18,10 @@ from dotenv import load_dotenv
 from typing import Dict, List
 from io import BytesIO
 from pypdf import PdfReader
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from .rag import build_context
 
@@ -25,9 +37,25 @@ UPLOAD_TTL = int(os.getenv("UPLOAD_TTL", "3600"))
 UPLOAD_MAX_SIZE = int(os.getenv("UPLOAD_MAX_SIZE", str(5 * 1024 * 1024)))
 UPLOAD_ALLOWED_MIME_TYPES = os.getenv("UPLOAD_ALLOWED_MIME_TYPES", "application/pdf").split(",")
 
+CHAT_MAX_MESSAGE_LENGTH = int(os.getenv("CHAT_MAX_MESSAGE_LENGTH", "5000"))
+SESSION_ID_MAX_LENGTH = int(os.getenv("SESSION_ID_MAX_LENGTH", "64"))
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+ 
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host
+
+
+limiter = Limiter(key_func=get_client_ip)
 
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount(
     "/",
@@ -91,17 +119,32 @@ async def ask(req: AskRequest):
 
 
 @app.post("/api/chat")
+@limiter.limit("5/minute")
 async def chat(
+    request: Request,
     q: str = Form(...),
     k: int = Form(5),
     attachments: str = Form("[]"),
+    sessionId: str = Form(...),
     files: List[UploadFile] = File([]),
 ):
+    if len(q) > CHAT_MAX_MESSAGE_LENGTH:
+        raise HTTPException(status_code=400, detail="Message too long")
+    if len(sessionId) > SESSION_ID_MAX_LENGTH:
+        raise HTTPException(status_code=400, detail="Invalid sessionId")
+    for f in files:
+        if f.content_type not in UPLOAD_ALLOWED_MIME_TYPES:
+            raise HTTPException(status_code=400, detail="Invalid file type")
     return await chat_stream(q, k, files, json.loads(attachments))
 
 
 @app.get("/api/chat")
-async def chat_get(q: str, k: int = 5):
+@limiter.limit("5/minute")
+async def chat_get(request: Request, q: str, k: int = 5, sessionId: str = ""):
+    if len(q) > CHAT_MAX_MESSAGE_LENGTH:
+        raise HTTPException(status_code=400, detail="Message too long")
+    if sessionId and len(sessionId) > SESSION_ID_MAX_LENGTH:
+        raise HTTPException(status_code=400, detail="Invalid sessionId")
     return await chat_stream(q, k, [], [])
 
 
@@ -114,8 +157,8 @@ async def chat_stream(
     attachment_texts: List[str] = []
     attachment_sources: List[Dict] = []
     for f in files:
-        if f.content_type != "application/pdf":
-            continue
+        if f.content_type not in UPLOAD_ALLOWED_MIME_TYPES:
+            raise HTTPException(status_code=400, detail="Invalid file type")
         data = await f.read()
         reader = PdfReader(BytesIO(data))
         text = "".join(page.extract_text() or "" for page in reader.pages)
