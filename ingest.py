@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 import psycopg
 from pgvector.psycopg import register_vector
 from pypdf import PdfReader
+from pdf2image import convert_from_path
+import pytesseract
 from tqdm import tqdm
 
 # Embeddings (multilíngue PT/EN)
@@ -31,7 +33,28 @@ def read_pdf_text(pdf_path: Path) -> str:
             except Exception:
                 t = ""
             pages_text.append(t)
-        return "\n".join(pages_text)
+
+        if any(t.strip() for t in pages_text):
+            return "\n".join(pages_text)
+
+        # Fallback to OCR if no text extracted from any page
+        try:
+            images = convert_from_path(str(pdf_path))
+            ocr_texts = []
+            ocr_lang = os.getenv("OCR_LANG")
+            for img in images:
+                try:
+                    if ocr_lang:
+                        txt = pytesseract.image_to_string(img, lang=ocr_lang)
+                    else:
+                        txt = pytesseract.image_to_string(img)
+                except Exception:
+                    txt = ""
+                ocr_texts.append(txt)
+            return "\n".join(ocr_texts)
+        except Exception as e:
+            print(f"[WARN] Falha no OCR para {pdf_path}: {e}")
+            return ""
     except Exception as e:
         print(f"[WARN] Falha ao ler {pdf_path}: {e}")
         return ""
