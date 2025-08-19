@@ -9,7 +9,7 @@ Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** em uma pa
 4. **Armazena** em **PostgreSQL + pgvector**.
 5. **Consulta** por similaridade (kNN) com `query.py` — pronto para integrar no seu agente.
 
-> Dimensão dos vetores: **384** (modelo `intfloat/multilingual-e5-small`).
+> Dimensão dos vetores: **384** (modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`).
 
 ---
 

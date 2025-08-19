@@ -19,7 +19,8 @@ def main():
     conn = psycopg.connect(dsn)
     register_vector(conn)
 
-    embedder = TextEmbedding(model_name="intfloat/multilingual-e5-small")
+    # Use a supported multilingual embedding model
+    embedder = TextEmbedding(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     qvec = list(embedder.embed([f'query: {args.q}']))[0]  # E5 prefix para consulta
 
     sql = """

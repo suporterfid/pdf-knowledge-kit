@@ -4,7 +4,8 @@ from pgvector.psycopg import register_vector
 from fastembed import TextEmbedding
 from typing import List, Tuple, Dict
 
-embedder = TextEmbedding(model_name="intfloat/multilingual-e5-small")
+# Use a supported multilingual embedding model
+embedder = TextEmbedding(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
 
 def get_conn():
