@@ -18,8 +18,14 @@ from fastembed import TextEmbedding
 
 
 def read_md_text(md_path: Path) -> str:
+    """Read a Markdown file as UTF-8 text.
+
+    Any failure to read the file results in a warning and an empty string so
+    that the caller can safely skip the document.
+    """
     try:
-        return md_path.read_text(encoding="utf-8")
+        with md_path.open("r", encoding="utf-8") as f:
+            return f.read()
     except Exception as e:
         print(f"[WARN] Falha ao ler {md_path}: {e}")
         return ""
@@ -153,7 +159,9 @@ def main():
     register_vector(conn)
 
     docs_dir = Path(args.docs)
-    doc_files = sorted(list(docs_dir.rglob("*.pdf")) + list(docs_dir.rglob("*.md")))
+    doc_files = sorted(
+        f for f in docs_dir.rglob("*") if f.suffix.lower() in {".pdf", ".md"}
+    )
     if not doc_files:
         print(f"[INFO] Nenhum PDF ou Markdown encontrado em {docs_dir.resolve()}")
         return
