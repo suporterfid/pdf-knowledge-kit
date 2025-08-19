@@ -11,6 +11,12 @@ Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** e **Markd
 
 > Dimensão dos vetores: **384** (modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`).
 
+### Suporte a idiomas
+O modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` atende mais de 50 idiomas
+e foi verificado com frases em **inglês**, **português brasileiro** e **espanhol**.
+Línguas fora desse conjunto podem gerar embeddings de qualidade reduzida e
+resultados menos precisos.
+
 ---
 
 ## Requisitos

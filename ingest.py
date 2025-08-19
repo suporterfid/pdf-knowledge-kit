@@ -13,8 +13,11 @@ from pdf2image import convert_from_path
 import pytesseract
 from tqdm import tqdm
 
-# Embeddings (multilíngue PT/EN)
+# Embeddings (multilíngue PT/EN/ES)
 from fastembed import TextEmbedding
+
+# Explicit model to ensure predictable multilingual embeddings
+EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 
 def read_md_text(md_path: Path) -> str:
@@ -167,7 +170,7 @@ def main():
         return
 
     # Use a supported multilingual embedding model
-    embedder = TextEmbedding(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
 
     for doc_path in tqdm(doc_files, desc="Processando documentos"):
         try:
