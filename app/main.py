@@ -78,6 +78,31 @@ class AskRequest(BaseModel):
     q: str
     k: int = 5
 
+
+def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
+    """Generate an answer given a question and context using the LLM if available."""
+    if client:
+        try:  # pragma: no cover - openai optional
+            completion = client.chat.completions.create(
+                model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Responda à pergunta com base no contexto fornecido.",
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Contexto:\n{context}\n\nPergunta:\n{question}",
+                    },
+                ],
+            )
+            answer = completion.choices[0].message["content"].strip()
+            return answer, True
+        except Exception:  # pragma: no cover - openai optional
+            pass
+    answer = context or f"Você perguntou: {question}"
+    return answer, False
+
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
@@ -114,8 +139,9 @@ async def upload(
 
 @app.post("/api/ask")
 async def ask(req: AskRequest):
-    _, results = build_context(req.q, req.k)
-    return {"results": results}
+    context, sources = build_context(req.q, req.k)
+    answer, used_llm = _answer_with_context(req.q, context)
+    return {"answer": answer, "sources": sources, "used_llm": used_llm}
 
 
 @app.post("/api/chat")
