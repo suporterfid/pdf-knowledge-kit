@@ -13,6 +13,14 @@ from tqdm import tqdm
 # Embeddings (multilíngue PT/EN)
 from fastembed import TextEmbedding
 
+
+def read_md_text(md_path: Path) -> str:
+    try:
+        return md_path.read_text(encoding="utf-8")
+    except Exception as e:
+        print(f"[WARN] Falha ao ler {md_path}: {e}")
+        return ""
+
 def read_pdf_text(pdf_path: Path) -> str:
     try:
         reader = PdfReader(str(pdf_path))
@@ -96,8 +104,8 @@ def insert_chunks(conn: psycopg.Connection, doc_id: uuid.UUID, chunks, embedding
 
 def main():
     load_dotenv()
-    parser = argparse.ArgumentParser(description="Ingestão de PDFs para Postgres+pgvector")
-    parser.add_argument("--docs", type=str, default=os.getenv("DOCS_DIR", "./docs"), help="Pasta com PDFs")
+    parser = argparse.ArgumentParser(description="Ingestão de PDFs e Markdown para Postgres+pgvector")
+    parser.add_argument("--docs", type=str, default=os.getenv("DOCS_DIR", "./docs"), help="Pasta com PDFs/MD")
     parser.add_argument("--batch", type=int, default=64, help="Tamanho do batch para embeddings")
     parser.add_argument("--reindex", action="store_true", help="Recria índice vetorial após ingestão")
     args = parser.parse_args()
@@ -108,45 +116,50 @@ def main():
     register_vector(conn)
 
     docs_dir = Path(args.docs)
-    pdf_files = sorted(list(docs_dir.rglob("*.pdf")))
-    if not pdf_files:
-        print(f"[INFO] Nenhum PDF encontrado em {docs_dir.resolve()}")
+    doc_files = sorted(list(docs_dir.rglob("*.pdf")) + list(docs_dir.rglob("*.md")))
+    if not doc_files:
+        print(f"[INFO] Nenhum PDF ou Markdown encontrado em {docs_dir.resolve()}")
         return
 
     # Use a supported multilingual embedding model
     embedder = TextEmbedding(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
-    for pdf_path in tqdm(pdf_files, desc="Processando PDFs"):
+    for doc_path in tqdm(doc_files, desc="Processando documentos"):
         try:
-            text = read_pdf_text(pdf_path)
+            suffix = doc_path.suffix.lower()
+            if suffix == ".pdf":
+                text = read_pdf_text(doc_path)
+            elif suffix == ".md":
+                text = read_md_text(doc_path)
+            else:
+                continue
             if not text.strip():
-                print(f"[WARN] Sem texto extraído (talvez precise de OCR): {pdf_path}")
+                print(f"[WARN] Sem texto extraído: {doc_path}")
                 continue
 
             chunks = chunk_text(text, max_chars=1200, overlap=200)
             if not chunks:
-                print(f"[WARN] Sem chunks gerados: {pdf_path}")
+                print(f"[WARN] Sem chunks gerados: {doc_path}")
                 continue
 
-            # metadados do PDF
-            bytes_len = os.path.getsize(pdf_path)
-            # Pypdf não é 100% confiável para contagem de páginas quando falha parsing; tentamos de novo:
-            try:
-                page_count = len(PdfReader(str(pdf_path)).pages)
-            except Exception:
-                page_count = None
+            bytes_len = os.path.getsize(doc_path)
+            if suffix == ".pdf":
+                try:
+                    page_count = len(PdfReader(str(doc_path)).pages)
+                except Exception:
+                    page_count = 0
+            else:
+                page_count = 1
 
-            doc_id = upsert_document(conn, pdf_path, bytes_len, page_count or 0)
+            doc_id = upsert_document(conn, doc_path, bytes_len, page_count)
 
-            # Prefixos E5 (melhor qualidade)
             passages = [f"passage: {c}" for c in chunks]
 
-            # Embeddings em lote
             embeddings = list(embedder.embed(passages, batch_size=args.batch))
 
             insert_chunks(conn, doc_id, chunks, embeddings)
         except Exception as e:
-            print(f"[ERROR] {pdf_path}: {e}")
+            print(f"[ERROR] {doc_path}: {e}")
 
     if args.reindex:
         with conn.cursor() as cur:

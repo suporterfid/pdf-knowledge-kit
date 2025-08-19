@@ -1,9 +1,9 @@
-# PDF → Vector DB (pgvector) Starter Kit
+# PDF/Markdown → Vector DB (pgvector) Starter Kit
 
-Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** em uma pasta local e habilite **busca semântica** para um agente de IA.
+Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** e **Markdown** em uma pasta local e habilite **busca semântica** para um agente de IA.
 
 ## Visão geral
-1. **Extrai** textos dos PDFs.
+1. **Extrai** textos dos PDFs e arquivos Markdown.
 2. **Divide** em *chunks* (trechos) com sobreposição.
 3. **Gera embeddings** (multilíngue, PT/EN) com `fastembed`.
 4. **Armazena** em **PostgreSQL + pgvector**.
@@ -29,7 +29,7 @@ pip install -r requirements.txt
 # 3) Configure variáveis de ambiente (opcional)
 cp .env.example .env  # edite se quiser
 
-# 4) Coloque seus PDFs na pasta ./docs/
+# 4) Coloque seus PDFs e arquivos Markdown (.md) na pasta ./docs/
 #    (ou aponte outra pasta com --docs / DOCS_DIR)
 
 # 5) Ingestão
@@ -39,14 +39,14 @@ python ingest.py --docs ./docs
 python query.py --q "Como configuro potência de leitura?" --k 5
 ```
 
-## Ingestão de PDFs com Docker
+## Ingestão de PDFs/Markdown com Docker
 
-1. **Tornar os PDFs acessíveis ao container**
+1. **Tornar os arquivos acessíveis ao container**
 
    - Coloque os arquivos na pasta `docs/` do projeto.
    - Essa pasta já está mapeada dentro do container; tudo nela ficará disponível em `/app/docs` quando o serviço subir.
 
-2. **Ingerir os PDFs no banco**
+2. **Ingerir os arquivos no banco**
 
    No diretório raiz do projeto, execute:
 
@@ -54,7 +54,7 @@ python query.py --q "Como configuro potência de leitura?" --k 5
    docker compose run --rm app python ingest.py --docs /app/docs
    ```
 
-   Esse script lê os PDFs e grava os vetores no **PostgreSQL/pgvector**.
+   Esse script lê os PDFs e arquivos Markdown e grava os vetores no **PostgreSQL/pgvector**.
 
 3. **Subir a aplicação**
 
@@ -64,7 +64,7 @@ python query.py --q "Como configuro potência de leitura?" --k 5
    docker compose up --build
    ```
 
-   Isso lança o backend e o frontend, que já podem consultar os PDFs ingeridos.
+   Isso lança o backend e o frontend, que já podem consultar os documentos ingeridos.
 
 4. **(Opcional) Usar outra pasta local**
 
@@ -110,7 +110,7 @@ npm run build  # gera os arquivos em app/static
 Copie `.env.example` para `.env` e ajuste conforme necessário:
 
 - **PGHOST**, **PGPORT**, **PGDATABASE**, **PGUSER**, **PGPASSWORD** – conexão com o Postgres/pgvector.
-- **DOCS_DIR** – pasta padrão para os PDFs.
+- **DOCS_DIR** – pasta padrão para os arquivos (PDF/MD).
 - **OPENAI_API_KEY**, **OPENAI_MODEL**, **USE_LLM** – integrações com LLM (opcional).
 - **TOP_K**, **MAX_CONTEXT_CHARS** – ajustes de recuperação de trechos.
 - **UPLOAD_DIR**, **UPLOAD_TTL**, **UPLOAD_MAX_SIZE**, **UPLOAD_ALLOWED_MIME_TYPES** – controle de uploads temporários.
@@ -128,17 +128,17 @@ pdf_knowledge_kit/
 ├─ docker-compose.yml      # Postgres + pgvector
 ├─ requirements.txt        # Dependências
 ├─ schema.sql              # Criação de tabelas/índices
-├─ ingest.py               # Varre PDFs, extrai, fatia e insere
+├─ ingest.py               # Varre PDFs/Markdown, extrai, fatia e insere
 ├─ query.py                # Busca semântica
 ├─ .env.example            # Configs de conexão
-└─ docs/                   # Coloque seus PDFs aqui
+└─ docs/                   # Coloque seus PDFs e Markdown aqui
 ```
 
 ## Integração no seu agente de IA (resumo)
 - Use `query.py` como referência: gere embedding da pergunta e rode SQL:
   `SELECT ... ORDER BY embedding <-> :vec LIMIT :k`.
 - Traga os trechos + metadados e alimente o *prompt* do agente (*RAG*).
-- Para respostas fiéis, **mostre as fontes** (caminho do PDF e página).
+- Para respostas fiéis, **mostre as fontes** (caminho do arquivo e página, quando houver).
 
 ## Dicas francas
 - PDFs escaneados (sem texto) exigem **OCR** (ex.: Tesseract). Este kit não faz OCR por padrão — adicione se precisar.
