@@ -11,3 +11,6 @@ openai>=1.0
 python-multipart>=0.0.7
 pytest>=8.0
 slowapi>=0.1.8
+pytesseract
+pdf2image
+Pillow
