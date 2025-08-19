@@ -8,13 +8,23 @@ import ErrorBanner from './components/ErrorBanner';
 import { useChat } from './chat';
 
 function App() {
-  const { messages, notices, send, isStreaming, cancel, error, clearError } =
-    useChat();
+  const {
+    messages,
+    notices,
+    send,
+    isStreaming,
+    cancel,
+    error,
+    clearError,
+    retry,
+  } = useChat();
 
   return (
     <div className="app">
       <Header />
-      {error && <ErrorBanner message={error} onClose={clearError} />}
+      {error && (
+        <ErrorBanner message={error} onClose={clearError} onRetry={retry} />
+      )}
       <ConversationPane messages={messages} />
       <SystemNotices notices={notices} />
       <Composer onSend={send} onCancel={cancel} isStreaming={isStreaming} />

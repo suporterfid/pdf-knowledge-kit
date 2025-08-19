@@ -21,6 +21,7 @@ interface ChatContextValue {
   cancel: () => void;
   error: string | null;
   clearError: () => void;
+  retry: () => void;
 }
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
@@ -35,6 +36,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
+  const lastRequestRef = useRef<{ text: string; file?: File | null } | null>(null);
 
   useEffect(() => {
     let id = localStorage.getItem('sessionId');
@@ -50,6 +52,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [messages]);
 
   const send = async (text: string, file?: File | null) => {
+    lastRequestRef.current = { text, file };
     setMessages((msgs) => [
       ...msgs,
       { role: 'user', content: text },
@@ -135,6 +138,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               return updated;
             });
             controllerRef.current = null;
+          } else if (event === 'error') {
+            doneReading = true;
+            setError(data || 'Erro desconhecido');
+            setIsStreaming(false);
+            setMessages((msgs) => {
+              const updated = [...msgs];
+              const last = updated[updated.length - 1];
+              updated[updated.length - 1] = { ...last, status: 'done' };
+              return updated;
+            });
+            controllerRef.current = null;
           }
         }
       }
@@ -172,6 +186,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const clearError = () => setError(null);
 
+  const retry = () => {
+    if (lastRequestRef.current) {
+      const { text, file } = lastRequestRef.current;
+      clearError();
+      send(text, file || null);
+    }
+  };
+
   return (
     <ChatContext.Provider
       value={{
@@ -183,6 +205,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         cancel,
         error,
         clearError,
+        retry,
       }}
     >
       {children}
