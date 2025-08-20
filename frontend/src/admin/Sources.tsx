@@ -11,14 +11,16 @@ interface Source {
 export default function Sources() {
   const apiFetch = useApiFetch();
   const [sources, setSources] = useState<Source[]>([]);
-  const [type, setType] = useState('local');
+  const [type, setType] = useState('local_dir');
   const [path, setPath] = useState('');
   const [url, setUrl] = useState('');
 
+  interface SourceList { items: Source[] }
+
   const load = () => {
     apiFetch('/api/admin/ingest/sources')
-      .then((r) => r.json())
-      .then(setSources)
+      .then((r) => r.json() as Promise<SourceList>)
+      .then((d) => setSources(d.items))
       .catch(() => {});
   };
 
@@ -28,10 +30,11 @@ export default function Sources() {
 
   const create = (e: React.FormEvent) => {
     e.preventDefault();
-    const params = new URLSearchParams({ type });
-    if (path) params.append('path', path);
-    if (url) params.append('url', url);
-    apiFetch(`/api/admin/ingest/sources?${params.toString()}`, { method: 'POST' })
+    apiFetch('/api/admin/ingest/sources', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, path: path || undefined, url: url || undefined }),
+    })
       .then(() => {
         setPath('');
         setUrl('');
@@ -41,11 +44,10 @@ export default function Sources() {
   };
 
   const save = (s: Source) => {
-    const params = new URLSearchParams();
-    if (s.path) params.append('path', s.path);
-    if (s.url) params.append('url', s.url);
-    apiFetch(`/api/admin/ingest/sources/${s.id}?${params.toString()}`, {
+    apiFetch(`/api/admin/ingest/sources/${s.id}`, {
       method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: s.path, url: s.url }),
     }).then(load);
   };
 
@@ -65,7 +67,7 @@ export default function Sources() {
       <form onSubmit={create} aria-label="Create source form">
         <label htmlFor="type">Type</label>
         <select id="type" value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="local">Local</option>
+          <option value="local_dir">Local</option>
           <option value="url">URL</option>
         </select>
         <label htmlFor="path">Path</label>
@@ -90,7 +92,7 @@ export default function Sources() {
               <td>{s.id}</td>
               <td>{s.type}</td>
               <td>
-                {s.type === 'local' && (
+                {s.type === 'local_dir' && (
                   <input
                     aria-label="path"
                     value={s.path || ''}
@@ -116,9 +118,9 @@ export default function Sources() {
                 )}
               </td>
               <td>
-                <button onClick={() => save(s)}>Save</button>
-                <button onClick={() => del(s.id)}>Delete</button>
-                <button onClick={() => reindex(s.id)}>Reindex</button>
+                <button aria-label={`Save source ${s.id}`} onClick={() => save(s)}>Save</button>
+                <button aria-label={`Delete source ${s.id}`} onClick={() => del(s.id)}>Delete</button>
+                <button aria-label={`Reindex source ${s.id}`} onClick={() => reindex(s.id)}>Reindex</button>
               </td>
             </tr>
           ))}

@@ -8,15 +8,25 @@ interface Job {
   created_at: string;
 }
 
+interface JobList {
+  items: Job[];
+}
+
 export default function Dashboard() {
   const apiFetch = useApiFetch();
   const [jobs, setJobs] = useState<Job[]>([]);
 
-  useEffect(() => {
+  const load = () => {
     apiFetch('/api/admin/ingest/jobs')
-      .then((r) => r.json())
-      .then(setJobs)
+      .then((r) => r.json() as Promise<JobList>)
+      .then((d) => setJobs(d.items))
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 3000);
+    return () => clearInterval(id);
   }, [apiFetch]);
 
   const counts = jobs.reduce<Record<string, number>>((acc, j) => {
@@ -38,6 +48,7 @@ export default function Dashboard() {
             <th>Job</th>
             <th>Status</th>
             <th>Created</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -46,6 +57,24 @@ export default function Dashboard() {
               <td><Link to={`/admin/jobs/${job.id}`}>{job.id}</Link></td>
               <td>{job.status}</td>
               <td>{new Date(job.created_at).toLocaleString()}</td>
+              <td>
+                <button
+                  aria-label={`Cancel job ${job.id}`}
+                  onClick={() =>
+                    apiFetch(`/api/admin/ingest/jobs/${job.id}/cancel`, { method: 'POST' }).then(load)
+                  }
+                >
+                  Cancel
+                </button>
+                <button
+                  aria-label={`Re-run job ${job.id}`}
+                  onClick={() =>
+                    apiFetch(`/api/admin/ingest/jobs/${job.id}/rerun`, { method: 'POST' }).then(load)
+                  }
+                >
+                  Re-run
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>

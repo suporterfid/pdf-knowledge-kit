@@ -8,12 +8,16 @@ export default function IngestLocal() {
   const [lang, setLang] = useState('');
   const [jobId, setJobId] = useState<string | null>(null);
 
+  interface StartJobResponse { job_id: string }
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const params = new URLSearchParams({ path, use_ocr: String(useOcr) });
-    if (lang) params.append('ocr_lang', lang);
-    apiFetch(`/api/admin/ingest/jobs/local?${params.toString()}`, { method: 'POST' })
-      .then((r) => r.json())
+    apiFetch('/api/admin/ingest/local', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, use_ocr: useOcr, ocr_lang: lang || undefined }),
+    })
+      .then((r) => r.json() as Promise<StartJobResponse>)
       .then((d) => setJobId(d.job_id))
       .catch(() => {});
   };
