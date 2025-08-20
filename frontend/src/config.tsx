@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useApiFetch } from './apiKey';
 
 export interface AppConfig {
   BRAND_NAME: string;
@@ -21,13 +22,14 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
     const injected = (window as any).__CONFIG__ || {};
     return { ...defaultConfig, ...injected } as AppConfig;
   });
+  const apiFetch = useApiFetch();
 
   useEffect(() => {
-    fetch('/api/config')
+    apiFetch('/api/config')
       .then((res) => (res.ok ? res.json() : {}))
       .then((data) => setConfig((prev) => ({ ...prev, ...data })))
       .catch(() => {});
-  }, []);
+  }, [apiFetch]);
 
   return (
     <ConfigContext.Provider value={config}>{children}</ConfigContext.Provider>
