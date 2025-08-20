@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { useConfig } from './config';
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -37,6 +38,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const lastRequestRef = useRef<{ text: string; file?: File | null } | null>(null);
+  const { UPLOAD_MAX_SIZE } = useConfig();
 
   useEffect(() => {
     let id = localStorage.getItem('sessionId');
@@ -54,6 +56,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const send = async (text: string, file?: File | null) => {
     if (text.length > 5000) {
       setError('Mensagem muito longa');
+      return;
+    }
+    if (file && file.size > UPLOAD_MAX_SIZE) {
+      setError('Arquivo muito grande');
       return;
     }
     lastRequestRef.current = { text, file };
