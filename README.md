@@ -97,9 +97,24 @@ python query.py --q "Como configuro potência de leitura?" --k 5
    ```bash
    docker compose run --rm \
      -v "C:/Users/alexa/Dropbox/Delivery/Impinj/R700/FAQ:/app/docs:ro" \
-     app python ingest.py --docs /app/docs  # adicione --ocr ou ENABLE_OCR=1 se preciso
+    app python ingest.py --docs /app/docs  # adicione --ocr ou ENABLE_OCR=1 se preciso
    ```
 
+
+## Ingestão de páginas web públicas
+
+Além de arquivos locais, o `ingest.py` também pode buscar e indexar páginas da web acessíveis publicamente.
+
+```bash
+# Uma ou mais URLs diretamente na linha de comando
+python ingest.py --url https://exemplo.com/sobre --url https://example.com/en/doc
+
+# Lista de URLs (uma por linha)
+python ingest.py --urls-file urls.txt
+# ou defina URLS_FILE=urls.txt e o script usará esse caminho por padrão
+```
+
+O conteúdo dessas páginas deve estar em **inglês**, **português** ou **espanhol** (EN/PT/ES).
 
 ## Logging
 
