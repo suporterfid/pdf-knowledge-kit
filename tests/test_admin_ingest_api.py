@@ -29,20 +29,20 @@ def test_role_enforcement(monkeypatch):
     # viewer can list jobs
     res = client.get("/api/admin/ingest/jobs", headers={"X-API-Key": "view"})
     assert res.status_code == 200
-    assert res.json() == []
+    assert res.json() == {"items": [], "total": 0}
 
     # viewer cannot start job
     res = client.post(
-        "/api/admin/ingest/jobs/url",
-        params={"url": "http://example.com"},
+        "/api/admin/ingest/url",
+        json={"url": "http://example.com"},
         headers={"X-API-Key": "view"},
     )
     assert res.status_code == 403
 
     # operator can start job
     res = client.post(
-        "/api/admin/ingest/jobs/url",
-        params={"url": "http://example.com"},
+        "/api/admin/ingest/url",
+        json={"url": "http://example.com"},
         headers={"X-API-Key": "oper"},
     )
     assert res.status_code == 200
