@@ -23,7 +23,28 @@ resultados menos precisos.
 - **Docker** + **Docker Compose** (para o Postgres com pgvector).
 - **Python 3.10+** com `pip`.
 - *(Opcional p/ OCR)* `tesseract-ocr`, pacotes de idioma (`tesseract-ocr-eng`, `tesseract-ocr-por`, `tesseract-ocr-spa`) e `poppler-utils`.
-  O `Dockerfile` já instala esses pacotes.
+O `Dockerfile` já instala esses pacotes.
+
+## Ambiente de desenvolvimento
+1. Clone este repositório.
+2. Crie um ambiente virtual e instale as dependências:
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+```
+3. Suba o Postgres local com pgvector:
+```bash
+docker compose up -d db
+```
+4. Execute os testes para validar o setup:
+```bash
+pytest
+```
+5. Inicie o backend em modo `reload`:
+```bash
+uvicorn app.main:app --reload
+```
+6. (Opcional) Para a interface, entre em `frontend/` e rode `npm install && npm run dev`.
 
 ## Passo a passo (rápido)
 ```bash
@@ -254,6 +275,43 @@ pdf_knowledge_kit/
 ├─ query.py                # Busca semântica
 ├─ .env.example            # Configs de conexão
 └─ docs/                   # Coloque seus PDFs e Markdown aqui
+```
+
+## Deploy em produção
+
+### Bare metal
+1. Instale **PostgreSQL** com a extensão **pgvector** e crie o banco:
+```bash
+psql -c 'CREATE EXTENSION IF NOT EXISTS vector;' "$PGDATABASE"
+psql -f schema.sql "$PGDATABASE"
+```
+2. Configure as variáveis de ambiente (veja `.env.example`).
+3. Ingestione os documentos:
+```bash
+python ingest.py --docs ./docs
+```
+4. Inicie a API com um servidor como **gunicorn** ou **uvicorn**:
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+5. Teste:
+```bash
+curl http://localhost:8000/api/health
+```
+
+### Docker
+1. Copie `.env.example` para `.env` e ajuste.
+2. Construa e suba os serviços:
+```bash
+docker compose up --build -d
+```
+3. Ingerir documentos dentro do container:
+```bash
+docker compose run --rm app python ingest.py --docs /app/docs
+```
+4. Verifique a API:
+```bash
+curl http://localhost:8000/api/health
 ```
 
 ## Integração no seu agente de IA (resumo)
