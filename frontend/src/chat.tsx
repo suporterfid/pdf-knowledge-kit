@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import { useConfig } from './config';
+import { useApiFetch } from './apiKey';
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -39,6 +40,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const controllerRef = useRef<AbortController | null>(null);
   const lastRequestRef = useRef<{ text: string; file?: File | null } | null>(null);
   const { UPLOAD_MAX_SIZE } = useConfig();
+  const apiFetch = useApiFetch();
 
   useEffect(() => {
     let id = localStorage.getItem('sessionId');
@@ -83,7 +85,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         } else {
           const up = new FormData();
           up.append('file', file);
-          const resUp = await fetch('/api/upload', {
+          const resUp = await apiFetch('/api/upload', {
             method: 'POST',
             body: up,
           });
@@ -96,7 +98,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
       formData.append('attachments', JSON.stringify(attachments));
       controllerRef.current = new AbortController();
-      const res = await fetch('/api/chat', {
+      const res = await apiFetch('/api/chat', {
         method: 'POST',
         body: formData,
         signal: controllerRef.current.signal,

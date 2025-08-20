@@ -1,36 +1,33 @@
 import React from 'react';
-import Header from './components/Header';
-import ConversationPane from './components/ConversationPane';
-import Composer from './components/Composer';
-import SystemNotices from './components/SystemNotices';
-import Footer from './components/Footer';
-import ErrorBanner from './components/ErrorBanner';
-import { useChat } from './chat';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import ChatPage from './ChatPage';
+import Login from './Login';
+import RequireApiKey from './RequireApiKey';
+import AdminApp from './admin/AdminApp';
 
-function App() {
-  const {
-    messages,
-    notices,
-    send,
-    isStreaming,
-    cancel,
-    error,
-    clearError,
-    retry,
-  } = useChat();
-
+export default function App() {
   return (
-    <div className="app">
-      <Header />
-      {error && (
-        <ErrorBanner message={error} onClose={clearError} onRetry={retry} />
-      )}
-      <ConversationPane messages={messages} />
-      <SystemNotices notices={notices} />
-      <Composer onSend={send} onCancel={cancel} isStreaming={isStreaming} />
-      <Footer />
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/"
+          element={
+            <RequireApiKey>
+              <ChatPage />
+            </RequireApiKey>
+          }
+        />
+        <Route
+          path="/admin/*"
+          element={
+            <RequireApiKey>
+              <AdminApp />
+            </RequireApiKey>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
-
-export default App;

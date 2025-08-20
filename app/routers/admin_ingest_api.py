@@ -3,14 +3,15 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
+from typing import List
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from ..ingestion import service, storage
-from ..ingestion.models import IngestionJobStatus
+from ..ingestion.models import IngestionJobStatus, SourceType
 from ..security.auth import require_role
 
 router = APIRouter(prefix="/api/admin/ingest", tags=["admin-ingest"])
@@ -47,6 +48,15 @@ def start_url_job(
     return {"job_id": str(job_id)}
 
 
+@router.post("/jobs/urls")
+def start_urls_job(
+    urls: List[str] = Body(...),
+    role: str = Depends(require_role("operator")),
+):
+    job_id = service.ingest_urls(urls)
+    return {"job_id": str(job_id)}
+
+
 @router.post("/jobs/{job_id}/cancel")
 def cancel_job(job_id: UUID, role: str = Depends(require_role("operator"))):
     service.cancel_job(job_id)
@@ -62,6 +72,49 @@ def list_jobs(role: str = Depends(require_role("viewer"))):
 def list_sources(role: str = Depends(require_role("viewer"))):
     with _get_conn() as conn:
         return list(storage.list_sources(conn))
+
+
+@router.post("/sources")
+def create_source(
+    type: SourceType,
+    path: str | None = None,
+    url: str | None = None,
+    role: str = Depends(require_role("operator")),
+):
+    with _get_conn() as conn:
+        source_id = storage.get_or_create_source(
+            conn, type=type, path=path, url=url
+        )
+    return {"source_id": str(source_id)}
+
+
+@router.put("/sources/{source_id}")
+def update_source(
+    source_id: UUID,
+    path: str | None = None,
+    url: str | None = None,
+    role: str = Depends(require_role("operator")),
+):
+    with _get_conn() as conn:
+        storage.update_source(conn, source_id, path=path, url=url)
+    return {"status": "updated"}
+
+
+@router.delete("/sources/{source_id}")
+def delete_source(
+    source_id: UUID, role: str = Depends(require_role("operator"))
+):
+    with _get_conn() as conn:
+        storage.soft_delete_source(conn, source_id)
+    return {"status": "deleted"}
+
+
+@router.post("/sources/{source_id}/reindex")
+def reindex_source_endpoint(
+    source_id: UUID, role: str = Depends(require_role("operator"))
+):
+    service.reindex_source(source_id)
+    return {"status": "reindexing"}
 
 
 @router.get("/jobs/{job_id}/logs")

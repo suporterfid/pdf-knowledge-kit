@@ -2,6 +2,7 @@ import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { ChatProvider, useChat } from './chat';
 import { ConfigProvider } from './config';
+import { ApiKeyProvider } from './apiKey';
 import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
 import 'whatwg-fetch';
@@ -23,9 +24,11 @@ afterAll(() => server.close());
 function renderChat() {
   return renderHook(() => useChat(), {
     wrapper: ({ children }) => (
-      <ConfigProvider>
-        <ChatProvider>{children}</ChatProvider>
-      </ConfigProvider>
+      <ApiKeyProvider>
+        <ConfigProvider>
+          <ChatProvider>{children}</ChatProvider>
+        </ConfigProvider>
+      </ApiKeyProvider>
     ),
   });
 }
