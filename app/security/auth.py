@@ -13,17 +13,21 @@ def _load_api_key_roles() -> dict[str, str]:
     """Load API keys for each role from environment variables.
 
     Environment variables expected:
-    - ``VIEWER_API_KEYS``
-    - ``OPERATOR_API_KEYS``
-    - ``ADMIN_API_KEYS``
+    - ``VIEW_API_KEY`` (default: ``view``)
+    - ``OP_API_KEY`` (default: ``oper``)
+    - ``ADMIN_API_KEY`` (default: ``admin``)
 
-    Each variable may contain a comma-separated list of keys for that role.
+    Each variable holds a single key for that role.
     """
 
     mapping: dict[str, str] = {}
-    for role in _ROLE_LEVELS:
-        keys = os.getenv(f"{role.upper()}_API_KEYS", "")
-        for key in [k.strip() for k in keys.split(",") if k.strip()]:
+    for env, role, default in [
+        ("VIEW_API_KEY", "viewer", "view"),
+        ("OP_API_KEY", "operator", "oper"),
+        ("ADMIN_API_KEY", "admin", "admin"),
+    ]:
+        key = os.getenv(env, default).strip()
+        if key:
             mapping[key] = role
     return mapping
 
