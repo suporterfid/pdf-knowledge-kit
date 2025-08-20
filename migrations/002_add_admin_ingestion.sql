@@ -5,27 +5,25 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS sources (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     type TEXT NOT NULL,
-    path TEXT,
-    url TEXT,
+    label TEXT,
+    location TEXT,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ,
-    deleted_at TIMESTAMPTZ
+    updated_at TIMESTAMPTZ
 );
-
--- Ensure fast lookups and uniqueness
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_path ON sources (path) WHERE path IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_url ON sources (url) WHERE url IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_sources_created_at ON sources (created_at);
 
 -- Table to register ingestion jobs
 CREATE TABLE IF NOT EXISTS ingestion_jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_id UUID NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    params JSONB,
     status TEXT NOT NULL,
-    error TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ
+    started_at TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ,
+    log_path TEXT,
+    error TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_ingestion_jobs_source ON ingestion_jobs (source_id);
-CREATE INDEX IF NOT EXISTS idx_ingestion_jobs_created_at ON ingestion_jobs (created_at);
+-- Indexes for efficient lookups
+CREATE INDEX IF NOT EXISTS idx_ingestion_jobs_status ON ingestion_jobs (status);
+CREATE INDEX IF NOT EXISTS idx_ingestion_jobs_source_id ON ingestion_jobs (source_id);
