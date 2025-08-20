@@ -1,0 +1,38 @@
+"""Ingestion package exposing high level APIs."""
+from .service import (
+    read_md_text,
+    read_pdf_text,
+    read_url_text,
+    chunk_text,
+    upsert_document,
+    insert_chunks,
+    ingest_local,
+    ingest_url,
+    ingest_urls,
+    reindex_source,
+    cancel_job,
+    get_job,
+    list_jobs,
+    read_job_log,
+    TextEmbedding,
+    EMBEDDING_MODEL,
+)
+
+__all__ = [
+    "read_md_text",
+    "read_pdf_text",
+    "read_url_text",
+    "chunk_text",
+    "upsert_document",
+    "insert_chunks",
+    "ingest_local",
+    "ingest_url",
+    "ingest_urls",
+    "reindex_source",
+    "cancel_job",
+    "get_job",
+    "list_jobs",
+    "read_job_log",
+    "TextEmbedding",
+    "EMBEDDING_MODEL",
+]
