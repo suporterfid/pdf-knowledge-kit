@@ -12,6 +12,8 @@ from pypdf import PdfReader
 from pdf2image import convert_from_path
 import pytesseract
 from tqdm import tqdm
+import requests
+from bs4 import BeautifulSoup
 
 # Embeddings (multilíngue PT/EN/ES)
 from fastembed import TextEmbedding
@@ -75,6 +77,23 @@ def read_pdf_text(pdf_path: Path, use_ocr: bool = False, ocr_lang: str | None = 
         print(f"[WARN] Falha ao ler {pdf_path}: {e}")
         return ""
 
+
+def read_url_text(url: str) -> str:
+    """Fetch a URL and return readable text content.
+
+    Scripts and style tags are removed and whitespace is normalized.
+    Any failure results in a warning and an empty string."""
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for tag in soup(["script", "style"]):
+            tag.decompose()
+        return " ".join(soup.stripped_strings)
+    except Exception as e:
+        print(f"[WARN] Falha ao ler URL {url}: {e}")
+        return ""
+
 def chunk_text(text: str, max_chars: int = 1200, overlap: int = 200):
     """
     Simples chunk por caracteres, preservando quebras.
@@ -116,7 +135,7 @@ def ensure_schema(conn: psycopg.Connection, schema_sql_path: Path):
         cur.execute(open(schema_sql_path, "r", encoding="utf-8").read())
     conn.commit()
 
-def upsert_document(conn: psycopg.Connection, path: Path, bytes_len: int, page_count: int) -> uuid.UUID:
+def upsert_document(conn: psycopg.Connection, path: str | Path, bytes_len: int, page_count: int) -> uuid.UUID:
     with conn.cursor() as cur:
         # Existe?
         cur.execute("SELECT id FROM documents WHERE path = %s", (str(path),))
@@ -143,8 +162,10 @@ def insert_chunks(conn: psycopg.Connection, doc_id: uuid.UUID, chunks, embedding
 
 def main():
     load_dotenv()
-    parser = argparse.ArgumentParser(description="Ingestão de PDFs e Markdown para Postgres+pgvector")
+    parser = argparse.ArgumentParser(description="Ingestão de PDFs, Markdown e URLs para Postgres+pgvector")
     parser.add_argument("--docs", type=str, default=os.getenv("DOCS_DIR", "./docs"), help="Pasta com PDFs/MD")
+    parser.add_argument("--url", action="append", help="URL para ingestão; pode ser usado várias vezes")
+    parser.add_argument("--urls-file", type=str, help="Arquivo com URLs (uma por linha)")
     parser.add_argument("--batch", type=int, default=64, help="Tamanho do batch para embeddings")
     parser.add_argument("--reindex", action="store_true", help="Recria índice vetorial após ingestão")
     parser.add_argument("--ocr", action="store_true", help="Habilita OCR para PDFs escaneados")
@@ -165,49 +186,85 @@ def main():
     doc_files = sorted(
         f for f in docs_dir.rglob("*") if f.suffix.lower() in {".pdf", ".md"}
     )
-    if not doc_files:
-        print(f"[INFO] Nenhum PDF ou Markdown encontrado em {docs_dir.resolve()}")
+    urls: list[str] = []
+    if args.url:
+        urls.extend(args.url)
+    if args.urls_file:
+        try:
+            with open(args.urls_file, "r", encoding="utf-8") as uf:
+                urls.extend([ln.strip() for ln in uf if ln.strip()])
+        except Exception as e:
+            print(f"[WARN] Falha ao ler URLs de {args.urls_file}: {e}")
+
+    if not doc_files and not urls:
+        print(
+            f"[INFO] Nenhum PDF ou Markdown encontrado em {docs_dir.resolve()} e nenhuma URL fornecida"
+        )
         return
 
     # Use a supported multilingual embedding model
     embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
 
-    for doc_path in tqdm(doc_files, desc="Processando documentos"):
-        try:
-            suffix = doc_path.suffix.lower()
-            if suffix == ".pdf":
-                text = read_pdf_text(doc_path, use_ocr=args.ocr, ocr_lang=args.ocr_lang)
-            elif suffix == ".md":
-                text = read_md_text(doc_path)
-            else:
-                continue
-            if not text.strip():
-                print(f"[WARN] Sem texto extraído: {doc_path}")
-                continue
+    if doc_files:
+        for doc_path in tqdm(doc_files, desc="Processando documentos"):
+            try:
+                suffix = doc_path.suffix.lower()
+                if suffix == ".pdf":
+                    text = read_pdf_text(doc_path, use_ocr=args.ocr, ocr_lang=args.ocr_lang)
+                elif suffix == ".md":
+                    text = read_md_text(doc_path)
+                else:
+                    continue
+                if not text.strip():
+                    print(f"[WARN] Sem texto extraído: {doc_path}")
+                    continue
 
-            chunks = chunk_text(text, max_chars=1200, overlap=200)
-            if not chunks:
-                print(f"[WARN] Sem chunks gerados: {doc_path}")
-                continue
+                chunks = chunk_text(text, max_chars=1200, overlap=200)
+                if not chunks:
+                    print(f"[WARN] Sem chunks gerados: {doc_path}")
+                    continue
 
-            bytes_len = os.path.getsize(doc_path)
-            if suffix == ".pdf":
-                try:
-                    page_count = len(PdfReader(str(doc_path)).pages)
-                except Exception:
-                    page_count = 0
-            else:
-                page_count = 1
+                bytes_len = os.path.getsize(doc_path)
+                if suffix == ".pdf":
+                    try:
+                        page_count = len(PdfReader(str(doc_path)).pages)
+                    except Exception:
+                        page_count = 0
+                else:
+                    page_count = 1
 
-            doc_id = upsert_document(conn, doc_path, bytes_len, page_count)
+                doc_id = upsert_document(conn, doc_path, bytes_len, page_count)
 
-            passages = [f"passage: {c}" for c in chunks]
+                passages = [f"passage: {c}" for c in chunks]
 
-            embeddings = list(embedder.embed(passages, batch_size=args.batch))
+                embeddings = list(embedder.embed(passages, batch_size=args.batch))
 
-            insert_chunks(conn, doc_id, chunks, embeddings)
-        except Exception as e:
-            print(f"[ERROR] {doc_path}: {e}")
+                insert_chunks(conn, doc_id, chunks, embeddings)
+            except Exception as e:
+                print(f"[ERROR] {doc_path}: {e}")
+
+    if urls:
+        for url in tqdm(urls, desc="Processando URLs"):
+            try:
+                text = read_url_text(url)
+                if not text.strip():
+                    print(f"[WARN] Sem texto extraído: {url}")
+                    continue
+
+                chunks = chunk_text(text, max_chars=1200, overlap=200)
+                if not chunks:
+                    print(f"[WARN] Sem chunks gerados: {url}")
+                    continue
+
+                bytes_len = len(text.encode("utf-8"))
+                doc_id = upsert_document(conn, url, bytes_len, page_count=1)
+
+                passages = [f"passage: {c}" for c in chunks]
+                embeddings = list(embedder.embed(passages, batch_size=args.batch))
+
+                insert_chunks(conn, doc_id, chunks, embeddings)
+            except Exception as e:
+                print(f"[ERROR] {url}: {e}")
 
     if args.reindex:
         with conn.cursor() as cur:
