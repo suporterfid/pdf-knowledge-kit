@@ -8,6 +8,7 @@ from fastapi import (
     Request,
 )
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
 import asyncio
 from pydantic import BaseModel
@@ -25,6 +26,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from .rag import build_context
 from .app_logging import init_logging
+from .routers import admin_ingest_api
 
 try:
     from openai import OpenAI
@@ -58,7 +60,19 @@ init_logging(app)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+# Optional CORS for admin UI
+admin_ui_origins = os.getenv("ADMIN_UI_ORIGINS")
+if admin_ui_origins:
+    origins = [o.strip() for o in admin_ui_origins.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+app.include_router(admin_ingest_api.router)
 app.mount(
     "/",
     StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static"), html=True),
