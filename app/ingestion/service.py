@@ -17,11 +17,13 @@ import pytesseract
 import psycopg
 from pgvector.psycopg import register_vector
 
-from .models import IngestionJob, IngestionJobStatus, JobLogSlice
+from . import storage
+from .models import IngestionJob, IngestionJobStatus, JobLogSlice, SourceType
 from .runner import IngestionRunner
 
 # Multilingual embedding model
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema.sql"
 
 # ---------------------------------------------------------------------------
 # Helper functions moved from the legacy ``ingest.py`` script
@@ -203,39 +205,77 @@ def _setup_job_logging(job_id: uuid.UUID) -> logging.Logger:
 
 
 def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = None) -> uuid.UUID:
-    job_id = uuid.uuid4()
+    """Ingest a local Markdown or PDF file."""
+
+    db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+    with psycopg.connect(db_url) as conn:
+        register_vector(conn)
+        ensure_schema(conn, SCHEMA_PATH)
+        source_id = storage.get_or_create_source(conn, type=SourceType.LOCAL, path=str(path))
+        job_id = storage.create_job(conn, source_id)
+
     logger = _setup_job_logging(job_id)
     job = IngestionJob(
         id=job_id,
-        source_id=uuid.uuid4(),
+        source_id=source_id,
         status=IngestionJobStatus.PENDING,
         created_at=datetime.utcnow(),
     )
     _jobs[job_id] = job
 
     def _work(cancel_event):
-        job.status = IngestionJobStatus.RUNNING
         try:
-            suffix = path.suffix.lower()
-            if suffix == ".pdf":
-                text = read_pdf_text(path, use_ocr=use_ocr, ocr_lang=ocr_lang)
-            elif suffix == ".md":
-                text = read_md_text(path)
-            else:
-                text = ""
-            if cancel_event.is_set():
-                job.status = IngestionJobStatus.CANCELED
-                return
-            chunks = chunk_text(text)
-            logger.info("chunks=%d", len(chunks))
-            if cancel_event.is_set():
-                job.status = IngestionJobStatus.CANCELED
-                return
-            job.status = IngestionJobStatus.COMPLETED
+            with psycopg.connect(db_url) as conn:
+                register_vector(conn)
+                storage.update_job_status(conn, job_id, IngestionJobStatus.RUNNING)
+                job.status = IngestionJobStatus.RUNNING
+
+                suffix = path.suffix.lower()
+                if suffix == ".pdf":
+                    text = read_pdf_text(path, use_ocr=use_ocr, ocr_lang=ocr_lang)
+                    page_count = len(PdfReader(str(path)).pages)
+                elif suffix == ".md":
+                    text = read_md_text(path)
+                    page_count = 1
+                else:
+                    text = ""
+                    page_count = 1
+
+                if cancel_event.is_set():
+                    storage.update_job_status(conn, job_id, IngestionJobStatus.CANCELED)
+                    job.status = IngestionJobStatus.CANCELED
+                    return
+
+                chunks = chunk_text(text)
+                logger.info("chunks=%d", len(chunks))
+                if cancel_event.is_set():
+                    storage.update_job_status(conn, job_id, IngestionJobStatus.CANCELED)
+                    job.status = IngestionJobStatus.CANCELED
+                    return
+
+                embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
+                embeddings: list[list[float]] = []
+                for emb in embedder.embed(chunks):
+                    if cancel_event.is_set():
+                        storage.update_job_status(conn, job_id, IngestionJobStatus.CANCELED)
+                        job.status = IngestionJobStatus.CANCELED
+                        return
+                    embeddings.append(emb)
+
+                bytes_len = path.stat().st_size if path.exists() else 0
+                doc_id = upsert_document(conn, path, bytes_len, page_count)
+                insert_chunks(conn, doc_id, chunks, embeddings)
+
+                storage.update_job_status(conn, job_id, IngestionJobStatus.COMPLETED)
+                job.status = IngestionJobStatus.COMPLETED
         except Exception as e:  # pragma: no cover - defensive
             logger.exception("ingestion failed: %s", e)
-            job.status = IngestionJobStatus.FAILED
-            job.error = str(e)
+            try:
+                with psycopg.connect(db_url) as conn:
+                    storage.update_job_status(conn, job_id, IngestionJobStatus.FAILED, str(e))
+            finally:
+                job.status = IngestionJobStatus.FAILED
+                job.error = str(e)
         finally:
             for h in list(logger.handlers):
                 h.close()
@@ -250,37 +290,77 @@ def ingest_url(url: str) -> uuid.UUID:
 
 
 def ingest_urls(urls: List[str]) -> uuid.UUID:
-    job_id = uuid.uuid4()
+    if not urls:
+        raise ValueError("no URLs provided")
+
+    db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+    first_url = urls[0]
+    with psycopg.connect(db_url) as conn:
+        register_vector(conn)
+        ensure_schema(conn, SCHEMA_PATH)
+        source_id = storage.get_or_create_source(conn, type=SourceType.URL, url=first_url)
+        job_id = storage.create_job(conn, source_id)
+
     logger = _setup_job_logging(job_id)
     job = IngestionJob(
         id=job_id,
-        source_id=uuid.uuid4(),
+        source_id=source_id,
         status=IngestionJobStatus.PENDING,
         created_at=datetime.utcnow(),
     )
     _jobs[job_id] = job
 
     def _work(cancel_event):
-        job.status = IngestionJobStatus.RUNNING
         try:
-            for url in urls:
-                if cancel_event.is_set():
-                    job.status = IngestionJobStatus.CANCELED
-                    return
-                text = read_url_text(url)
-                if cancel_event.is_set():
-                    job.status = IngestionJobStatus.CANCELED
-                    return
-                chunks = chunk_text(text)
-                logger.info("url=%s chunks=%d", url, len(chunks))
-                if cancel_event.is_set():
-                    job.status = IngestionJobStatus.CANCELED
-                    return
-            job.status = IngestionJobStatus.COMPLETED
+            with psycopg.connect(db_url) as conn:
+                register_vector(conn)
+                storage.update_job_status(conn, job_id, IngestionJobStatus.RUNNING)
+                job.status = IngestionJobStatus.RUNNING
+
+                embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
+
+                for url in urls:
+                    if cancel_event.is_set():
+                        storage.update_job_status(conn, job_id, IngestionJobStatus.CANCELED)
+                        job.status = IngestionJobStatus.CANCELED
+                        return
+
+                    storage.get_or_create_source(conn, type=SourceType.URL, url=url)
+                    text = read_url_text(url)
+                    if cancel_event.is_set():
+                        storage.update_job_status(conn, job_id, IngestionJobStatus.CANCELED)
+                        job.status = IngestionJobStatus.CANCELED
+                        return
+
+                    chunks = chunk_text(text)
+                    logger.info("url=%s chunks=%d", url, len(chunks))
+                    if cancel_event.is_set():
+                        storage.update_job_status(conn, job_id, IngestionJobStatus.CANCELED)
+                        job.status = IngestionJobStatus.CANCELED
+                        return
+
+                    embeddings: list[list[float]] = []
+                    for emb in embedder.embed(chunks):
+                        if cancel_event.is_set():
+                            storage.update_job_status(conn, job_id, IngestionJobStatus.CANCELED)
+                            job.status = IngestionJobStatus.CANCELED
+                            return
+                        embeddings.append(emb)
+
+                    bytes_len = len(text.encode("utf-8"))
+                    doc_id = upsert_document(conn, url, bytes_len, 1)
+                    insert_chunks(conn, doc_id, chunks, embeddings)
+
+                storage.update_job_status(conn, job_id, IngestionJobStatus.COMPLETED)
+                job.status = IngestionJobStatus.COMPLETED
         except Exception as e:  # pragma: no cover - defensive
             logger.exception("ingestion failed: %s", e)
-            job.status = IngestionJobStatus.FAILED
-            job.error = str(e)
+            try:
+                with psycopg.connect(db_url) as conn:
+                    storage.update_job_status(conn, job_id, IngestionJobStatus.FAILED, str(e))
+            finally:
+                job.status = IngestionJobStatus.FAILED
+                job.error = str(e)
         finally:
             for h in list(logger.handlers):
                 h.close()
