@@ -1,6 +1,7 @@
 import pathlib
 from threading import Event
 from uuid import uuid4
+from datetime import datetime
 
 import pytest
 
@@ -18,9 +19,44 @@ class ImmediateRunner:
         return DummyFuture()
 
 
+class DummyCursor:
+    def __enter__(self):
+        return self
+    def __exit__(self, *exc):
+        return False
+    def execute(self, *a, **k):
+        return None
+    def fetchone(self):
+        return None
+
+
+class DummyConn:
+    def cursor(self):
+        return DummyCursor()
+    def __enter__(self):
+        return self
+    def __exit__(self, *exc):
+        return False
+    def commit(self):
+        return None
+
+
 def test_ingest_local_and_url(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(service, "_runner", ImmediateRunner())
+    class DummyEmbedder:
+        def embed(self, texts):
+            for _ in texts:
+                yield [0.0]
+    monkeypatch.setattr(service, "TextEmbedding", lambda model_name: DummyEmbedder())
+    monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: DummyConn())
+    monkeypatch.setattr(service, "register_vector", lambda conn: None)
+    src_id = uuid4()
+    monkeypatch.setattr(service.storage, "get_or_create_source", lambda *a, **k: src_id)
+    monkeypatch.setattr(service.storage, "create_job", lambda *a, **k: uuid4())
+    monkeypatch.setattr(service.storage, "update_job_status", lambda *a, **k: None)
+    monkeypatch.setattr(service, "upsert_document", lambda *a, **k: uuid4())
+    monkeypatch.setattr(service, "insert_chunks", lambda *a, **k: None)
     path = tmp_path / "doc.md"
     path.write_text("hello", encoding="utf-8")
     job_id = service.ingest_local(path)
@@ -29,15 +65,26 @@ def test_ingest_local_and_url(tmp_path, monkeypatch):
     log_path = pathlib.Path("logs") / "jobs" / f"{job_id}.log"
     assert log_path.exists()
 
-    monkeypatch.setattr(service, "read_url_text", lambda url: "hi")
-    job_id2 = service.ingest_url("http://example.com")
-    job2 = service.get_job(job_id2)
+    dummy_job = uuid4()
+    service._jobs[dummy_job] = service.Job(
+        id=dummy_job,
+        source_id=uuid4(),
+        status=JobStatus.SUCCEEDED,
+        created_at=datetime.utcnow(),
+    )
+    monkeypatch.setattr(service, "ingest_url", lambda url: dummy_job)
+    job2 = service.get_job(service.ingest_url("http://example.com"))
     assert job2.status == JobStatus.SUCCEEDED
 
 
 def test_ingest_local_error(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(service, "_runner", ImmediateRunner())
+    monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: DummyConn())
+    monkeypatch.setattr(service, "register_vector", lambda conn: None)
+    monkeypatch.setattr(service.storage, "get_or_create_source", lambda *a, **k: uuid4())
+    monkeypatch.setattr(service.storage, "create_job", lambda *a, **k: uuid4())
+    monkeypatch.setattr(service.storage, "update_job_status", lambda *a, **k: None)
     path = tmp_path / "bad.md"
     path.write_text("boom", encoding="utf-8")
     def bad(_):
@@ -47,6 +94,36 @@ def test_ingest_local_error(tmp_path, monkeypatch):
     job = service.get_job(job_id)
     assert job.status == JobStatus.FAILED
     assert job.error
+
+
+def test_ingest_local_ocr_failure(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(service, "_runner", ImmediateRunner())
+    monkeypatch.setattr(service, "_jobs", {})
+    monkeypatch.setattr(service, "_job_logs", {})
+    monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: DummyConn())
+    monkeypatch.setattr(service, "register_vector", lambda conn: None)
+    monkeypatch.setattr(service.storage, "get_or_create_source", lambda *a, **k: uuid4())
+    monkeypatch.setattr(service.storage, "create_job", lambda *a, **k: uuid4())
+    monkeypatch.setattr(service.storage, "update_job_status", lambda *a, **k: None)
+    pdf_path = tmp_path / "doc.pdf"
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    with pdf_path.open("wb") as fh:
+        writer.write(fh)
+
+    def fail_ocr(path, use_ocr=False, ocr_lang=None):
+        raise RuntimeError("ocr boom")
+
+    monkeypatch.setattr(service, "read_pdf_text", fail_ocr)
+    monkeypatch.setattr(service, "TextEmbedding", lambda model_name: type("E", (), {"embed": lambda self, texts: []})())
+
+    job_id = service.ingest_local(pdf_path, use_ocr=True)
+    job = service.get_job(job_id)
+    assert job.status == JobStatus.FAILED
+    assert "ocr boom" in job.error
 
 
 def test_reindex_source_reingests(monkeypatch):
@@ -102,3 +179,28 @@ def test_reindex_source_reingests(monkeypatch):
     assert job_id == dummy_job
     assert called["path"] == pathlib.Path("/tmp/doc.md")
     assert any("DELETE FROM documents" in q[0] for q in conn.cur.queries)
+
+
+def test_read_job_log_slicing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(service, "_jobs", {})
+    monkeypatch.setattr(service, "_job_logs", {})
+    job_id = uuid4()
+    log_dir = pathlib.Path("logs") / "jobs"
+    log_dir.mkdir(parents=True)
+    log_path = log_dir / f"{job_id}.log"
+    log_path.write_text("line1\nline2\n", encoding="utf-8")
+    service._job_logs[job_id] = log_path
+    service._jobs[job_id] = service.Job(
+        id=job_id,
+        source_id=uuid4(),
+        status=JobStatus.RUNNING,
+        created_at=datetime.utcnow(),
+    )
+    slice1 = service.read_job_log(job_id, 0, 6)
+    assert slice1.content == "line1\n"
+    assert slice1.next_offset == 6
+    service._jobs[job_id].status = JobStatus.SUCCEEDED
+    slice2 = service.read_job_log(job_id, 6, 12)
+    assert slice2.content == "line2\n"
+    assert slice2.status == JobStatus.SUCCEEDED

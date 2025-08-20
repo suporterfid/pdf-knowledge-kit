@@ -237,3 +237,60 @@ def test_job_lifecycle_and_logs(monkeypatch):
     data = res.json()
     assert "line2" in data["content"]
     assert data["status"] == JobStatus.SUCCEEDED
+
+
+def test_jobs_pagination_filters(monkeypatch):
+    client, admin_api = create_client(monkeypatch)
+    jobs = [
+        Job(id=uuid4(), source_id=uuid4(), status=JobStatus.QUEUED, created_at=datetime.utcnow()),
+        Job(id=uuid4(), source_id=uuid4(), status=JobStatus.SUCCEEDED, created_at=datetime.utcnow()),
+        Job(id=uuid4(), source_id=uuid4(), status=JobStatus.QUEUED, created_at=datetime.utcnow()),
+    ]
+
+    monkeypatch.setattr(admin_api.service, "list_jobs", lambda: jobs)
+
+    res = client.get(
+        "/api/admin/ingest/jobs",
+        params={"status": "queued", "limit": 1, "offset": 1},
+        headers={"X-API-Key": "view"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 2
+    assert len(data["items"]) == 1
+
+
+def test_sources_pagination_filters(monkeypatch):
+    client, admin_api = create_client(monkeypatch)
+    sources = [
+        Source(id=uuid4(), type=SourceType.URL, url="http://a", path=None, created_at=datetime.utcnow(), active=True),
+        Source(id=uuid4(), type=SourceType.URL, url="http://b", path=None, created_at=datetime.utcnow(), active=True),
+        Source(id=uuid4(), type=SourceType.URL, url="http://c", path=None, created_at=datetime.utcnow(), active=False),
+    ]
+
+    class DummyConn:
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+
+    def list_sources(conn, active=True, type=None, **kwargs):
+        items = sources
+        if active is not None:
+            items = [s for s in items if s.active == active]
+        if type is not None:
+            items = [s for s in items if s.type == type]
+        return items
+
+    monkeypatch.setattr(admin_api, "_get_conn", lambda: DummyConn())
+    monkeypatch.setattr(admin_api.storage, "list_sources", list_sources)
+
+    res = client.get(
+        "/api/admin/ingest/sources",
+        params={"type": "url", "limit": 1, "offset": 0},
+        headers={"X-API-Key": "view"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 2
+    assert len(data["items"]) == 1
