@@ -239,6 +239,19 @@ def test_job_lifecycle_and_logs(monkeypatch):
     assert data["status"] == JobStatus.SUCCEEDED
 
 
+def test_rerun_job_endpoint(monkeypatch):
+    client, admin_api = create_client(monkeypatch)
+    orig = uuid4()
+    new_id = uuid4()
+    monkeypatch.setattr(admin_api.service, "rerun_job", lambda jid: new_id)
+
+    res = client.post(
+        f"/api/admin/ingest/jobs/{orig}/rerun", headers={"X-API-Key": "oper"}
+    )
+    assert res.status_code == 200
+    assert res.json()["job_id"] == str(new_id)
+
+
 def test_jobs_pagination_filters(monkeypatch):
     client, admin_api = create_client(monkeypatch)
     jobs = [

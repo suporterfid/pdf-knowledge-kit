@@ -362,6 +362,10 @@ curl -H "X-API-Key: $VIEWER_API_KEY" \
 # Cancel a running job
 curl -X POST -H "X-API-Key: $OPERATOR_API_KEY" \
   http://localhost:8000/api/admin/ingest/jobs/<JOB_ID>/cancel
+
+# Re-run a job using the same source
+curl -X POST -H "X-API-Key: $OPERATOR_API_KEY" \
+  http://localhost:8000/api/admin/ingest/jobs/<JOB_ID>/rerun
 ```
 
 ### Ingestion examples
