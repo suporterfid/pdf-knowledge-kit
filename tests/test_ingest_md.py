@@ -1,5 +1,5 @@
 import pathlib
-import ingest
+from app.ingestion import service as ingest
 
 
 class DummyEmbedder:

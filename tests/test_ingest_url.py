@@ -1,4 +1,4 @@
-import ingest
+from app.ingestion import service as ingest
 import pytest
 
 
