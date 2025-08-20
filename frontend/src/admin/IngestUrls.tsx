@@ -14,12 +14,13 @@ export default function IngestUrls() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    apiFetch('/api/admin/ingest/jobs/urls', {
+    interface StartJobResponse { job_id: string }
+    apiFetch('/api/admin/ingest/urls', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(urls.filter((u) => u)),
+      body: JSON.stringify({ urls: urls.filter((u) => u) }),
     })
-      .then((r) => r.json())
+      .then((r) => r.json() as Promise<StartJobResponse>)
       .then((d) => setJobId(d.job_id))
       .catch(() => {});
   };
@@ -40,7 +41,7 @@ export default function IngestUrls() {
             />
           </div>
         ))}
-        <button type="button" onClick={addField}>Add URL</button>
+        <button type="button" onClick={addField} aria-label="Add another URL">Add URL</button>
         <button type="submit">Start</button>
       </form>
       {jobId && <p>Started job {jobId}</p>}

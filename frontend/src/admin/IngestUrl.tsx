@@ -6,11 +6,16 @@ export default function IngestUrl() {
   const [url, setUrl] = useState('');
   const [jobId, setJobId] = useState<string | null>(null);
 
+  interface StartJobResponse { job_id: string }
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const params = new URLSearchParams({ url });
-    apiFetch(`/api/admin/ingest/jobs/url?${params.toString()}`, { method: 'POST' })
-      .then((r) => r.json())
+    apiFetch('/api/admin/ingest/url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    })
+      .then((r) => r.json() as Promise<StartJobResponse>)
       .then((d) => setJobId(d.job_id))
       .catch(() => {});
   };
