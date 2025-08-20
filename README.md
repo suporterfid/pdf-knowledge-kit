@@ -271,6 +271,7 @@ pdf_knowledge_kit/
 ├─ docker-compose.yml      # Postgres + pgvector
 ├─ requirements.txt        # Dependências
 ├─ schema.sql              # Criação de tabelas/índices
+├─ migrations/             # Migrações incrementais do banco de dados
 ├─ ingest.py               # Varre PDFs/Markdown, extrai, fatia e insere
 ├─ query.py                # Busca semântica
 ├─ .env.example            # Configs de conexão
@@ -284,6 +285,7 @@ pdf_knowledge_kit/
 ```bash
 psql -c 'CREATE EXTENSION IF NOT EXISTS vector;' "$PGDATABASE"
 psql -f schema.sql "$PGDATABASE"
+psql -f migrations/002_add_admin_ingestion.sql "$PGDATABASE"
 ```
 2. Configure as variáveis de ambiente (veja `.env.example`).
 3. Ingestione os documentos:
