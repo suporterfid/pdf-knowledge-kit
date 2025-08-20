@@ -332,9 +332,9 @@ remotamente e acompanhar sua execução. Toda requisição exige o cabeçalho
 - **operator** – permissões de *viewer* + iniciar/cancelar jobs.
 - **admin** – reservado para operações avançadas.
 
-Defina as chaves via variáveis de ambiente (`ADMIN_API_KEYS`,
-`OPERATOR_API_KEYS`, `VIEWER_API_KEYS`). Cada variável pode listar múltiplas
-chaves separadas por vírgula.
+Defina as chaves via variáveis de ambiente (`ADMIN_API_KEY`,
+`OP_API_KEY`, `VIEW_API_KEY`). Cada variável aceita apenas **uma**
+chave (padrões de desenvolvimento: `admin`, `oper`, `view`).
 
 ### Ciclo de vida do job
 

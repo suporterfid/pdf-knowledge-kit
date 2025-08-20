@@ -5,9 +5,9 @@ from fastapi.testclient import TestClient
 
 
 def create_client(monkeypatch):
-    monkeypatch.setenv("VIEWER_API_KEYS", "view")
-    monkeypatch.setenv("OPERATOR_API_KEYS", "oper")
-    monkeypatch.setenv("ADMIN_API_KEYS", "admin")
+    monkeypatch.setenv("VIEW_API_KEY", "view")
+    monkeypatch.setenv("OP_API_KEY", "oper")
+    monkeypatch.setenv("ADMIN_API_KEY", "admin")
 
     # Reload modules to pick up env vars
     import app.security.auth as auth
