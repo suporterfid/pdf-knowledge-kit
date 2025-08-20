@@ -18,6 +18,12 @@ class ImmediateRunner:
                 return False
         return DummyFuture()
 
+    def cancel(self, job_id):
+        return None
+
+    def clear(self, job_id):
+        return None
+
 
 class DummyCursor:
     def __enter__(self):

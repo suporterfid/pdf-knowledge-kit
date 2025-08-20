@@ -315,6 +315,7 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
             for h in list(logger.handlers):
                 h.close()
                 logger.removeHandler(h)
+            _runner.clear(job_id)
 
     _runner.submit(job_id, _work)
     return job_id
@@ -437,6 +438,7 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
             for h in list(logger.handlers):
                 h.close()
                 logger.removeHandler(h)
+            _runner.clear(job_id)
 
     _runner.submit(job_id, _work)
     return job_id
@@ -489,6 +491,11 @@ def reindex_source(_source_id: uuid.UUID) -> uuid.UUID | None:
 
 def cancel_job(job_id: uuid.UUID) -> None:
     _runner.cancel(job_id)
+    _runner.clear(job_id)
+    logger = logging.getLogger(f"ingestion.{job_id}")
+    for h in list(logger.handlers):
+        h.close()
+        logger.removeHandler(h)
     job = _jobs.get(job_id)
     if job and job.status not in {JobStatus.SUCCEEDED, JobStatus.FAILED}:
         job.status = JobStatus.CANCELED
@@ -522,7 +529,7 @@ def read_job_log(job_id: uuid.UUID, offset: int = 0, limit: int = 16_384) -> Job
     with path.open("rb") as f:
         f.seek(offset)
         data = f.read(limit)
-    text = data.decode("utf-8", errors="ignore")
+    content = data.decode("utf-8", errors="ignore")
     next_offset = offset + len(data)
 
     job = _jobs.get(job_id)
@@ -530,4 +537,4 @@ def read_job_log(job_id: uuid.UUID, offset: int = 0, limit: int = 16_384) -> Job
     if job and job.status in {JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELED}:
         status = job.status
 
-    return JobLogSlice(content=text, next_offset=next_offset, status=status)
+    return JobLogSlice(content=content, next_offset=next_offset, status=status)
