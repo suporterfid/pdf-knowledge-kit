@@ -118,6 +118,7 @@ async def config():
             "POWERED_BY_LABEL", "Powered by PDF Knowledge Kit"
         ),
         "LOGO_URL": os.getenv("LOGO_URL", ""),
+        "UPLOAD_MAX_SIZE": UPLOAD_MAX_SIZE,
     }
 
 
