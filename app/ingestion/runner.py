@@ -41,6 +41,11 @@ class IngestionRunner:
         if fut:
             fut.cancel()
 
+    def clear(self, job_id: UUID) -> None:
+        """Remove references for a finished or cancelled job."""
+        self._events.pop(job_id, None)
+        self._futures.pop(job_id, None)
+
     def get(self, job_id: UUID) -> Optional[Future]:
         return self._futures.get(job_id)
 
