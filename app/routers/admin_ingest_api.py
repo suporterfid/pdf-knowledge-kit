@@ -117,6 +117,16 @@ def cancel_job(
     return job
 
 
+@router.post("/jobs/{job_id}/rerun", response_model=JobCreated)
+def rerun_job_endpoint(
+    job_id: UUID, role: str = Depends(require_role("operator"))
+) -> JobCreated:
+    new_job_id = service.rerun_job(job_id)
+    if not new_job_id:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return JobCreated(job_id=new_job_id)
+
+
 @router.get("/jobs/{job_id}/logs", response_model=JobLogSlice)
 def get_job_logs(
     job_id: UUID,

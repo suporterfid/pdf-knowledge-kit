@@ -489,6 +489,34 @@ def reindex_source(_source_id: uuid.UUID) -> uuid.UUID | None:
     return None
 
 
+def rerun_job(_job_id: uuid.UUID) -> uuid.UUID | None:
+    """Recreate a job using its original source parameters.
+
+    Returns the new job identifier or ``None`` if the given job cannot be
+    found.
+    """
+
+    db_url = os.getenv(
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
+    )
+
+    with psycopg.connect(db_url) as conn:
+        register_vector(conn)
+        ensure_schema(conn, SCHEMA_PATH)
+
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT source_id FROM ingestion_jobs WHERE id = %s",
+                (_job_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            source_id = row[0]
+
+    return reindex_source(source_id)
+
+
 def cancel_job(job_id: uuid.UUID) -> None:
     _runner.cancel(job_id)
     _runner.clear(job_id)

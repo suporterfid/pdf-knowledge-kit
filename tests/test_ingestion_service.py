@@ -187,6 +187,63 @@ def test_reindex_source_reingests(monkeypatch):
     assert any("DELETE FROM documents" in q[0] for q in conn.cur.queries)
 
 
+def test_rerun_job_calls_reindex(monkeypatch):
+    job_id = uuid4()
+    source_id = uuid4()
+    new_job_id = uuid4()
+    called: dict[str, uuid.UUID] = {}
+
+    class DummyCursor:
+        def __init__(self):
+            self.queries: list[tuple[str, tuple | None]] = []
+
+        def execute(self, sql, params=None):
+            self.queries.append((sql, params))
+
+        def fetchone(self):
+            return (source_id,)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    class DummyConn:
+        def __init__(self):
+            self.cur = DummyCursor()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def cursor(self):
+            return self.cur
+
+        def commit(self):
+            pass
+
+    conn = DummyConn()
+    monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: conn)
+    monkeypatch.setattr(service, "register_vector", lambda conn: None)
+    monkeypatch.setattr(service, "ensure_schema", lambda *a, **k: None)
+    def fake_reindex(sid):
+        called["sid"] = sid
+        return new_job_id
+
+    monkeypatch.setattr(service, "reindex_source", fake_reindex)
+
+    result = service.rerun_job(job_id)
+
+    assert result == new_job_id
+    assert called["sid"] == source_id
+    assert any(
+        "SELECT source_id FROM ingestion_jobs" in q[0] for q in conn.cur.queries
+    )
+
+
 def test_read_job_log_slicing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(service, "_jobs", {})
