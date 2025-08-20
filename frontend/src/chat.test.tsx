@@ -92,6 +92,31 @@ test('upload errors surface', async () => {
   });
 });
 
+test('SSE error event stops streaming and shows message', async () => {
+  server.use(
+    http.post('/api/chat', () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('event: error\ndata: boom\n\n'));
+          controller.close();
+        },
+      });
+      return new HttpResponse(stream, {
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+    })
+  );
+  const { result } = renderChat();
+  await act(async () => {
+    await result.current.send('Hi');
+  });
+  await waitFor(() => {
+    expect(result.current.error).toBe('boom');
+    expect(result.current.messages[1].status).toBe('done');
+  });
+});
+
 test('oversized client messages trigger validation without network calls', async () => {
   const fetchSpy = vi.spyOn(global, 'fetch');
   const { result } = renderChat();
