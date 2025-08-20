@@ -33,25 +33,27 @@ def test_start_local_job_auth_validation(monkeypatch):
     monkeypatch.setattr(admin_api.service, "ingest_local", lambda *a, **k: dummy_id)
 
     # missing key
-    res = client.post("/api/admin/ingest/jobs/local", params={"path": "/tmp/a"})
+    res = client.post(
+        "/api/admin/ingest/local", json={"path": "/tmp/a"}
+    )
     assert res.status_code == 401
 
     # viewer forbidden
     res = client.post(
-        "/api/admin/ingest/jobs/local",
-        params={"path": "/tmp/a"},
+        "/api/admin/ingest/local",
+        json={"path": "/tmp/a"},
         headers={"X-API-Key": "view"},
     )
     assert res.status_code == 403
 
     # validation error missing path
-    res = client.post("/api/admin/ingest/jobs/local", headers={"X-API-Key": "oper"})
+    res = client.post("/api/admin/ingest/local", headers={"X-API-Key": "oper"})
     assert res.status_code == 422
 
     # operator success
     res = client.post(
-        "/api/admin/ingest/jobs/local",
-        params={"path": "/tmp/a"},
+        "/api/admin/ingest/local",
+        json={"path": "/tmp/a"},
         headers={"X-API-Key": "oper"},
     )
     assert res.status_code == 200
@@ -64,12 +66,12 @@ def test_start_urls_job_validation(monkeypatch):
     monkeypatch.setattr(admin_api.service, "ingest_urls", lambda urls: dummy_id)
 
     # validation error for body
-    res = client.post("/api/admin/ingest/jobs/urls", headers={"X-API-Key": "oper"})
+    res = client.post("/api/admin/ingest/urls", headers={"X-API-Key": "oper"})
     assert res.status_code == 422
 
     res = client.post(
-        "/api/admin/ingest/jobs/urls",
-        json=["http://a"],
+        "/api/admin/ingest/urls",
+        json={"urls": ["http://a"]},
         headers={"X-API-Key": "oper"},
     )
     assert res.status_code == 200
@@ -88,41 +90,59 @@ def test_sources_crud_and_reindex(monkeypatch):
 
     monkeypatch.setattr(admin_api, "_get_conn", lambda: DummyConn())
 
-    def get_or_create(conn, type, path=None, url=None):
+    def get_or_create(conn, **kwargs):
         sid = uuid4()
-        sources[sid] = Source(id=sid, type=type, path=path, url=url, created_at=datetime.utcnow())
+        sources[sid] = Source(
+            id=sid,
+            type=kwargs.get("type"),
+            path=kwargs.get("path"),
+            url=kwargs.get("url"),
+            created_at=datetime.utcnow(),
+        )
         return sid
+
     monkeypatch.setattr(admin_api.storage, "get_or_create_source", get_or_create)
-    monkeypatch.setattr(admin_api.storage, "list_sources", lambda conn: sources.values())
-    def update(conn, sid, path=None, url=None):
+
+    def list_sources(conn, **kwargs):
+        return sources.values()
+
+    monkeypatch.setattr(admin_api.storage, "list_sources", list_sources)
+
+    def update(conn, sid, **kwargs):
         src = sources[sid]
-        if path:
-            src.path = path
-        if url:
-            src.url = url
+        for k, v in kwargs.items():
+            if v is not None:
+                setattr(src, k, v)
+
     monkeypatch.setattr(admin_api.storage, "update_source", update)
-    monkeypatch.setattr(admin_api.storage, "soft_delete_source", lambda conn, sid: sources.pop(sid, None))
+    monkeypatch.setattr(
+        admin_api.storage, "soft_delete_source", lambda conn, sid: sources.pop(sid, None)
+    )
     called = {}
-    monkeypatch.setattr(admin_api.service, "reindex_source", lambda sid: called.setdefault("rid", sid))
+    monkeypatch.setattr(
+        admin_api.service,
+        "reindex_source",
+        lambda sid: called.setdefault("rid", sid),
+    )
 
     # create
     res = client.post(
         "/api/admin/ingest/sources",
-        params={"type": "local_dir", "path": "/a"},
+        json={"type": "local_dir", "path": "/a"},
         headers={"X-API-Key": "oper"},
     )
     assert res.status_code == 200
-    sid = UUID(res.json()["source_id"])
+    sid = UUID(res.json()["id"])
 
     # list
     res = client.get("/api/admin/ingest/sources", headers={"X-API-Key": "view"})
     assert res.status_code == 200
-    assert len(res.json()) == 1
+    assert len(res.json()["items"]) == 1
 
     # update
     res = client.put(
         f"/api/admin/ingest/sources/{sid}",
-        params={"path": "/b"},
+        json={"path": "/b"},
         headers={"X-API-Key": "oper"},
     )
     assert res.status_code == 200
@@ -144,7 +164,7 @@ def test_sources_crud_and_reindex(monkeypatch):
 
     res = client.get("/api/admin/ingest/sources", headers={"X-API-Key": "view"})
     assert res.status_code == 200
-    assert res.json() == []
+    assert res.json()["items"] == []
 
 
 def test_job_lifecycle_and_logs(monkeypatch):
@@ -181,17 +201,18 @@ def test_job_lifecycle_and_logs(monkeypatch):
     monkeypatch.setattr(admin_api.service, "list_jobs", list_jobs)
     monkeypatch.setattr(admin_api.service, "cancel_job", cancel_job)
     monkeypatch.setattr(admin_api.service, "read_job_log", read_job_log)
+    monkeypatch.setattr(admin_api.service, "get_job", lambda jid: jobs.get(jid))
 
     res = client.post(
-        "/api/admin/ingest/jobs/url",
-        params={"url": "http://example.com"},
+        "/api/admin/ingest/url",
+        json={"url": "http://example.com"},
         headers={"X-API-Key": "oper"},
     )
     job_id = UUID(res.json()["job_id"])
 
     res = client.get("/api/admin/ingest/jobs", headers={"X-API-Key": "view"})
     assert res.status_code == 200
-    assert len(res.json()) == 1
+    assert len(res.json()["items"]) == 1
 
     res = client.post(
         f"/api/admin/ingest/jobs/{job_id}/cancel",
