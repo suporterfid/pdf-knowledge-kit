@@ -1,64 +1,135 @@
-"""Pydantic models and enums for ingestion jobs."""
+"""Pydantic models and enums for ingestion jobs and sources."""
+
 from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Generic, List, Optional, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, HttpUrl
 
 
+# ---------------------------------------------------------------------------
+# Enumerations
+# ---------------------------------------------------------------------------
+
+
 class SourceType(str, Enum):
-    """Type of source being ingested."""
+    """Types of sources that may be ingested."""
 
-    LOCAL = "local"
+    LOCAL_DIR = "local_dir"
     URL = "url"
+    URL_LIST = "url_list"
 
 
-class IngestionJobStatus(str, Enum):
-    """Lifecycle status for an ingestion job."""
+class JobStatus(str, Enum):
+    """Lifecycle status values for an ingestion job."""
 
-    PENDING = "pending"
+    QUEUED = "queued"
     RUNNING = "running"
-    COMPLETED = "completed"
+    SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELED = "canceled"
+
+
+# ---------------------------------------------------------------------------
+# Request models
+# ---------------------------------------------------------------------------
+
+
+class LocalIngestRequest(BaseModel):
+    """Request model for ingesting a local directory."""
+
+    path: str
+    use_ocr: bool = False
+    ocr_lang: str | None = None
+
+
+class UrlIngestRequest(BaseModel):
+    """Request model for ingesting a single URL."""
+
+    url: HttpUrl
+
+
+class UrlsIngestRequest(BaseModel):
+    """Request model for ingesting multiple URLs."""
+
+    urls: List[HttpUrl]
+
+
+class ReindexRequest(BaseModel):
+    """Request to re-index an existing source."""
+
+    source_id: UUID
+
+
+class SourceCreate(BaseModel):
+    """Model used to create a new source record."""
+
+    type: SourceType
+    path: str | None = None
+    url: HttpUrl | None = None
+
+
+class SourceUpdate(BaseModel):
+    """Model used to update an existing source record."""
+
+    path: str | None = None
+    url: HttpUrl | None = None
+
+
+# ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class JobCreated(BaseModel):
+    """Response returned when a job is created."""
+
+    job_id: UUID
 
 
 class Source(BaseModel):
     id: UUID
     type: SourceType
-    path: Optional[str] = None
-    url: Optional[HttpUrl] = None
+    path: str | None = None
+    url: HttpUrl | None = None
     created_at: datetime
 
 
-class IngestionJob(BaseModel):
+class Job(BaseModel):
     id: UUID
     source_id: UUID
-    status: IngestionJobStatus
+    status: JobStatus
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    error: Optional[str] = None
+    updated_at: datetime | None = None
+    error: str | None = None
+
+
+class JobSummary(BaseModel):
+    """A lightweight summary of a job."""
+
+    id: UUID
+    status: JobStatus
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
+T = TypeVar("T")
+
+
+class ListResponse(BaseModel, Generic[T]):
+    """Generic container for list responses."""
+
+    items: List[T]
+    total: int
 
 
 class JobLogSlice(BaseModel):
-    """A slice of a job log file.
+    """A slice of a job's log output."""
 
-    Attributes
-    ----------
-    text:
-        The log content read starting at ``offset``.
-    next_offset:
-        Byte offset for the next read.
-    total:
-        Total size of the log file in bytes.
-    status:
-        Final status of the job if it has completed, otherwise ``None``.
-    """
-
-    text: str
+    content: str
     next_offset: int
-    total: int
-    status: Optional[IngestionJobStatus] = None
+    status: JobStatus | None = None
+

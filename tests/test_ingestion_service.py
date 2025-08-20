@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 
 import app.ingestion.service as service
-from app.ingestion.models import IngestionJobStatus
+from app.ingestion.models import JobStatus
 
 
 class ImmediateRunner:
@@ -25,14 +25,14 @@ def test_ingest_local_and_url(tmp_path, monkeypatch):
     path.write_text("hello", encoding="utf-8")
     job_id = service.ingest_local(path)
     job = service.get_job(job_id)
-    assert job.status == IngestionJobStatus.COMPLETED
+    assert job.status == JobStatus.SUCCEEDED
     log_path = pathlib.Path("logs") / "jobs" / f"{job_id}.log"
     assert log_path.exists()
 
     monkeypatch.setattr(service, "read_url_text", lambda url: "hi")
     job_id2 = service.ingest_url("http://example.com")
     job2 = service.get_job(job_id2)
-    assert job2.status == IngestionJobStatus.COMPLETED
+    assert job2.status == JobStatus.SUCCEEDED
 
 
 def test_ingest_local_error(tmp_path, monkeypatch):
@@ -45,7 +45,7 @@ def test_ingest_local_error(tmp_path, monkeypatch):
     monkeypatch.setattr(service, "read_md_text", bad)
     job_id = service.ingest_local(path)
     job = service.get_job(job_id)
-    assert job.status == IngestionJobStatus.FAILED
+    assert job.status == JobStatus.FAILED
     assert job.error
 
 
@@ -62,8 +62,8 @@ def test_reindex_source_reingests(monkeypatch):
             self.queries.append((sql, params))
 
         def fetchone(self):
-            # Return a LOCAL source pointing to a file
-            return ("local", "/tmp/doc.md", None)
+            # Return a LOCAL_DIR source pointing to a file
+            return ("local_dir", "/tmp/doc.md", None)
 
         def __enter__(self):
             return self

@@ -8,7 +8,7 @@ from uuid import UUID
 import psycopg
 from fastapi import APIRouter, Body, Depends, HTTPException
 from ..ingestion import service, storage
-from ..ingestion.models import IngestionJobStatus, SourceType, JobLogSlice
+from ..ingestion.models import JobStatus, SourceType, JobLogSlice
 from ..security.auth import require_role
 
 router = APIRouter(prefix="/api/admin/ingest", tags=["admin-ingest"])

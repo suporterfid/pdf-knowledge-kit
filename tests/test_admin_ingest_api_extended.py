@@ -6,9 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.ingestion.models import (
-    IngestionJob,
-    IngestionJobStatus,
+    Job,
     JobLogSlice,
+    JobStatus,
     Source,
     SourceType,
 )
@@ -108,7 +108,7 @@ def test_sources_crud_and_reindex(monkeypatch):
     # create
     res = client.post(
         "/api/admin/ingest/sources",
-        params={"type": "local", "path": "/a"},
+        params={"type": "local_dir", "path": "/a"},
         headers={"X-API-Key": "oper"},
     )
     assert res.status_code == 200
@@ -149,19 +149,19 @@ def test_sources_crud_and_reindex(monkeypatch):
 
 def test_job_lifecycle_and_logs(monkeypatch):
     client, admin_api = create_client(monkeypatch)
-    jobs: dict[UUID, IngestionJob] = {}
+    jobs: dict[UUID, Job] = {}
     slices = [
-        JobLogSlice(text="line1\n", next_offset=6, total=12, status=None),
-        JobLogSlice(text="line2\n", next_offset=12, total=12, status=IngestionJobStatus.COMPLETED),
+        JobLogSlice(content="line1\n", next_offset=6, status=None),
+        JobLogSlice(content="line2\n", next_offset=12, status=JobStatus.SUCCEEDED),
     ]
     call = {"i": 0}
 
     def ingest_url(url):
         job_id = uuid4()
-        jobs[job_id] = IngestionJob(
+        jobs[job_id] = Job(
             id=job_id,
             source_id=uuid4(),
-            status=IngestionJobStatus.PENDING,
+            status=JobStatus.QUEUED,
             created_at=datetime.utcnow(),
         )
         return job_id
@@ -170,7 +170,7 @@ def test_job_lifecycle_and_logs(monkeypatch):
         return list(jobs.values())
 
     def cancel_job(job_id):
-        jobs[job_id].status = IngestionJobStatus.CANCELED
+        jobs[job_id].status = JobStatus.CANCELED
 
     def read_job_log(job_id, offset=0, limit=16_384):
         i = call["i"]
@@ -198,14 +198,14 @@ def test_job_lifecycle_and_logs(monkeypatch):
         headers={"X-API-Key": "oper"},
     )
     assert res.status_code == 200
-    assert jobs[job_id].status == IngestionJobStatus.CANCELED
+    assert jobs[job_id].status == JobStatus.CANCELED
 
     res = client.get(
         f"/api/admin/ingest/jobs/{job_id}/logs", headers={"X-API-Key": "view"}
     )
     assert res.status_code == 200
     data = res.json()
-    assert "line1" in data["text"]
+    assert "line1" in data["content"]
     assert data["next_offset"] == 6
 
     res = client.get(
@@ -214,5 +214,5 @@ def test_job_lifecycle_and_logs(monkeypatch):
         headers={"X-API-Key": "view"},
     )
     data = res.json()
-    assert "line2" in data["text"]
-    assert data["status"] == IngestionJobStatus.COMPLETED
+    assert "line2" in data["content"]
+    assert data["status"] == JobStatus.SUCCEEDED

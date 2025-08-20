@@ -5,7 +5,7 @@ import psycopg
 import pytest
 
 from app.ingestion import service, storage
-from app.ingestion.models import IngestionJobStatus, SourceType
+from app.ingestion.models import JobStatus, SourceType
 
 
 def _require_conn():
@@ -19,10 +19,10 @@ def _require_conn():
 def test_migration_persistence_and_soft_delete(tmp_path):
     conn = _require_conn()
     service.ensure_schema(conn, Path("schema.sql"), Path("migrations"))
-    src_id = storage.get_or_create_source(conn, type=SourceType.LOCAL, path=str(tmp_path / "a"))
+    src_id = storage.get_or_create_source(conn, type=SourceType.LOCAL_DIR, path=str(tmp_path / "a"))
     job_id = storage.create_job(conn, src_id)
     job = storage.get_job(conn, job_id)
-    assert job and job.status == IngestionJobStatus.PENDING
+    assert job and job.status == JobStatus.QUEUED
     storage.soft_delete_source(conn, src_id)
     assert list(storage.list_sources(conn)) == []
     conn.close()

@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 
-from .models import IngestionJob, IngestionJobStatus, Source, SourceType
+from .models import Job, JobStatus, Source, SourceType
 
 
 def get_or_create_source(
@@ -71,7 +71,7 @@ def list_sources(conn: psycopg.Connection) -> Iterable[Source]:
         )
 
 
-def create_job(conn: psycopg.Connection, source_id: UUID, status: IngestionJobStatus = IngestionJobStatus.PENDING) -> UUID:
+def create_job(conn: psycopg.Connection, source_id: UUID, status: JobStatus = JobStatus.QUEUED) -> UUID:
     job_id = uuid4()
     with conn.cursor() as cur:
         cur.execute(
@@ -83,7 +83,7 @@ def create_job(conn: psycopg.Connection, source_id: UUID, status: IngestionJobSt
 
 
 def update_job_status(
-    conn: psycopg.Connection, job_id: UUID, status: IngestionJobStatus, error: str | None = None
+    conn: psycopg.Connection, job_id: UUID, status: JobStatus, error: str | None = None
 ) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -93,7 +93,7 @@ def update_job_status(
     conn.commit()
 
 
-def get_job(conn: psycopg.Connection, job_id: UUID) -> Optional[IngestionJob]:
+def get_job(conn: psycopg.Connection, job_id: UUID) -> Optional[Job]:
     with conn.cursor() as cur:
         cur.execute(
             "SELECT id, source_id, status, created_at, updated_at, error FROM ingestion_jobs WHERE id = %s",
@@ -102,27 +102,27 @@ def get_job(conn: psycopg.Connection, job_id: UUID) -> Optional[IngestionJob]:
         row = cur.fetchone()
     if not row:
         return None
-    return IngestionJob(
+    return Job(
         id=row[0],
         source_id=row[1],
-        status=IngestionJobStatus(row[2]),
+        status=JobStatus(row[2]),
         created_at=row[3],
         updated_at=row[4],
         error=row[5],
     )
 
 
-def list_jobs(conn: psycopg.Connection) -> Iterable[IngestionJob]:
+def list_jobs(conn: psycopg.Connection) -> Iterable[Job]:
     with conn.cursor() as cur:
         cur.execute(
             "SELECT id, source_id, status, created_at, updated_at, error FROM ingestion_jobs ORDER BY created_at DESC"
         )
         rows = cur.fetchall()
     for row in rows:
-        yield IngestionJob(
+        yield Job(
             id=row[0],
             source_id=row[1],
-            status=IngestionJobStatus(row[2]),
+            status=JobStatus(row[2]),
             created_at=row[3],
             updated_at=row[4],
             error=row[5],
