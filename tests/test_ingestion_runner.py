@@ -35,3 +35,20 @@ def test_setup_job_logging_creates_file(tmp_path, monkeypatch):
     log_path = pathlib.Path("logs") / "jobs" / f"{job_id}.log"
     assert log_path.exists()
     assert "hello" in log_path.read_text(encoding="utf-8")
+
+
+def test_runner_submit_and_cleanup():
+    runner = IngestionRunner(max_workers=1)
+    job_id = uuid4()
+    called = {}
+
+    def work(ev: Event):
+        called["ran"] = True
+
+    fut = runner.submit(job_id, work)
+    fut.result(timeout=1)
+    assert called["ran"]
+    # manual cleanup to remove bookkeeping
+    runner._events.pop(job_id, None)
+    runner._futures.pop(job_id, None)
+    assert list(runner.list()) == []
