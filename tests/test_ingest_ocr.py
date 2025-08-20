@@ -4,7 +4,7 @@ from pypdf import PdfWriter
 pytest.importorskip("pytesseract")
 pytest.importorskip("pdf2image")
 
-from app.ingestion import service as ingest
+import app.ingestion.service as ingest
 
 
 @pytest.fixture(params=["eng", "por", "spa"])
