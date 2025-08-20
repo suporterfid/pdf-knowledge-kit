@@ -124,9 +124,35 @@ def chunk_text(text: str, max_chars: int = 1200, overlap: int = 200) -> List[str
     return out
 
 
-def ensure_schema(conn: psycopg.Connection, schema_sql_path: Path) -> None:
+def ensure_schema(
+    conn: psycopg.Connection,
+    schema_sql_path: Path,
+    migrations_dir: Path | None = None,
+) -> None:
+    """Apply base schema and any subsequent SQL migrations.
+
+    Parameters
+    ----------
+    conn:
+        Active database connection.
+    schema_sql_path:
+        Path to the ``schema.sql`` file containing the initial schema.
+    migrations_dir:
+        Directory containing sequential ``.sql`` migration files. If not
+        provided, ``schema_sql_path.parent / 'migrations'`` is used. Each
+        migration is executed in alphabetical order.
+    """
+
+    # First ensure the base schema exists.
     with conn.cursor() as cur:
-        cur.execute(open(schema_sql_path, "r", encoding="utf-8").read())
+        cur.execute(schema_sql_path.read_text(encoding="utf-8"))
+
+        # Then apply any migrations if available.
+        migrations_dir = migrations_dir or schema_sql_path.parent / "migrations"
+        if migrations_dir.exists():
+            for mig in sorted(migrations_dir.glob("*.sql")):
+                cur.execute(mig.read_text(encoding="utf-8"))
+
     conn.commit()
 
 
