@@ -9,36 +9,29 @@ export default function JobDetail() {
   const [status, setStatus] = useState('');
 
   useEffect(() => {
-    const controller = new AbortController();
-    async function load() {
-      const res = await apiFetch(`/api/admin/ingest/jobs/${id}/logs`, {
-        signal: controller.signal,
-      });
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      if (!reader) return;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let idx;
-        while ((idx = buffer.indexOf('\n\n')) !== -1) {
-          const chunk = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 2);
-          const lines = chunk.split('\n');
-          const event = lines.find((l) => l.startsWith('event:'))?.replace('event:', '').trim();
-          const data = lines.find((l) => l.startsWith('data:'))?.replace('data:', '').trim();
-          if (event === 'end') {
-            setStatus(data || '');
-          } else if (data) {
-            setLog((prev) => prev + data);
-          }
+    let canceled = false;
+    let offset = 0;
+    async function poll() {
+      while (!canceled) {
+        const res = await apiFetch(
+          `/api/admin/ingest/jobs/${id}/logs?offset=${offset}`,
+        );
+        const data = await res.json();
+        if (data.text) {
+          setLog((prev) => prev + data.text);
         }
+        offset = data.next_offset;
+        if (data.status) {
+          setStatus(data.status);
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 500));
       }
     }
-    load();
-    return () => controller.abort();
+    poll();
+    return () => {
+      canceled = true;
+    };
   }, [id, apiFetch]);
 
   const cancelJob = () => {

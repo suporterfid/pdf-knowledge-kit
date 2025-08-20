@@ -41,3 +41,24 @@ class IngestionJob(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     error: Optional[str] = None
+
+
+class JobLogSlice(BaseModel):
+    """A slice of a job log file.
+
+    Attributes
+    ----------
+    text:
+        The log content read starting at ``offset``.
+    next_offset:
+        Byte offset for the next read.
+    total:
+        Total size of the log file in bytes.
+    status:
+        Final status of the job if it has completed, otherwise ``None``.
+    """
+
+    text: str
+    next_offset: int
+    total: int
+    status: Optional[IngestionJobStatus] = None

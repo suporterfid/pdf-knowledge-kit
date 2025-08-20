@@ -5,7 +5,13 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from app.ingestion.models import IngestionJob, IngestionJobStatus, Source, SourceType
+from app.ingestion.models import (
+    IngestionJob,
+    IngestionJobStatus,
+    JobLogSlice,
+    Source,
+    SourceType,
+)
 
 
 def create_client(monkeypatch):
@@ -144,7 +150,10 @@ def test_sources_crud_and_reindex(monkeypatch):
 def test_job_lifecycle_and_logs(monkeypatch):
     client, admin_api = create_client(monkeypatch)
     jobs: dict[UUID, IngestionJob] = {}
-    log_states = ["", "line1\n", "line1\nline2\n"]
+    slices = [
+        JobLogSlice(text="line1\n", next_offset=6, total=12, status=None),
+        JobLogSlice(text="line2\n", next_offset=12, total=12, status=IngestionJobStatus.COMPLETED),
+    ]
     call = {"i": 0}
 
     def ingest_url(url):
@@ -163,24 +172,15 @@ def test_job_lifecycle_and_logs(monkeypatch):
     def cancel_job(job_id):
         jobs[job_id].status = IngestionJobStatus.CANCELED
 
-    def get_job(job_id):
-        status = IngestionJobStatus.RUNNING if call["i"] < 2 else IngestionJobStatus.COMPLETED
-        return IngestionJob(id=job_id, source_id=uuid4(), status=status, created_at=datetime.utcnow())
-
-    def read_job_log(job_id):
+    def read_job_log(job_id, offset=0, limit=16_384):
         i = call["i"]
-        call["i"] = min(i + 1, len(log_states) - 1)
-        return log_states[i]
-
-    async def fake_sleep(_):
-        return None
+        call["i"] = min(i + 1, len(slices) - 1)
+        return slices[i]
 
     monkeypatch.setattr(admin_api.service, "ingest_url", ingest_url)
     monkeypatch.setattr(admin_api.service, "list_jobs", list_jobs)
     monkeypatch.setattr(admin_api.service, "cancel_job", cancel_job)
-    monkeypatch.setattr(admin_api.service, "get_job", get_job)
     monkeypatch.setattr(admin_api.service, "read_job_log", read_job_log)
-    monkeypatch.setattr(admin_api.asyncio, "sleep", fake_sleep)
 
     res = client.post(
         "/api/admin/ingest/jobs/url",
@@ -200,10 +200,19 @@ def test_job_lifecycle_and_logs(monkeypatch):
     assert res.status_code == 200
     assert jobs[job_id].status == IngestionJobStatus.CANCELED
 
-    with client.stream(
-        "GET", f"/api/admin/ingest/jobs/{job_id}/logs", headers={"X-API-Key": "view"}
-    ) as res:
-        raw = list(res.iter_lines())
-    lines = [l.decode() if isinstance(l, bytes) else l for l in raw]
-    assert any("line1" in l for l in lines)
-    assert any("event: end" in l for l in lines)
+    res = client.get(
+        f"/api/admin/ingest/jobs/{job_id}/logs", headers={"X-API-Key": "view"}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert "line1" in data["text"]
+    assert data["next_offset"] == 6
+
+    res = client.get(
+        f"/api/admin/ingest/jobs/{job_id}/logs",
+        params={"offset": data["next_offset"]},
+        headers={"X-API-Key": "view"},
+    )
+    data = res.json()
+    assert "line2" in data["text"]
+    assert data["status"] == IngestionJobStatus.COMPLETED
