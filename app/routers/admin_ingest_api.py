@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 from pathlib import Path
 from typing import List
@@ -8,10 +7,8 @@ from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Body, Depends, HTTPException
-from sse_starlette.sse import EventSourceResponse
-
 from ..ingestion import service, storage
-from ..ingestion.models import IngestionJobStatus, SourceType
+from ..ingestion.models import IngestionJobStatus, SourceType, JobLogSlice
 from ..security.auth import require_role
 
 router = APIRouter(prefix="/api/admin/ingest", tags=["admin-ingest"])
@@ -117,22 +114,13 @@ def reindex_source_endpoint(
     return {"status": "reindexing"}
 
 
-@router.get("/jobs/{job_id}/logs")
-async def stream_logs(job_id: UUID, role: str = Depends(require_role("viewer"))):
-    async def event_generator():
-        last_size = 0
-        while True:
-            await asyncio.sleep(0.5)
-            log = service.read_job_log(job_id)
-            if len(log) > last_size:
-                yield {"data": log[last_size:]}
-                last_size = len(log)
-            job = service.get_job(job_id)
-            if job and job.status in (
-                IngestionJobStatus.COMPLETED,
-                IngestionJobStatus.FAILED,
-                IngestionJobStatus.CANCELED,
-            ):
-                yield {"event": "end", "data": job.status}
-                break
-    return EventSourceResponse(event_generator())
+@router.get("/jobs/{job_id}/logs", response_model=JobLogSlice)
+def get_job_logs(
+    job_id: UUID,
+    offset: int = 0,
+    limit: int = 16_384,
+    role: str = Depends(require_role("viewer")),
+):
+    """Return a slice of the job log starting at ``offset``."""
+
+    return service.read_job_log(job_id, offset=offset, limit=limit)

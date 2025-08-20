@@ -17,7 +17,7 @@ import pytesseract
 import psycopg
 from pgvector.psycopg import register_vector
 
-from .models import IngestionJob, IngestionJobStatus
+from .models import IngestionJob, IngestionJobStatus, JobLogSlice
 from .runner import IngestionRunner
 
 # Multilingual embedding model
@@ -310,8 +310,37 @@ def list_jobs() -> List[IngestionJob]:
     return list(_jobs.values())
 
 
-def read_job_log(job_id: uuid.UUID) -> str:
+def read_job_log(job_id: uuid.UUID, offset: int = 0, limit: int = 16_384) -> JobLogSlice:
+    """Read a portion of a job log.
+
+    Parameters
+    ----------
+    job_id:
+        Identifier of the job whose log should be read.
+    offset:
+        Byte offset in the log file from which to start reading.
+    limit:
+        Maximum number of bytes to read from the log file.
+    """
+
     path = _job_logs.get(job_id)
-    if path and path.exists():
-        return path.read_text(encoding="utf-8")
-    return ""
+    if not path or not path.exists():
+        return JobLogSlice(text="", next_offset=offset, total=0, status=None)
+
+    total = path.stat().st_size
+    with path.open("rb") as f:
+        f.seek(offset)
+        data = f.read(limit)
+    text = data.decode("utf-8", errors="ignore")
+    next_offset = offset + len(data)
+
+    job = _jobs.get(job_id)
+    status = None
+    if job and job.status in {
+        IngestionJobStatus.COMPLETED,
+        IngestionJobStatus.FAILED,
+        IngestionJobStatus.CANCELED,
+    }:
+        status = job.status
+
+    return JobLogSlice(text=text, next_offset=next_offset, total=total, status=status)
