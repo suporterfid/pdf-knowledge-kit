@@ -322,64 +322,79 @@ curl http://localhost:8000/api/health
   - Traga os trechos + metadados e alimente o *prompt* do agente (*RAG*).
   - Para respostas fiéis, **mostre as fontes** (caminho do arquivo e página, quando houver).
 
-## API de ingestão administrativa
+## Admin Ingestion
 
-Os endpoints sob `/api/admin/ingest/*` permitem disparar jobs de ingestão
-remotamente e acompanhar sua execução. Toda requisição exige o cabeçalho
-`X-API-Key` com um papel válido:
+The `/api/admin/ingest/*` endpoints let operators trigger ingestion jobs remotely. Jobs run in the background and immediately return a `job_id`. Each job writes its own log file that can be polled while the work proceeds.
 
-- **viewer** – listar jobs e fontes e ler logs.
-- **operator** – permissões de *viewer* + iniciar/cancelar jobs.
-- **admin** – reservado para operações avançadas.
+### Roles and environment variables
 
-Defina as chaves via variáveis de ambiente (`ADMIN_API_KEY`,
-`OP_API_KEY`, `VIEW_API_KEY`). Cada variável aceita apenas **uma**
-chave (padrões de desenvolvimento: `admin`, `oper`, `view`).
+Requests must send an API key in the `X-API-Key` header. Keys map to roles in a strict hierarchy:
 
-### Ciclo de vida do job
+- **viewer** – read-only access to jobs and sources.
+- **operator** – all viewer permissions plus start and cancel jobs.
+- **admin** – reserved for advanced operations.
 
-Um job começa em `pending`, muda para `running` e termina em `completed`,
-`failed` ou `canceled`.
-
-### Endpoints e exemplos
-
-Nos exemplos abaixo, exporte `OPERATOR_API_KEY` e `VIEWER_API_KEY` com uma das
-chaves configuradas.
+Configure the keys with single-value environment variables:
 
 ```bash
-# Iniciar ingestão de um arquivo local
-curl -X POST "http://localhost:8000/api/admin/ingest/jobs/local" \
-  -H "X-API-Key: $OPERATOR_API_KEY" \
-  -d "path=/app/docs/exemplo.pdf"
-
-# Iniciar ingestão de uma URL
-curl -X POST "http://localhost:8000/api/admin/ingest/jobs/url" \
-  -H "X-API-Key: $OPERATOR_API_KEY" \
-  -d "url=https://exemplo.com/doc"
-
-# Listar jobs
-curl -H "X-API-Key: $VIEWER_API_KEY" \
-  "http://localhost:8000/api/admin/ingest/jobs"
-
-# Cancelar um job
-curl -X POST "http://localhost:8000/api/admin/ingest/jobs/<JOB_ID>/cancel" \
-  -H "X-API-Key: $OPERATOR_API_KEY"
-
-# Acompanhar logs (SSE)
-curl -N -H "X-API-Key: $VIEWER_API_KEY" \
-  "http://localhost:8000/api/admin/ingest/jobs/<JOB_ID>/logs"
+ADMIN_API_KEY=admin    # full access
+OP_API_KEY=oper        # start/cancel jobs
+VIEW_API_KEY=view      # read-only
 ```
 
-Para consultar as fontes ingeridas:
+### Job lifecycle, logs, and monitoring
+
+Jobs move from `pending` → `running` → `completed`/`failed`/`canceled`. Logs are stored per job and exposed via `GET /api/admin/ingest/jobs/<JOB_ID>/logs`. The endpoint returns a slice of text and the next byte offset so clients can poll to tail progress.
 
 ```bash
+# List jobs
 curl -H "X-API-Key: $VIEWER_API_KEY" \
-  "http://localhost:8000/api/admin/ingest/sources"
+  http://localhost:8000/api/admin/ingest/jobs
+
+# Inspect a single job
+curl -H "X-API-Key: $VIEWER_API_KEY" \
+  http://localhost:8000/api/admin/ingest/jobs/<JOB_ID>
+
+# Read logs from the beginning
+curl -H "X-API-Key: $VIEWER_API_KEY" \
+  "http://localhost:8000/api/admin/ingest/jobs/<JOB_ID>/logs?offset=0"
+
+# Cancel a running job
+curl -X POST -H "X-API-Key: $OPERATOR_API_KEY" \
+  http://localhost:8000/api/admin/ingest/jobs/<JOB_ID>/cancel
 ```
 
-### UI administrativa mínima
+### Ingestion examples
 
-Uma interface HTML simples está disponível em `admin-ui/`. Para rodá-la:
+```bash
+# Local file
+curl -X POST http://localhost:8000/api/admin/ingest/local \
+  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -d "path=/app/docs/example.pdf"
+
+# Single URL
+curl -X POST http://localhost:8000/api/admin/ingest/url \
+  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -d "url=https://example.com/doc"
+
+# List of URLs
+curl -X POST http://localhost:8000/api/admin/ingest/urls \
+  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"urls": ["https://a.com/doc1", "https://b.com/doc2"]}'
+```
+
+### Source management
+
+```bash
+# List known sources
+curl -H "X-API-Key: $VIEWER_API_KEY" \
+  http://localhost:8000/api/admin/ingest/sources
+```
+
+### Admin UI
+
+A minimal HTML interface lives in `admin-ui/`:
 
 ```bash
 cd admin-ui
@@ -387,8 +402,7 @@ npm install
 npm run dev
 ```
 
-Se a UI rodar em outra origem, defina `ADMIN_UI_ORIGINS` com essa URL antes
-de iniciar o backend.
+If the UI is served from another origin, set `ADMIN_UI_ORIGINS` before starting the backend so CORS allows the requests.
 
 ## Dicas francas
 - PDFs escaneados (sem texto) exigem **OCR** (ex.: Tesseract). Habilite com `--ocr` (opcionalmente `--ocr-lang`) ou `ENABLE_OCR=1`/`OCR_LANG`.
