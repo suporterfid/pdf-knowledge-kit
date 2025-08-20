@@ -370,8 +370,48 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
     return job_id
 
 
-def reindex_source(_source_id: uuid.UUID) -> None:
-    """Placeholder for vector index recreation."""
+def reindex_source(_source_id: uuid.UUID) -> uuid.UUID | None:
+    """Re-ingest content for an existing source.
+
+    The current chunks (and associated document record) for the given
+    ``source_id`` are removed and a new ingestion job is started using the
+    stored source parameters. The newly created job identifier is returned,
+    or ``None`` if the source cannot be found or lacks the required
+    parameters.
+    """
+
+    db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+
+    with psycopg.connect(db_url) as conn:
+        register_vector(conn)
+        ensure_schema(conn, SCHEMA_PATH)
+
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT type, path, url FROM sources WHERE id = %s AND deleted_at IS NULL",
+                (_source_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+
+            type_val, path, url = row
+            identifier = path or url
+            if identifier:
+                # Remove existing chunks/documents for this source. Deleting the
+                # document record cascades to ``chunks``.
+                cur.execute(
+                    "DELETE FROM documents WHERE path = %s",
+                    (identifier,),
+                )
+
+        conn.commit()
+
+    source_type = SourceType(type_val)
+    if source_type == SourceType.LOCAL and path:
+        return ingest_local(Path(path))
+    if source_type == SourceType.URL and url:
+        return ingest_url(url)
     return None
 
 

@@ -49,5 +49,56 @@ def test_ingest_local_error(tmp_path, monkeypatch):
     assert job.error
 
 
-def test_reindex_source_noop():
-    assert service.reindex_source(uuid4()) is None
+def test_reindex_source_reingests(monkeypatch):
+    source_id = uuid4()
+    dummy_job = uuid4()
+    called: dict[str, pathlib.Path] = {}
+
+    class DummyCursor:
+        def __init__(self):
+            self.queries: list[tuple[str, tuple | None]] = []
+
+        def execute(self, sql, params=None):
+            self.queries.append((sql, params))
+
+        def fetchone(self):
+            # Return a LOCAL source pointing to a file
+            return ("local", "/tmp/doc.md", None)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    class DummyConn:
+        def __init__(self):
+            self.cur = DummyCursor()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def cursor(self):
+            return self.cur
+
+        def commit(self):
+            pass
+
+    conn = DummyConn()
+    monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: conn)
+    monkeypatch.setattr(service, "register_vector", lambda conn: None)
+
+    def fake_ingest(path):
+        called["path"] = path
+        return dummy_job
+
+    monkeypatch.setattr(service, "ingest_local", fake_ingest)
+
+    job_id = service.reindex_source(source_id)
+
+    assert job_id == dummy_job
+    assert called["path"] == pathlib.Path("/tmp/doc.md")
+    assert any("DELETE FROM documents" in q[0] for q in conn.cur.queries)
