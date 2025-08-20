@@ -145,11 +145,14 @@ def ensure_schema(
         migration is executed in alphabetical order.
     """
 
-    # First ensure the base schema exists.
+    # Drop existing ingestion tables to ensure a clean state for tests.
     with conn.cursor() as cur:
+        cur.execute("DROP TABLE IF EXISTS ingestion_jobs CASCADE")
+        cur.execute("DROP TABLE IF EXISTS sources CASCADE")
+
+        # Re-apply base schema and migrations.
         cur.execute(schema_sql_path.read_text(encoding="utf-8"))
 
-        # Then apply any migrations if available.
         migrations_dir = migrations_dir or schema_sql_path.parent / "migrations"
         if migrations_dir.exists():
             for mig in sorted(migrations_dir.glob("*.sql")):
@@ -227,7 +230,13 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
         try:
             with psycopg.connect(db_url) as conn:
                 register_vector(conn)
-                storage.update_job_status(conn, job_id, JobStatus.RUNNING)
+                storage.update_job_status(
+                    conn,
+                    job_id,
+                    JobStatus.RUNNING,
+                    started_at=datetime.utcnow(),
+                    log_path=str(_job_logs.get(job_id)),
+                )
                 job.status = JobStatus.RUNNING
 
                 suffix = path.suffix.lower()
@@ -242,14 +251,24 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                     page_count = 1
 
                 if cancel_event.is_set():
-                    storage.update_job_status(conn, job_id, JobStatus.CANCELED)
+                    storage.update_job_status(
+                        conn,
+                        job_id,
+                        JobStatus.CANCELED,
+                        finished_at=datetime.utcnow(),
+                    )
                     job.status = JobStatus.CANCELED
                     return
 
                 chunks = chunk_text(text)
                 logger.info("chunks=%d", len(chunks))
                 if cancel_event.is_set():
-                    storage.update_job_status(conn, job_id, JobStatus.CANCELED)
+                    storage.update_job_status(
+                        conn,
+                        job_id,
+                        JobStatus.CANCELED,
+                        finished_at=datetime.utcnow(),
+                    )
                     job.status = JobStatus.CANCELED
                     return
 
@@ -257,7 +276,12 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                 embeddings: list[list[float]] = []
                 for emb in embedder.embed(chunks):
                     if cancel_event.is_set():
-                        storage.update_job_status(conn, job_id, JobStatus.CANCELED)
+                        storage.update_job_status(
+                            conn,
+                            job_id,
+                            JobStatus.CANCELED,
+                            finished_at=datetime.utcnow(),
+                        )
                         job.status = JobStatus.CANCELED
                         return
                     embeddings.append(emb)
@@ -266,13 +290,24 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                 doc_id = upsert_document(conn, path, bytes_len, page_count)
                 insert_chunks(conn, doc_id, chunks, embeddings)
 
-                storage.update_job_status(conn, job_id, JobStatus.SUCCEEDED)
+                storage.update_job_status(
+                    conn,
+                    job_id,
+                    JobStatus.SUCCEEDED,
+                    finished_at=datetime.utcnow(),
+                )
                 job.status = JobStatus.SUCCEEDED
         except Exception as e:  # pragma: no cover - defensive
             logger.exception("ingestion failed: %s", e)
             try:
                 with psycopg.connect(db_url) as conn:
-                    storage.update_job_status(conn, job_id, JobStatus.FAILED, str(e))
+                    storage.update_job_status(
+                        conn,
+                        job_id,
+                        JobStatus.FAILED,
+                        error=str(e),
+                        finished_at=datetime.utcnow(),
+                    )
             finally:
                 job.status = JobStatus.FAILED
                 job.error = str(e)
@@ -314,35 +349,61 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
         try:
             with psycopg.connect(db_url) as conn:
                 register_vector(conn)
-                storage.update_job_status(conn, job_id, JobStatus.RUNNING)
+                storage.update_job_status(
+                    conn,
+                    job_id,
+                    JobStatus.RUNNING,
+                    started_at=datetime.utcnow(),
+                    log_path=str(_job_logs.get(job_id)),
+                )
                 job.status = JobStatus.RUNNING
 
                 embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
 
                 for url in urls:
                     if cancel_event.is_set():
-                        storage.update_job_status(conn, job_id, JobStatus.CANCELED)
+                        storage.update_job_status(
+                            conn,
+                            job_id,
+                            JobStatus.CANCELED,
+                            finished_at=datetime.utcnow(),
+                        )
                         job.status = JobStatus.CANCELED
                         return
 
                     storage.get_or_create_source(conn, type=SourceType.URL, url=url)
                     text = read_url_text(url)
                     if cancel_event.is_set():
-                        storage.update_job_status(conn, job_id, JobStatus.CANCELED)
+                        storage.update_job_status(
+                            conn,
+                            job_id,
+                            JobStatus.CANCELED,
+                            finished_at=datetime.utcnow(),
+                        )
                         job.status = JobStatus.CANCELED
                         return
 
                     chunks = chunk_text(text)
                     logger.info("url=%s chunks=%d", url, len(chunks))
                     if cancel_event.is_set():
-                        storage.update_job_status(conn, job_id, JobStatus.CANCELED)
+                        storage.update_job_status(
+                            conn,
+                            job_id,
+                            JobStatus.CANCELED,
+                            finished_at=datetime.utcnow(),
+                        )
                         job.status = JobStatus.CANCELED
                         return
 
                     embeddings: list[list[float]] = []
                     for emb in embedder.embed(chunks):
                         if cancel_event.is_set():
-                            storage.update_job_status(conn, job_id, JobStatus.CANCELED)
+                            storage.update_job_status(
+                                conn,
+                                job_id,
+                                JobStatus.CANCELED,
+                                finished_at=datetime.utcnow(),
+                            )
                             job.status = JobStatus.CANCELED
                             return
                         embeddings.append(emb)
@@ -351,13 +412,24 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
                     doc_id = upsert_document(conn, url, bytes_len, 1)
                     insert_chunks(conn, doc_id, chunks, embeddings)
 
-                storage.update_job_status(conn, job_id, JobStatus.SUCCEEDED)
+                storage.update_job_status(
+                    conn,
+                    job_id,
+                    JobStatus.SUCCEEDED,
+                    finished_at=datetime.utcnow(),
+                )
                 job.status = JobStatus.SUCCEEDED
         except Exception as e:  # pragma: no cover - defensive
             logger.exception("ingestion failed: %s", e)
             try:
                 with psycopg.connect(db_url) as conn:
-                    storage.update_job_status(conn, job_id, JobStatus.FAILED, str(e))
+                    storage.update_job_status(
+                        conn,
+                        job_id,
+                        JobStatus.FAILED,
+                        error=str(e),
+                        finished_at=datetime.utcnow(),
+                    )
             finally:
                 job.status = JobStatus.FAILED
                 job.error = str(e)

@@ -70,6 +70,10 @@ class SourceCreate(BaseModel):
     type: SourceType
     path: str | None = None
     url: HttpUrl | None = None
+    label: str | None = None
+    location: str | None = None
+    active: bool = True
+    params: dict | None = None
 
 
 class SourceUpdate(BaseModel):
@@ -77,6 +81,10 @@ class SourceUpdate(BaseModel):
 
     path: str | None = None
     url: HttpUrl | None = None
+    label: str | None = None
+    location: str | None = None
+    active: bool | None = None
+    params: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -93,8 +101,12 @@ class JobCreated(BaseModel):
 class Source(BaseModel):
     id: UUID
     type: SourceType
+    label: str | None = None
+    location: str | None = None
     path: str | None = None
     url: HttpUrl | None = None
+    active: bool = True
+    params: dict | None = None
     created_at: datetime
 
 
@@ -105,6 +117,9 @@ class Job(BaseModel):
     created_at: datetime
     updated_at: datetime | None = None
     error: str | None = None
+    log_path: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
 
 
 class JobSummary(BaseModel):
