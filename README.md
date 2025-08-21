@@ -410,10 +410,10 @@ curl -H "X-API-Key: $VIEWER_API_KEY" \
 
 ### Admin UI
 
-A minimal HTML interface lives in `admin-ui/`:
+Admin pages live inside the main frontend project under `frontend/src/admin`. Run the frontend dev server and open the `/admin` route:
 
 ```bash
-cd admin-ui
+cd frontend
 npm install
 npm run dev
 ```
