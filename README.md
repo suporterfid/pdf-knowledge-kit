@@ -220,12 +220,12 @@ OCR_LANG=eng+por+spa      # ex.: PDFs em inglês, português e espanhol
 
 Principais chaves disponíveis:
 
-- **PGHOST**, **PGPORT**, **PGDATABASE**, **PGUSER**, **PGPASSWORD** – conexão com o Postgres/pgvector.
+- **PGHOST**, **PGPORT**, **PGDATABASE**, **PGUSER**, **PGPASSWORD** – conexão com o Postgres/pgvector (padrões: `db`, `5432`, `pdfkb`, `pdfkb`, `pdfkb`).
 - **DOCS_DIR** – pasta padrão para os arquivos. Qualquer `.md` nessa pasta é ingerido junto com os PDFs.
 - **OPENAI_API_KEY**, **OPENAI_MODEL**, **USE_LLM** – integrações com LLM (opcional).
 - **TOP_K**, **MAX_CONTEXT_CHARS** – ajustes de recuperação de trechos.
 - **UPLOAD_DIR**, **UPLOAD_TTL**, **UPLOAD_MAX_SIZE**, **UPLOAD_ALLOWED_MIME_TYPES** – controle de uploads temporários.
-- **CORS_ALLOW_ORIGINS**, **BRAND_NAME**, **POWERED_BY_LABEL**, **LOGO_URL** – personalização da UI.
+- **CORS_ALLOW_ORIGINS**, **BRAND_NAME**, **POWERED_BY_LABEL**, **LOGO_URL** – personalização da UI. `POWERED_BY_LABEL` define o texto do rodapé (padrão: "Powered by PDF Knowledge Kit").
 - **ENABLE_OCR** – habilita OCR em execuções não interativas (override de `--ocr`).
 - **OCR_LANG** – idiomas do Tesseract para OCR. Combine múltiplos códigos com `+` (ex.: `eng+por`).
 
