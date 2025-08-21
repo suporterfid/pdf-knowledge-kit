@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiFetch } from '../apiKey';
+import useAuth from '../hooks/useAuth';
 
 interface Job {
   id: string;
@@ -14,6 +15,8 @@ interface JobList {
 
 export default function Dashboard() {
   const apiFetch = useApiFetch();
+  const { roles } = useAuth();
+  const canOperate = roles.includes('operator') || roles.includes('admin');
   const [jobs, setJobs] = useState<Job[]>([]);
 
   const load = () => {
@@ -63,6 +66,7 @@ export default function Dashboard() {
                   onClick={() =>
                     apiFetch(`/api/admin/ingest/jobs/${job.id}/cancel`, { method: 'POST' }).then(load)
                   }
+                  disabled={!canOperate}
                 >
                   Cancel
                 </button>
@@ -71,6 +75,7 @@ export default function Dashboard() {
                   onClick={() =>
                     apiFetch(`/api/admin/ingest/jobs/${job.id}/rerun`, { method: 'POST' }).then(load)
                   }
+                  disabled={!canOperate}
                 >
                   Re-run
                 </button>

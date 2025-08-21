@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useApiFetch } from '../apiKey';
+import useAuth from '../hooks/useAuth';
 
 interface Source {
   id: string;
@@ -14,6 +15,8 @@ interface Source {
 
 export default function Sources() {
   const apiFetch = useApiFetch();
+  const { roles } = useAuth();
+  const canOperate = roles.includes('operator') || roles.includes('admin');
   const [sources, setSources] = useState<Source[]>([]);
   const [type, setType] = useState('local_dir');
   const [path, setPath] = useState('');
@@ -134,46 +137,48 @@ export default function Sources() {
   return (
     <div>
       <h2>Sources</h2>
-      <form onSubmit={create} aria-label="Create source form">
-        <label htmlFor="type">Type</label>
-        <select id="type" value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="local_dir">Local</option>
-          <option value="url">URL</option>
-          <option value="url_list">URL List</option>
-        </select>
-        <label htmlFor="label">Label</label>
-        <input id="label" value={label} onChange={(e) => setLabel(e.target.value)} />
-        <label htmlFor="location">Location</label>
-        <input id="location" value={location} onChange={(e) => setLocation(e.target.value)} />
-        <label htmlFor="active">Active</label>
-        <input
-          id="active"
-          type="checkbox"
-          checked={active}
-          onChange={(e) => setActive(e.target.checked)}
-        />
-        <label htmlFor="params">Params</label>
-        <input id="params" value={params} onChange={(e) => setParams(e.target.value)} />
-        {type === 'local_dir' && (
-          <>
-            <label htmlFor="path">Path</label>
-            <input id="path" value={path} onChange={(e) => setPath(e.target.value)} />
-          </>
-        )}
-        {type === 'url' && (
-          <>
-            <label htmlFor="url">URL</label>
-            <input id="url" value={url} onChange={(e) => setUrl(e.target.value)} />
-          </>
-        )}
-        {type === 'url_list' && (
-          <>
-            <label htmlFor="urls">URLs</label>
-            <textarea id="urls" value={urls} onChange={(e) => setUrls(e.target.value)} />
-          </>
-        )}
-        <button type="submit">Add</button>
-      </form>
+      {canOperate && (
+        <form onSubmit={create} aria-label="Create source form">
+          <label htmlFor="type">Type</label>
+          <select id="type" value={type} onChange={(e) => setType(e.target.value)}>
+            <option value="local_dir">Local</option>
+            <option value="url">URL</option>
+            <option value="url_list">URL List</option>
+          </select>
+          <label htmlFor="label">Label</label>
+          <input id="label" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <label htmlFor="location">Location</label>
+          <input id="location" value={location} onChange={(e) => setLocation(e.target.value)} />
+          <label htmlFor="active">Active</label>
+          <input
+            id="active"
+            type="checkbox"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+          />
+          <label htmlFor="params">Params</label>
+          <input id="params" value={params} onChange={(e) => setParams(e.target.value)} />
+          {type === 'local_dir' && (
+            <>
+              <label htmlFor="path">Path</label>
+              <input id="path" value={path} onChange={(e) => setPath(e.target.value)} />
+            </>
+          )}
+          {type === 'url' && (
+            <>
+              <label htmlFor="url">URL</label>
+              <input id="url" value={url} onChange={(e) => setUrl(e.target.value)} />
+            </>
+          )}
+          {type === 'url_list' && (
+            <>
+              <label htmlFor="urls">URLs</label>
+              <textarea id="urls" value={urls} onChange={(e) => setUrls(e.target.value)} />
+            </>
+          )}
+          <button type="submit">Add</button>
+        </form>
+      )}
 
       <div>
         <label htmlFor="filterActive">Filter Active</label>
@@ -227,6 +232,7 @@ export default function Sources() {
                       prev.map((p) => (p.id === s.id ? { ...p, label: e.target.value } : p))
                     )
                   }
+                  disabled={!canOperate}
                 />
               </td>
               <td>
@@ -238,6 +244,7 @@ export default function Sources() {
                       prev.map((p) => (p.id === s.id ? { ...p, location: e.target.value } : p))
                     )
                   }
+                  disabled={!canOperate}
                 />
               </td>
               <td>
@@ -250,6 +257,7 @@ export default function Sources() {
                         prev.map((p) => (p.id === s.id ? { ...p, path: e.target.value } : p))
                       )
                     }
+                    disabled={!canOperate}
                   />
                 )}
               </td>
@@ -263,6 +271,7 @@ export default function Sources() {
                         prev.map((p) => (p.id === s.id ? { ...p, url: e.target.value } : p))
                       )
                     }
+                    disabled={!canOperate}
                   />
                 )}
               </td>
@@ -276,6 +285,7 @@ export default function Sources() {
                       prev.map((p) => (p.id === s.id ? { ...p, active: e.target.checked } : p))
                     )
                   }
+                  disabled={!canOperate}
                 />
               </td>
               <td>
@@ -293,12 +303,31 @@ export default function Sources() {
                       prev.map((p) => (p.id === s.id ? { ...p, params: e.target.value } : p))
                     )
                   }
+                  disabled={!canOperate}
                 />
               </td>
               <td>
-                <button aria-label={`Save source ${s.id}`} onClick={() => save(s)}>Save</button>
-                <button aria-label={`Delete source ${s.id}`} onClick={() => del(s.id)}>Delete</button>
-                <button aria-label={`Reindex source ${s.id}`} onClick={() => reindex(s.id)}>Reindex</button>
+                <button
+                  aria-label={`Save source ${s.id}`}
+                  onClick={() => save(s)}
+                  disabled={!canOperate}
+                >
+                  Save
+                </button>
+                <button
+                  aria-label={`Delete source ${s.id}`}
+                  onClick={() => del(s.id)}
+                  disabled={!canOperate}
+                >
+                  Delete
+                </button>
+                <button
+                  aria-label={`Reindex source ${s.id}`}
+                  onClick={() => reindex(s.id)}
+                  disabled={!canOperate}
+                >
+                  Reindex
+                </button>
               </td>
             </tr>
           ))}

@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useApiFetch } from '../apiKey';
+import useAuth from '../hooks/useAuth';
 
 export default function IngestUrl() {
   const apiFetch = useApiFetch();
+  const { roles } = useAuth();
+  const canOperate = roles.includes('operator') || roles.includes('admin');
   const [url, setUrl] = useState('');
   const [jobId, setJobId] = useState<string | null>(null);
 
@@ -19,6 +22,10 @@ export default function IngestUrl() {
       .then((d) => setJobId(d.job_id))
       .catch(() => {});
   };
+
+  if (!canOperate) {
+    return <p>You do not have permission to start ingestion.</p>;
+  }
 
   return (
     <div>

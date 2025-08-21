@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApiFetch } from '../apiKey';
 import LogViewer from './LogViewer';
+import useAuth from '../hooks/useAuth';
 
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const apiFetch = useApiFetch();
+  const { roles } = useAuth();
+  const canOperate = roles.includes('operator') || roles.includes('admin');
   const [status, setStatus] = useState('');
 
   const cancelJob = () => {
@@ -24,7 +27,7 @@ export default function JobDetail() {
         <button
           aria-label="Cancel job"
           onClick={cancelJob}
-          disabled={!!status && status !== 'queued' && status !== 'running'}
+          disabled={!canOperate || (!!status && status !== 'queued' && status !== 'running')}
         >
           Cancel
         </button>
@@ -33,6 +36,7 @@ export default function JobDetail() {
           onClick={() =>
             apiFetch(`/api/admin/ingest/jobs/${id}/rerun`, { method: 'POST' }).then(() => {})
           }
+          disabled={!canOperate}
         >
           Re-run
         </button>

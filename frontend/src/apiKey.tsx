@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
+import { toast } from 'react-toastify';
 
 interface ApiKeyContextValue {
   apiKey: string;
@@ -26,12 +27,18 @@ export function useApiFetch() {
   const { apiKey } = useApiKey();
   return useMemo(
     () =>
-      (input: RequestInfo | URL, init: RequestInit = {}) => {
+      async (input: RequestInfo | URL, init: RequestInit = {}) => {
         const headers = new Headers(init.headers);
         if (apiKey) {
           headers.set('X-API-Key', apiKey);
         }
-        return fetch(input, { ...init, headers });
+        const res = await fetch(input, { ...init, headers });
+        if (res.status === 401) {
+          toast.error('Unauthorized: invalid or missing API key');
+        } else if (res.status === 403) {
+          toast.error('Forbidden: insufficient permissions');
+        }
+        return res;
       },
     [apiKey],
   );
