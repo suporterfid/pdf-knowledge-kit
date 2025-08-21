@@ -26,7 +26,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from .rag import build_context
 from .app_logging import init_logging
-from .routers import admin_ingest_api
+from .routers import admin_ingest_api, auth_api
 
 try:
     from openai import OpenAI
@@ -73,6 +73,7 @@ if admin_ui_origins:
     )
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.include_router(admin_ingest_api.router)
+app.include_router(auth_api.router)
 app.mount(
     "/",
     StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static"), html=True),

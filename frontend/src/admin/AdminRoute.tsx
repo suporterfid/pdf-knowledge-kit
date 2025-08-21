@@ -4,16 +4,16 @@ import { toast } from 'react-toastify';
 import useAuth from '../hooks/useAuth';
 
 export default function AdminRoute({ children }: { children: JSX.Element }) {
-  const { roles } = useAuth();
+  const { roles, loading } = useAuth();
   const navigate = useNavigate();
-  const isAdmin = roles.includes('admin');
+  const hasAccess = roles.length > 0;
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!loading && !hasAccess) {
       toast.error('You are not authorized to view this page');
       navigate('/', { replace: true });
     }
-  }, [isAdmin, navigate]);
+  }, [loading, hasAccess, navigate]);
 
-  return isAdmin ? children : null;
+  return !loading && hasAccess ? children : null;
 }

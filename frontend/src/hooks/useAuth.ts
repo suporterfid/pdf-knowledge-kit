@@ -1,14 +1,56 @@
-import { useApiKey } from '../apiKey';
+import { useEffect, useState } from 'react';
+import { useApiFetch, useApiKey } from '../apiKey';
 
 /**
- * Minimal authentication hook returning available roles for the current user.
+ * Authentication hook returning roles for the current user.
  *
- * This is a placeholder implementation that treats the presence of an API key
- * as an administrator role. Real-world usage should fetch roles from the
- * backend and update this hook accordingly.
+ * Roles are fetched from the backend whenever the API key changes.
  */
 export default function useAuth() {
   const { apiKey } = useApiKey();
-  const roles = apiKey ? ['admin'] : [];
-  return { roles };
+  const apiFetch = useApiFetch();
+  const [roles, setRoles] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let canceled = false;
+    async function load() {
+      if (!apiKey) {
+        setRoles([]);
+        return;
+      }
+      setLoading(true);
+      try {
+        const res = await apiFetch('/api/auth/roles');
+        if (!res.ok) {
+          setRoles([]);
+          return;
+        }
+        const data = await res.json();
+        if (!canceled) {
+          if (Array.isArray(data.roles)) {
+            setRoles(data.roles);
+          } else if (data.role) {
+            setRoles([data.role]);
+          } else {
+            setRoles([]);
+          }
+        }
+      } catch {
+        if (!canceled) {
+          setRoles([]);
+        }
+      } finally {
+        if (!canceled) {
+          setLoading(false);
+        }
+      }
+    }
+    load();
+    return () => {
+      canceled = true;
+    };
+  }, [apiKey, apiFetch]);
+
+  return { roles, loading };
 }

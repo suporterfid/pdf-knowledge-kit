@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useApiFetch } from '../apiKey';
+import useAuth from '../hooks/useAuth';
 
 export default function IngestLocal() {
   const apiFetch = useApiFetch();
+  const { roles } = useAuth();
+  const canOperate = roles.includes('operator') || roles.includes('admin');
   const [path, setPath] = useState('');
   const [useOcr, setUseOcr] = useState(false);
   const [lang, setLang] = useState('');
@@ -21,6 +24,10 @@ export default function IngestLocal() {
       .then((d) => setJobId(d.job_id))
       .catch(() => {});
   };
+
+  if (!canOperate) {
+    return <p>You do not have permission to start ingestion.</p>;
+  }
 
   return (
     <div>
