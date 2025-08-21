@@ -25,7 +25,7 @@ interface ChatContextValue {
   sources: Source[] | null;
   sessionId: string;
   isStreaming: boolean;
-  send: (text: string, file?: File | null) => void;
+  send: (text: string, files?: File[]) => void;
   cancel: () => void;
   error: string | null;
   clearError: () => void;
@@ -44,7 +44,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
-  const lastRequestRef = useRef<{ text: string; file?: File | null } | null>(null);
+  const lastRequestRef = useRef<{ text: string; files: File[] } | null>(null);
   const { UPLOAD_MAX_SIZE } = useConfig();
   const apiFetch = useApiFetch();
 
@@ -61,16 +61,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('messages', JSON.stringify(messages));
   }, [messages]);
 
-  const send = async (text: string, file?: File | null) => {
+  const send = async (text: string, files: File[] = []) => {
     if (text.length > 5000) {
       setError('Mensagem muito longa');
       return;
     }
-    if (file && file.size > UPLOAD_MAX_SIZE) {
-      setError('Arquivo muito grande');
-      return;
+    for (const f of files) {
+      if (f.size > UPLOAD_MAX_SIZE) {
+        setError('Arquivo muito grande');
+        return;
+      }
     }
-    lastRequestRef.current = { text, file };
+    lastRequestRef.current = { text, files };
     setMessages((msgs) => [
       ...msgs,
       { role: 'user', content: text },
@@ -84,7 +86,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     formData.append('sessionId', sessionId);
     const SMALL_FILE_LIMIT = 1024 * 1024; // 1MB
     try {
-      if (file) {
+      for (const file of files) {
         if (file.size <= SMALL_FILE_LIMIT) {
           formData.append('files', file);
           attachments.push({ name: file.name });
@@ -206,9 +208,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const retry = () => {
     if (lastRequestRef.current) {
-      const { text, file } = lastRequestRef.current;
+      const { text, files } = lastRequestRef.current;
       clearError();
-      send(text, file || null);
+      send(text, files);
     }
   };
 

@@ -88,7 +88,7 @@ test('upload errors surface', async () => {
   const bigFile = new File([new Uint8Array(1024 * 1024 + 1)], 'big.txt');
   const { result } = renderChat();
   await act(async () => {
-    await result.current.send('Hi', bigFile);
+    await result.current.send('Hi', [bigFile]);
   });
   await waitFor(() => {
     expect(result.current.error).toBe('Upload failed');
@@ -144,7 +144,7 @@ test('oversized file triggers local validation without network calls', async () 
     { type: 'application/pdf' }
   );
   await act(async () => {
-    await result.current.send('Hi', hugeFile);
+    await result.current.send('Hi', [hugeFile]);
   });
   expect(fetchSpy).not.toHaveBeenCalled();
   expect(result.current.error).toBe('Arquivo muito grande');

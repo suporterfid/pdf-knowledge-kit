@@ -1,22 +1,22 @@
 import React, { useRef, useState } from 'react';
 
 interface Props {
-  onSend: (text: string, file?: File | null) => void;
+  onSend: (text: string, files: File[]) => void;
   onCancel: () => void;
   isStreaming: boolean;
 }
 
 export default function Composer({ onSend, onCancel, isStreaming }: Props) {
   const [input, setInput] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const submit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!input.trim()) return;
-    onSend(input, file);
+    onSend(input, files);
     setInput('');
-    setFile(null);
+    setFiles([]);
     textareaRef.current?.focus();
   };
 
@@ -44,14 +44,28 @@ export default function Composer({ onSend, onCancel, isStreaming }: Props) {
         id="composer-file"
         type="file"
         accept="application/pdf"
-        onChange={(e) => setFile(e.target.files?.[0] || null)}
+        multiple
+        onChange={(e) => {
+          const newFiles = Array.from(e.target.files || []);
+          setFiles((prev) => [...prev, ...newFiles]);
+          e.target.value = '';
+        }}
       />
-      {file && (
+      {files.length > 0 && (
         <div className="attachment-info">
-          <span>{file.name}</span>
-          <button type="button" onClick={() => setFile(null)}>
-            Remover
-          </button>
+          {files.map((f, idx) => (
+            <div key={idx} className="attachment-item">
+              <span>{f.name}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setFiles((prev) => prev.filter((_, i) => i !== idx))
+                }
+              >
+                Remover
+              </button>
+            </div>
+          ))}
         </div>
       )}
       {!isStreaming ? (
