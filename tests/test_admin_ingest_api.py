@@ -25,6 +25,7 @@ def test_role_enforcement(monkeypatch):
     client, admin_api = create_client(monkeypatch)
     dummy_job_id = uuid4()
     monkeypatch.setattr(admin_api.service, "ingest_url", lambda url: dummy_job_id)
+    monkeypatch.setattr(admin_api.service, "list_jobs", lambda: [])
 
     # viewer can list jobs
     res = client.get("/api/admin/ingest/jobs", headers={"X-API-Key": "view"})
