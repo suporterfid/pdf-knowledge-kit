@@ -18,7 +18,7 @@ def _require_conn():
 
 def test_migration_persistence_and_soft_delete(tmp_path):
     conn = _require_conn()
-    service.ensure_schema(conn, Path("schema.sql"), Path("migrations"))
+    service.reset_schema(conn, Path("schema.sql"), Path("migrations"))
     with conn.cursor() as cur:
         cur.execute("ALTER TABLE sources ADD COLUMN IF NOT EXISTS path TEXT")
         cur.execute("ALTER TABLE sources ADD COLUMN IF NOT EXISTS url TEXT")

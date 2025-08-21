@@ -128,29 +128,29 @@ def chunk_text(text: str, max_chars: int = 1200, overlap: int = 200) -> List[str
 
 def ensure_schema(
     conn: psycopg.Connection,
-    schema_sql_path: Path,
+    schema_sql_path: Path = SCHEMA_PATH,
     migrations_dir: Path | None = None,
 ) -> None:
-    """Apply base schema and any subsequent SQL migrations.
+    """Ensure the required tables and migrations exist.
+
+    This function is *non-destructive*; it executes the base schema and any
+    migrations, relying on ``IF NOT EXISTS`` clauses so that existing tables or
+    columns are preserved. It can safely be called multiple times.
 
     Parameters
     ----------
     conn:
         Active database connection.
     schema_sql_path:
-        Path to the ``schema.sql`` file containing the initial schema.
+        Path to the ``schema.sql`` file containing the initial schema. Defaults
+        to ``SCHEMA_PATH``.
     migrations_dir:
         Directory containing sequential ``.sql`` migration files. If not
         provided, ``schema_sql_path.parent / 'migrations'`` is used. Each
         migration is executed in alphabetical order.
     """
 
-    # Drop existing ingestion tables to ensure a clean state for tests.
     with conn.cursor() as cur:
-        cur.execute("DROP TABLE IF EXISTS ingestion_jobs CASCADE")
-        cur.execute("DROP TABLE IF EXISTS sources CASCADE")
-
-        # Re-apply base schema and migrations.
         cur.execute(schema_sql_path.read_text(encoding="utf-8"))
 
         migrations_dir = migrations_dir or schema_sql_path.parent / "migrations"
@@ -159,6 +159,27 @@ def ensure_schema(
                 cur.execute(mig.read_text(encoding="utf-8"))
 
     conn.commit()
+
+
+def reset_schema(
+    conn: psycopg.Connection,
+    schema_sql_path: Path = SCHEMA_PATH,
+    migrations_dir: Path | None = None,
+) -> None:
+    """Drop ingestion tables and recreate them.
+
+    This helper is intended for tests or development scenarios where a clean
+    slate is required. After dropping tables it delegates to ``ensure_schema``
+    to recreate them and apply migrations.
+    """
+
+    with conn.cursor() as cur:
+        cur.execute("DROP TABLE IF EXISTS ingestion_jobs CASCADE")
+        cur.execute("DROP TABLE IF EXISTS sources CASCADE")
+        cur.execute("DROP TABLE IF EXISTS chunks CASCADE")
+        cur.execute("DROP TABLE IF EXISTS documents CASCADE")
+    conn.commit()
+    ensure_schema(conn, schema_sql_path, migrations_dir)
 
 
 def upsert_document(conn: psycopg.Connection, path: str | Path, bytes_len: int, page_count: int) -> uuid.UUID:
@@ -210,7 +231,7 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
     db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
     with psycopg.connect(db_url) as conn:
         register_vector(conn)
-        ensure_schema(conn, SCHEMA_PATH)
+        ensure_schema(conn)
         source_id = storage.get_or_create_source(conn, type=SourceType.LOCAL_DIR, path=str(path))
         job_id = storage.create_job(conn, source_id)
 
@@ -317,7 +338,7 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
     first_url = urls[0]
     with psycopg.connect(db_url) as conn:
         register_vector(conn)
-        ensure_schema(conn, SCHEMA_PATH)
+        ensure_schema(conn)
         source_id = storage.get_or_create_source(conn, type=SourceType.URL_LIST, url=first_url)
         job_id = storage.create_job(conn, source_id)
 
@@ -428,7 +449,7 @@ def reindex_source(_source_id: uuid.UUID) -> uuid.UUID | None:
 
     with psycopg.connect(db_url) as conn:
         register_vector(conn)
-        ensure_schema(conn, SCHEMA_PATH)
+        ensure_schema(conn)
 
         with conn.cursor() as cur:
             cur.execute(
@@ -472,7 +493,7 @@ def rerun_job(_job_id: uuid.UUID) -> uuid.UUID | None:
 
     with psycopg.connect(db_url) as conn:
         register_vector(conn)
-        ensure_schema(conn, SCHEMA_PATH)
+        ensure_schema(conn)
 
         with conn.cursor() as cur:
             cur.execute(
