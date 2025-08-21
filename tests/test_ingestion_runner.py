@@ -27,7 +27,7 @@ def test_runner_cancel_stops_work():
 def test_setup_job_logging_creates_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     job_id = uuid4()
-    logger = service._setup_job_logging(job_id)
+    logger, _ = service._setup_job_logging(job_id)
     logger.info("hello")
     for h in list(logger.handlers):
         h.close()

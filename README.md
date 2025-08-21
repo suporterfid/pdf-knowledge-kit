@@ -286,6 +286,7 @@ pdf_knowledge_kit/
 psql -c 'CREATE EXTENSION IF NOT EXISTS vector;' "$PGDATABASE"
 psql -f schema.sql "$PGDATABASE"
 psql -f migrations/002_add_admin_ingestion.sql "$PGDATABASE"
+psql -f migrations/003_extend_ingestion_tables.sql "$PGDATABASE"  # novas colunas de metadados
 ```
 2. Configure as variáveis de ambiente (veja `.env.example`).
 3. Ingestione os documentos:
