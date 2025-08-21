@@ -5,3 +5,4 @@ tmp/uploads/*
 # frontend
 frontend/node_modules/
 frontend/dist/
+.env
