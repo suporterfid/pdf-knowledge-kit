@@ -7,6 +7,13 @@ import { http, HttpResponse } from 'msw';
 import 'whatwg-fetch';
 import { beforeAll, afterEach, afterAll, test, expect } from 'vitest';
 
+interface SourcePayload {
+  type: string;
+  label: string;
+  path: string;
+  active: boolean;
+}
+
 const sources: any[] = [
   { id: '1', type: 'local_dir', label: 'Existing', path: '/data', active: true },
 ];
@@ -19,9 +26,9 @@ const server = setupServer(
     HttpResponse.json({ items: sources })
   ),
   http.post('/api/admin/ingest/sources', async ({ request }) => {
-    const body = await request.json();
+    const payload = (await request.json()) as SourcePayload;
     const id = String(sources.length + 1);
-    sources.push({ id, type: body.type, label: body.label, path: body.path, active: body.active });
+    sources.push({ id, type: payload.type, label: payload.label, path: payload.path, active: payload.active });
     return HttpResponse.json({ id });
   })
 );
