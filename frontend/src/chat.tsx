@@ -14,9 +14,15 @@ export interface Message {
   status?: 'streaming' | 'done';
 }
 
+export interface Source {
+  path: string;
+  chunk_index: number;
+  distance: number;
+}
+
 interface ChatContextValue {
   messages: Message[];
-  notices: any;
+  sources: Source[] | null;
   sessionId: string;
   isStreaming: boolean;
   send: (text: string, file?: File | null) => void;
@@ -33,7 +39,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem('messages');
     return stored ? JSON.parse(stored) : [];
   });
-  const [notices, setNotices] = useState<any>(null);
+  const [sources, setSources] = useState<Source[] | null>(null);
   const [sessionId, setSessionId] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +145,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               return updated;
             });
           } else if (event === 'sources') {
-            setNotices(JSON.parse(data));
+            setSources(JSON.parse(data));
           } else if (event === 'done') {
             doneReading = true;
             setIsStreaming(false);
@@ -210,7 +216,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     <ChatContext.Provider
       value={{
         messages,
-        notices,
+        sources,
         sessionId,
         isStreaming,
         send,

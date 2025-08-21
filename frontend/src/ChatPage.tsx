@@ -2,7 +2,6 @@ import React from 'react';
 import Header from './components/Header';
 import ConversationPane from './components/ConversationPane';
 import Composer from './components/Composer';
-import SystemNotices from './components/SystemNotices';
 import Footer from './components/Footer';
 import ErrorBanner from './components/ErrorBanner';
 import { useChat } from './chat';
@@ -10,7 +9,7 @@ import { useChat } from './chat';
 function ChatPage() {
   const {
     messages,
-    notices,
+    sources,
     send,
     isStreaming,
     cancel,
@@ -25,8 +24,7 @@ function ChatPage() {
       {error && (
         <ErrorBanner message={error} onClose={clearError} onRetry={retry} />
       )}
-      <ConversationPane messages={messages} />
-      <SystemNotices notices={notices} />
+      <ConversationPane messages={messages} sources={sources ?? undefined} />
       <Composer onSend={send} onCancel={cancel} isStreaming={isStreaming} />
       <Footer />
     </div>

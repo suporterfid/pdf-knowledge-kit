@@ -1,15 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import MarkdownIt from 'markdown-it';
-import DOMPurify from 'dompurify';
-import { Message } from '../chat';
-
-const md = new MarkdownIt();
+import ChatMessage from './Message';
+import { Message, Source } from '../chat';
 
 interface Props {
   messages: Message[];
+  sources?: Source[] | null;
 }
 
-export default function ConversationPane({ messages }: Props) {
+export default function ConversationPane({ messages, sources }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -35,25 +33,15 @@ export default function ConversationPane({ messages }: Props) {
   return (
     <div className="conversation" ref={containerRef} role="list">
       {messages.map((m, i) => (
-        <div
+        <ChatMessage
           key={i}
-          className={`msg ${m.role}`}
-          role="listitem"
-          aria-live={
-            m.role === 'assistant' && m.status === 'streaming'
-              ? 'polite'
+          message={m}
+          sources={
+            i === messages.length - 1 && m.role === 'assistant'
+              ? sources || undefined
               : undefined
           }
-        >
-          <div
-            dangerouslySetInnerHTML={{
-              __html: DOMPurify.sanitize(md.render(m.content)),
-            }}
-          />
-          {m.status === 'streaming' && (
-            <div className="typing-indicator">Digitando...</div>
-          )}
-        </div>
+        />
       ))}
     </div>
   );
