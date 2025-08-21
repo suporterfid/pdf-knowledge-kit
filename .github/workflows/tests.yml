@@ -18,6 +18,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Run ingest URL tests
+      - name: Run Python tests
         run: |
-          pytest tests/test_ingest_url.py
+          pytest
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install and run frontend tests
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test
