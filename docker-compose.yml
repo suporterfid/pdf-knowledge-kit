@@ -18,6 +18,8 @@ services:
       watch:
         - path: Dockerfile
           action: rebuild
+    depends_on:
+      - db
     ports:
       - "8000:8000"
     volumes:
