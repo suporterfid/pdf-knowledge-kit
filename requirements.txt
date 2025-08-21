@@ -16,3 +16,4 @@ pdf2image
 Pillow
 requests>=2.31.0
 beautifulsoup4>=4.12.0
+prometheus-fastapi-instrumentator>=6.0.0

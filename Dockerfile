@@ -1,5 +1,6 @@
 FROM python:3.12-slim
 WORKDIR /app
+EXPOSE 8000
 
 # Install system dependencies for OCR
 RUN apt-get update && apt-get install -y \

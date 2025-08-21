@@ -23,6 +23,7 @@ from pypdf import PdfReader
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from .rag import build_context
 from .app_logging import init_logging
@@ -74,6 +75,12 @@ if admin_ui_origins:
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.include_router(admin_ingest_api.router)
 app.include_router(auth_api.router)
+ 
+# Expose Prometheus metrics
+Instrumentator().instrument(app).expose(
+    app, include_in_schema=False, endpoint="/api/metrics"
+)
+
 app.mount(
     "/",
     StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static"), html=True),
