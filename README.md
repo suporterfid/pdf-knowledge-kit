@@ -410,7 +410,7 @@ curl -H "X-API-Key: $VIEWER_API_KEY" \
 
 ### Admin UI
 
-Admin pages live inside the main frontend project under `frontend/src/admin`. Run the frontend dev server and open the `/admin` route:
+Admin features live under `frontend/src/admin` inside the main frontend project. To work on them, start the frontend dev server and visit the `/admin` route:
 
 ```bash
 cd frontend
@@ -418,7 +418,7 @@ npm install
 npm run dev
 ```
 
-If the UI is served from another origin, set `ADMIN_UI_ORIGINS` before starting the backend so CORS allows the requests.
+If you need to serve the UI from another origin, set `ADMIN_UI_ORIGINS` before starting the backend so CORS allows the requests.
 
 ## Dicas francas
 - PDFs escaneados (sem texto) exigem **OCR** (ex.: Tesseract). Habilite com `--ocr` (opcionalmente `--ocr-lang`) ou `ENABLE_OCR=1`/`OCR_LANG`.
