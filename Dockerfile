@@ -1,3 +1,10 @@
+FROM node:20 AS frontend-build
+WORKDIR /workspace/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.12-slim
 WORKDIR /app
 EXPOSE 8000
@@ -18,4 +25,5 @@ RUN mkdir -p /var/log/app && \
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
+COPY --from=frontend-build /workspace/app/static ./app/static
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
