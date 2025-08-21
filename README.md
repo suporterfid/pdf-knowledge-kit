@@ -183,6 +183,17 @@ app:
     - ./logs:/var/log/app
 ```
 
+## Métricas
+
+A aplicação expõe métricas no formato **Prometheus** em `/api/metrics`.
+Ao rodar localmente ou via Docker, você pode verificar as métricas com:
+
+```bash
+curl http://localhost:8000/api/metrics
+```
+
+Esses dados podem ser coletados por Prometheus ou outras ferramentas de monitoramento.
+
 ## Build do chat e frontend
 
 ```bash
