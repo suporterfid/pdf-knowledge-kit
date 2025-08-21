@@ -20,7 +20,7 @@ def _get_conn():
 
 def test_storage_sources_and_jobs(tmp_path):
     conn = _get_conn()
-    service.ensure_schema(conn, Path("schema.sql"), Path("migrations"))
+    service.reset_schema(conn, Path("schema.sql"), Path("migrations"))
     with conn.cursor() as cur:
         cur.execute("ALTER TABLE sources ADD COLUMN IF NOT EXISTS path TEXT")
         cur.execute("ALTER TABLE sources ADD COLUMN IF NOT EXISTS url TEXT")
