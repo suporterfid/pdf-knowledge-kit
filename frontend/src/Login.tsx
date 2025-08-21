@@ -1,16 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApiKey } from './apiKey';
 
 export default function Login() {
-  const { setApiKey } = useApiKey();
-  const [key, setKey] = useState('');
+  const { apiKey, setApiKey, clearApiKey } = useApiKey();
+  const [key, setKey] = useState(apiKey);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setKey(apiKey);
+  }, [apiKey]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setApiKey(key.trim());
     navigate('/');
+  };
+
+  const handleLogout = () => {
+    clearApiKey();
+    setKey('');
   };
 
   return (
@@ -27,6 +36,11 @@ export default function Login() {
         />
         <button type="submit">Save</button>
       </form>
+      {apiKey && (
+        <button type="button" onClick={handleLogout}>
+          Logout
+        </button>
+      )}
     </div>
   );
 }

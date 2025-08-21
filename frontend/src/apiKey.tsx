@@ -1,17 +1,37 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  useCallback,
+} from 'react';
 import { toast } from 'react-toastify';
 
 interface ApiKeyContextValue {
   apiKey: string;
   setApiKey: (k: string) => void;
+  clearApiKey: () => void;
 }
 
 const ApiKeyContext = createContext<ApiKeyContextValue | undefined>(undefined);
 
 export function ApiKeyProvider({ children }: { children: React.ReactNode }) {
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKeyState] = useState(
+    () => localStorage.getItem('apiKey') || ''
+  );
+
+  const setApiKey = useCallback((k: string) => {
+    localStorage.setItem('apiKey', k);
+    setApiKeyState(k);
+  }, []);
+
+  const clearApiKey = useCallback(() => {
+    localStorage.removeItem('apiKey');
+    setApiKeyState('');
+  }, []);
+
   return (
-    <ApiKeyContext.Provider value={{ apiKey, setApiKey }}>
+    <ApiKeyContext.Provider value={{ apiKey, setApiKey, clearApiKey }}>
       {children}
     </ApiKeyContext.Provider>
   );
