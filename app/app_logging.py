@@ -138,15 +138,15 @@ def init_logging(app: FastAPI | None = None) -> None:
     app_logger.setLevel(log_level)
 
     access_logger = logging.getLogger("uvicorn.access")
-    if not access_logger.handlers:
-        handler = TimedRotatingFileHandler(
-            os.path.join(log_dir, "access.log"),
-            when="midnight",
-            backupCount=retention_days,
-            utc=rotate_utc,
-        )
-        handler.setFormatter(formatter)
-        access_logger.addHandler(handler)
+    access_logger.handlers.clear()
+    handler = TimedRotatingFileHandler(
+        os.path.join(log_dir, "access.log"),
+        when="midnight",
+        backupCount=retention_days,
+        utc=rotate_utc,
+    )
+    handler.setFormatter(formatter)
+    access_logger.addHandler(handler)
     access_logger.setLevel(log_level)
 
     if app is not None:
