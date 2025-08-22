@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, List
+from contextlib import contextmanager
 
 import requests
 from bs4 import BeautifulSoup
@@ -182,6 +183,20 @@ def reset_schema(
     ensure_schema(conn, schema_sql_path, migrations_dir)
 
 
+@contextmanager
+def connect_and_init(db_url: str):
+    """Connect to the database, ensure schema, then register pgvector.
+
+    Ensures ``ensure_schema`` runs before ``register_vector`` for every
+    connection.
+    """
+
+    with psycopg.connect(db_url) as conn:
+        ensure_schema(conn)
+        register_vector(conn)
+        yield conn
+
+
 def upsert_document(conn: psycopg.Connection, path: str | Path, bytes_len: int, page_count: int) -> uuid.UUID:
     with conn.cursor() as cur:
         cur.execute("SELECT id FROM documents WHERE path = %s", (str(path),))
@@ -229,9 +244,7 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
     """Ingest a local Markdown or PDF file."""
 
     db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
-    with psycopg.connect(db_url) as conn:
-        register_vector(conn)
-        ensure_schema(conn)
+    with connect_and_init(db_url) as conn:
         source_id = storage.get_or_create_source(conn, type=SourceType.LOCAL_DIR, path=str(path))
         job_id = storage.create_job(conn, source_id)
 
@@ -239,8 +252,7 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
 
     def _work(cancel_event):
         try:
-            with psycopg.connect(db_url) as conn:
-                register_vector(conn)
+            with connect_and_init(db_url) as conn:
                 storage.update_job_status(
                     conn,
                     job_id,
@@ -336,9 +348,7 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
 
     db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
     first_url = urls[0]
-    with psycopg.connect(db_url) as conn:
-        register_vector(conn)
-        ensure_schema(conn)
+    with connect_and_init(db_url) as conn:
         source_id = storage.get_or_create_source(conn, type=SourceType.URL_LIST, url=first_url)
         job_id = storage.create_job(conn, source_id)
 
@@ -346,8 +356,7 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
 
     def _work(cancel_event):
         try:
-            with psycopg.connect(db_url) as conn:
-                register_vector(conn)
+            with connect_and_init(db_url) as conn:
                 storage.update_job_status(
                     conn,
                     job_id,
@@ -447,9 +456,7 @@ def reindex_source(_source_id: uuid.UUID) -> uuid.UUID | None:
 
     db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
 
-    with psycopg.connect(db_url) as conn:
-        register_vector(conn)
-        ensure_schema(conn)
+    with connect_and_init(db_url) as conn:
 
         with conn.cursor() as cur:
             cur.execute(
@@ -491,9 +498,7 @@ def rerun_job(_job_id: uuid.UUID) -> uuid.UUID | None:
         "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
     )
 
-    with psycopg.connect(db_url) as conn:
-        register_vector(conn)
-        ensure_schema(conn)
+    with connect_and_init(db_url) as conn:
 
         with conn.cursor() as cur:
             cur.execute(
