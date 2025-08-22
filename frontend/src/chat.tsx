@@ -104,13 +104,26 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           attachments.push({ name: file.name, url: dataUp.url });
         }
       }
-      formData.append('attachments', JSON.stringify(attachments));
       controllerRef.current = new AbortController();
-      const res = await apiFetch('/api/chat', {
-        method: 'POST',
-        body: formData,
-        signal: controllerRef.current.signal,
-      });
+      let res: Response;
+      if (files.length === 0 && attachments.length === 0) {
+        const params = new URLSearchParams({
+          q: text,
+          k: '5',
+          sessionId,
+        });
+        res = await apiFetch(`/api/chat?${params.toString()}`, {
+          method: 'GET',
+          signal: controllerRef.current.signal,
+        });
+      } else {
+        formData.append('attachments', JSON.stringify(attachments));
+        res = await apiFetch('/api/chat', {
+          method: 'POST',
+          body: formData,
+          signal: controllerRef.current.signal,
+        });
+      }
       if (!res.ok) {
         if (res.status === 429) {
           throw new Error('Limite de taxa atingido. Tente novamente mais tarde.');
