@@ -99,12 +99,15 @@ class AskRequest(BaseModel):
 
 def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
     """Generate an answer given a question and context using the LLM if available."""
-    lang_instruction = "Reply in the same language as the question."
-    try:
-        lang = detect(question)
-        lang_instruction = f"Reply in {lang}."
-    except Exception:  # pragma: no cover - detection optional
-        pass
+    lang = os.getenv("OPENAI_LANG")
+    if not lang:
+        try:
+            lang = detect(question)
+        except Exception:  # pragma: no cover - detection optional
+            lang = None
+    lang_instruction = (
+        f"Reply in {lang}." if lang else "Reply in the same language as the question."
+    )
     if client:
         try:  # pragma: no cover - openai optional
             completion = client.chat.completions.create(
@@ -258,12 +261,15 @@ async def chat_stream(
             usage: Dict = {}
             if client:
                 try:
-                    lang_instruction = "Reply in the same language as the question."
-                    try:
-                        lang = detect(q)
-                        lang_instruction = f"Reply in {lang}."
-                    except Exception:  # pragma: no cover - detection optional
-                        pass
+                    lang = os.getenv("OPENAI_LANG")
+                    if not lang:
+                        try:
+                            lang = detect(q)
+                        except Exception:  # pragma: no cover - detection optional
+                            lang = None
+                    lang_instruction = (
+                        f"Reply in {lang}." if lang else "Reply in the same language as the question."
+                    )
                     completion = client.chat.completions.create(
                         model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
                         messages=[

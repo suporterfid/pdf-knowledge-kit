@@ -222,7 +222,7 @@ Principais chaves disponíveis:
 
 - **PGHOST**, **PGPORT**, **PGDATABASE**, **PGUSER**, **PGPASSWORD** – conexão com o Postgres/pgvector (padrões: `db`, `5432`, `pdfkb`, `pdfkb`, `pdfkb`).
 - **DOCS_DIR** – pasta padrão para os arquivos. Qualquer `.md` nessa pasta é ingerido junto com os PDFs.
-- **OPENAI_API_KEY**, **OPENAI_MODEL**, **USE_LLM** – integrações com LLM (opcional).
+  - **OPENAI_API_KEY**, **OPENAI_MODEL**, **OPENAI_LANG**, **USE_LLM** – integrações com LLM (opcional).
 - **TOP_K**, **MAX_CONTEXT_CHARS** – ajustes de recuperação de trechos.
 - **UPLOAD_DIR**, **UPLOAD_TTL**, **UPLOAD_MAX_SIZE**, **UPLOAD_ALLOWED_MIME_TYPES** – controle de uploads temporários.
 - **CORS_ALLOW_ORIGINS**, **BRAND_NAME**, **POWERED_BY_LABEL**, **LOGO_URL** – personalização da UI. `POWERED_BY_LABEL` define o texto do rodapé (padrão: "Powered by PDF Knowledge Kit").
@@ -333,6 +333,46 @@ curl http://localhost:8000/api/health
   `SELECT ... ORDER BY embedding <-> :vec LIMIT :k`.
   - Traga os trechos + metadados e alimente o *prompt* do agente (*RAG*).
   - Para respostas fiéis, **mostre as fontes** (caminho do arquivo e página, quando houver).
+
+## Respostas humanizadas com OpenAI
+
+Para gerar uma resposta em linguagem natural a partir dos trechos recuperados, o projeto pode consultar a API da OpenAI.
+Configure as variáveis de ambiente antes de executar:
+
+```bash
+export OPENAI_API_KEY="sua-chave"
+export OPENAI_MODEL="gpt-4o-mini"    # ou outro modelo compatível
+export OPENAI_LANG="pt"              # opcional: força o idioma da resposta
+```
+
+O script `query.py` detecta automaticamente o idioma da pergunta (ou usa `OPENAI_LANG` caso definido) e retorna a resposta no mesmo idioma:
+
+```bash
+python query.py --q "Qual é o objetivo deste projeto?" --k 3
+```
+
+Saída (exemplo):
+
+```
+================================================================================
+Resposta:
+Este projeto cria uma base de conhecimento a partir de PDFs e arquivos Markdown...
+================================================================================
+```
+
+Também é possível obter a resposta pela API:
+
+```bash
+curl -s -X POST http://localhost:8000/api/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"q":"¿Cuál es la capital de Francia?"}'
+```
+
+Resposta:
+
+```json
+{"answer": "La capital de Francia es París.", "from_llm": true}
+```
 
 ## Admin Ingestion
 

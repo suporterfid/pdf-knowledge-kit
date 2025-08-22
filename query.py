@@ -22,11 +22,15 @@ def _answer_with_context(question: str, context: str) -> str:
     if OpenAI and api_key:
         try:  # pragma: no cover - openai optional
             client = OpenAI()
-            try:
-                lang = detect(question)
-                lang_instruction = f"Reply in {lang}."
-            except Exception:  # pragma: no cover - detection optional
-                lang_instruction = "Reply in the same language as the question."
+            lang = os.getenv("OPENAI_LANG")
+            if not lang:
+                try:
+                    lang = detect(question)
+                except Exception:  # pragma: no cover - detection optional
+                    lang = None
+            lang_instruction = (
+                f"Reply in {lang}." if lang else "Reply in the same language as the question."
+            )
             completion = client.chat.completions.create(
                 model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
                 messages=[
