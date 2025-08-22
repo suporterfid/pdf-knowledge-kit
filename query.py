@@ -8,6 +8,36 @@ from pgvector.psycopg import register_vector
 
 from fastembed import TextEmbedding
 
+try:  # pragma: no cover - openai optional
+    from openai import OpenAI
+except Exception:  # pragma: no cover - openai optional
+    OpenAI = None  # type: ignore
+
+
+def _answer_with_context(question: str, context: str) -> str:
+    """Generate an answer given a question and context using the LLM if available."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if OpenAI and api_key:
+        try:  # pragma: no cover - openai optional
+            client = OpenAI()
+            completion = client.chat.completions.create(
+                model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Responda à pergunta com base no contexto fornecido.",
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Contexto:\n{context}\n\nPergunta:\n{question}",
+                    },
+                ],
+            )
+            return completion.choices[0].message["content"].strip()
+        except Exception:  # pragma: no cover - openai optional
+            pass
+    return context or f"Você perguntou: {question}"
+
 def main():
     load_dotenv()
     parser = argparse.ArgumentParser(description="Consulta semântica (kNN) no pgvector")
@@ -35,14 +65,20 @@ def main():
         cur.execute(sql, (qvec, qvec, args.k))
         rows = cur.fetchall()
 
-    print("="*80)
+    context = "\n\n".join(content for _, _, content, _ in rows)
+    answer = _answer_with_context(args.q, context)
+
+    print("=" * 80)
+    print("Resposta:")
+    print(answer)
+    print("=" * 80)
     print(f"Top {args.k} trechos mais similares para: {args.q!r}\n")
     for i, (path, idx, content, dist) in enumerate(rows, 1):
         print(f"[{i}] {path}  #chunk {idx}  (dist={dist:.4f})")
         preview = content.strip().replace("\n", " ")
         preview = (preview[:600] + "…") if len(preview) > 600 else preview
         print(preview)
-        print("-"*80)
+        print("-" * 80)
 
     conn.close()
 
