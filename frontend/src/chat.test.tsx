@@ -33,9 +33,39 @@ function renderChat() {
   });
 }
 
-test('tokens append correctly on success', async () => {
+test('tokens append correctly on success via POST', async () => {
   server.use(
     http.post('/api/chat', () => {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('event: token\ndata: Hel\n\n'));
+          controller.enqueue(encoder.encode('event: token\ndata: lo\n\n'));
+          controller.enqueue(encoder.encode('event: done\ndata:\n\n'));
+          controller.close();
+        },
+      });
+      return new HttpResponse(stream, {
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+    })
+  );
+
+  const smallFile = new File(['hi'], 'a.txt');
+  const { result } = renderChat();
+  await act(async () => {
+    await result.current.send('Hello', [smallFile]);
+  });
+
+  await waitFor(() => {
+    expect(result.current.messages[1].content).toBe('Hello');
+    expect(result.current.messages[1].status).toBe('done');
+  });
+});
+
+test('tokens append correctly on success via GET', async () => {
+  server.use(
+    http.get('/api/chat', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
@@ -64,7 +94,7 @@ test('tokens append correctly on success', async () => {
 
 test('rate-limit message appears on 429', async () => {
   server.use(
-    http.post('/api/chat', () =>
+    http.get('/api/chat', () =>
       HttpResponse.json({ detail: 'Too Many Requests' }, { status: 429 })
     )
   );
@@ -97,7 +127,7 @@ test('upload errors surface', async () => {
 
 test('SSE error event stops streaming and shows message', async () => {
   server.use(
-    http.post('/api/chat', () => {
+    http.get('/api/chat', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
