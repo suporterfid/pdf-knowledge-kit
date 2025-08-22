@@ -21,10 +21,6 @@ import pathlib
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
 from app.main import app, CHAT_MAX_MESSAGE_LENGTH, SESSION_ID_MAX_LENGTH
-from starlette.routing import Mount
-
-# Remove static mount to access API routes during tests
-app.router.routes = [r for r in app.router.routes if not (isinstance(r, Mount) and r.path == '')]
 
 
 def dummy_build_context(q, k):

@@ -80,13 +80,6 @@ app.include_router(auth_api.router)
 Instrumentator().instrument(app).expose(
     app, include_in_schema=False, endpoint="/api/metrics"
 )
-
-app.mount(
-    "/",
-    StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static"), html=True),
-    name="static",
-)
-
 client = OpenAI() if (OpenAI and os.getenv("OPENAI_API_KEY")) else None
 
 
@@ -311,3 +304,9 @@ async def chat_stream(
             yield {"event": "error", "data": str(e)}
 
     return EventSourceResponse(event_gen())
+
+app.mount(
+    "/",
+    StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static"), html=True),
+    name="static",
+)
