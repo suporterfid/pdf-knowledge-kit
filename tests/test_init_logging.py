@@ -31,7 +31,7 @@ def test_init_logging_adds_handlers(monkeypatch, tmp_path):
     access_logger.handlers.clear()
 
 
-def test_init_logging_preserves_existing_access_handlers(monkeypatch, tmp_path):
+def test_init_logging_replaces_existing_access_handlers(monkeypatch, tmp_path):
     monkeypatch.setenv("LOG_DIR", str(tmp_path))
     access_logger = _clear_handlers("uvicorn.access")
 
@@ -40,5 +40,8 @@ def test_init_logging_preserves_existing_access_handlers(monkeypatch, tmp_path):
 
     init_logging()
 
-    assert access_logger.handlers == [stream_handler]
+    assert stream_handler not in access_logger.handlers
+    assert any(
+        isinstance(h, TimedRotatingFileHandler) for h in access_logger.handlers
+    )
     access_logger.handlers.clear()
