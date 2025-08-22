@@ -17,9 +17,22 @@ def test_cli_invokes_service(tmp_path, monkeypatch):
     mod = runpy.run_path("ingest.py", run_name="ingest_cli")
     svc = mod["_service"]
 
-    monkeypatch.setattr(svc, "ingest_local", lambda path, **kw: called.setdefault("local", []).append(path))
-    monkeypatch.setattr(svc, "ingest_urls", lambda urls: called.setdefault("urls", urls))
-    monkeypatch.setattr(svc, "reindex_source", lambda source_id: called.setdefault("reindex", source_id))
+    def fake_ingest_local(path, **kw):
+        called.setdefault("local", []).append(path)
+        return uuid4()
+
+    def fake_ingest_urls(urls):
+        called.setdefault("urls", urls)
+        return uuid4()
+
+    def fake_reindex(source_id):
+        called.setdefault("reindex", source_id)
+        return uuid4()
+
+    monkeypatch.setattr(svc, "ingest_local", fake_ingest_local)
+    monkeypatch.setattr(svc, "ingest_urls", fake_ingest_urls)
+    monkeypatch.setattr(svc, "reindex_source", fake_reindex)
+    monkeypatch.setattr(svc, "wait_for_job", lambda job_id: None)
 
     mod["main"]([
         "--docs", str(docs_dir),

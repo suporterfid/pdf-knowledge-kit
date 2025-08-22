@@ -78,7 +78,8 @@ def main(argv: list[str] | None = None) -> None:
         doc_dir = Path(args.docs)
         for doc in _iter_docs(doc_dir):
             log.info("ingesting %s", doc)
-            _service.ingest_local(doc, use_ocr=args.ocr, ocr_lang=args.ocr_lang)
+            job_id = _service.ingest_local(doc, use_ocr=args.ocr, ocr_lang=args.ocr_lang)
+            _service.wait_for_job(job_id)
 
     urls: list[str] = list(args.urls)
     if args.urls_file:
@@ -91,7 +92,8 @@ def main(argv: list[str] | None = None) -> None:
                         urls.append(line)
     if urls:
         log.info("ingesting %d url(s)", len(urls))
-        _service.ingest_urls(urls)
+        job_id = _service.ingest_urls(urls)
+        _service.wait_for_job(job_id)
 
     if args.reindex:
         try:
@@ -99,7 +101,8 @@ def main(argv: list[str] | None = None) -> None:
         except ValueError:
             log.error("--reindex requires a valid UUID")
         else:
-            _service.reindex_source(source_id)
+            job_id = _service.reindex_source(source_id)
+            _service.wait_for_job(job_id)
 
 
 if __name__ != "__main__":  # pragma: no cover - import-time aliasing

@@ -538,6 +538,13 @@ def cancel_job(job_id: uuid.UUID) -> None:
             )
 
 
+def wait_for_job(job_id: uuid.UUID) -> None:
+    """Block until the given job finishes."""
+    future = _runner.get(job_id)
+    if future:
+        future.result()
+
+
 def get_job(job_id: uuid.UUID) -> Job | None:
     db_url = os.getenv(
         "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
