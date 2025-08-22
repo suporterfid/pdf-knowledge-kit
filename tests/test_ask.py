@@ -54,14 +54,18 @@ def test_ask_with_llm(client):
     class DummyClient:
         def __init__(self):
             self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
+            self.messages = None
 
         def create(self, **kwargs):
+            self.messages = kwargs.get("messages")
             return DummyCompletion()
 
-    with patch("app.main.build_context", dummy_build_context), patch("app.main.client", DummyClient()):
+    dummy_client = DummyClient()
+    with patch("app.main.build_context", dummy_build_context), patch("app.main.client", dummy_client), patch("app.main.detect", lambda _: "en"):
         resp = client.post("/api/ask", json={"q": "hi", "k": 1})
     assert resp.status_code == 200
     data = resp.json()
     assert data["answer"] == "llm"
     assert data["used_llm"] is True
     assert data["sources"]
+    assert dummy_client.messages[0]["content"] == "Answer the user's question using the supplied context. Reply in en."

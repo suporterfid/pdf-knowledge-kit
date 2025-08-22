@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from typing import Dict, List
 from io import BytesIO
 from pypdf import PdfReader
+from langdetect import detect
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -98,6 +99,12 @@ class AskRequest(BaseModel):
 
 def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
     """Generate an answer given a question and context using the LLM if available."""
+    lang_instruction = "Reply in the same language as the question."
+    try:
+        lang = detect(question)
+        lang_instruction = f"Reply in {lang}."
+    except Exception:  # pragma: no cover - detection optional
+        pass
     if client:
         try:  # pragma: no cover - openai optional
             completion = client.chat.completions.create(
@@ -105,11 +112,11 @@ def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
                 messages=[
                     {
                         "role": "system",
-                        "content": "Responda à pergunta com base no contexto fornecido.",
+                        "content": f"Answer the user's question using the supplied context. {lang_instruction}",
                     },
                     {
                         "role": "user",
-                        "content": f"Contexto:\n{context}\n\nPergunta:\n{question}",
+                        "content": f"Context:\n{context}\n\nQuestion:\n{question}",
                     },
                 ],
             )
@@ -117,7 +124,7 @@ def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
             return answer, True
         except Exception:  # pragma: no cover - openai optional
             pass
-    answer = context or f"Você perguntou: {question}"
+    answer = context or f"You asked: {question}"
     return answer, False
 
 @app.get("/api/health")
@@ -251,16 +258,22 @@ async def chat_stream(
             usage: Dict = {}
             if client:
                 try:
+                    lang_instruction = "Reply in the same language as the question."
+                    try:
+                        lang = detect(q)
+                        lang_instruction = f"Reply in {lang}."
+                    except Exception:  # pragma: no cover - detection optional
+                        pass
                     completion = client.chat.completions.create(
                         model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
                         messages=[
                             {
                                 "role": "system",
-                                "content": "Responda à pergunta com base no contexto fornecido.",
+                                "content": f"Answer the user's question using the supplied context. {lang_instruction}",
                             },
                             {
                                 "role": "user",
-                                "content": f"Contexto:\n{context}\n\nPergunta:\n{q}",
+                                "content": f"Context:\n{context}\n\nQuestion:\n{q}",
                             },
                         ],
                         stream=True,
@@ -279,7 +292,7 @@ async def chat_stream(
                                 "total_tokens": u.total_tokens,
                             }
                 except Exception:
-                    answer = context or f"Você perguntou: {q}"
+                    answer = context or f"You asked: {q}"
                     for token in answer.split():
                         yield {"event": "token", "data": token}
                     n = len(answer.split())
@@ -289,7 +302,7 @@ async def chat_stream(
                         "total_tokens": n,
                     }
             else:
-                answer = context or f"Você perguntou: {q}"
+                answer = context or f"You asked: {q}"
                 for token in answer.split():
                     yield {"event": "token", "data": token}
                 n = len(answer.split())

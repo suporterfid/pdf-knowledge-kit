@@ -8,6 +8,8 @@ from pgvector.psycopg import register_vector
 
 from fastembed import TextEmbedding
 
+from langdetect import detect
+
 try:  # pragma: no cover - openai optional
     from openai import OpenAI
 except Exception:  # pragma: no cover - openai optional
@@ -20,23 +22,28 @@ def _answer_with_context(question: str, context: str) -> str:
     if OpenAI and api_key:
         try:  # pragma: no cover - openai optional
             client = OpenAI()
+            try:
+                lang = detect(question)
+                lang_instruction = f"Reply in {lang}."
+            except Exception:  # pragma: no cover - detection optional
+                lang_instruction = "Reply in the same language as the question."
             completion = client.chat.completions.create(
                 model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
                 messages=[
                     {
                         "role": "system",
-                        "content": "Responda à pergunta com base no contexto fornecido.",
+                        "content": f"Answer the user's question using the supplied context. {lang_instruction}",
                     },
                     {
                         "role": "user",
-                        "content": f"Contexto:\n{context}\n\nPergunta:\n{question}",
+                        "content": f"Context:\n{context}\n\nQuestion:\n{question}",
                     },
                 ],
             )
             return completion.choices[0].message["content"].strip()
         except Exception:  # pragma: no cover - openai optional
             pass
-    return context or f"Você perguntou: {question}"
+    return context or f"You asked: {question}"
 
 def main():
     load_dotenv()
