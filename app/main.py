@@ -9,10 +9,10 @@ from fastapi import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from uuid import uuid4
 import asyncio
 from pydantic import BaseModel
-from sse_starlette.sse import EventSourceResponse
 import os
 import json
 from dotenv import load_dotenv
@@ -27,6 +27,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from .rag import build_context
+from .sse_utils import sse_word_buffer
 from .app_logging import init_logging
 from .routers import admin_ingest_api, auth_api
 
@@ -189,7 +190,7 @@ async def chat(
     for f in files:
         if f.content_type not in UPLOAD_ALLOWED_MIME_TYPES:
             raise HTTPException(status_code=400, detail="Invalid file type")
-    return await chat_stream(q, k, files, json.loads(attachments))
+    return await chat_stream(request, q, k, files, json.loads(attachments))
 
 
 @app.get("/api/chat")
@@ -199,10 +200,11 @@ async def chat_get(request: Request, q: str, k: int = 5, sessionId: str = ""):
         raise HTTPException(status_code=400, detail="Message too long")
     if sessionId and len(sessionId) > SESSION_ID_MAX_LENGTH:
         raise HTTPException(status_code=400, detail="Invalid sessionId")
-    return await chat_stream(q, k, [], [])
+    return await chat_stream(request, q, k, [], [])
 
 
 async def chat_stream(
+    request: Request,
     q: str,
     k: int,
     files: List[UploadFile],
@@ -250,79 +252,100 @@ async def chat_stream(
     attachment_context = "\n\n".join(attachment_texts)
     combined_q = q if not attachment_context else f"{q}\n\n{attachment_context}"
 
-    async def event_gen():
-        try:
-            context_db, sources = build_context(combined_q, k)
-            if attachment_context:
-                context = attachment_context + ("\n\n" + context_db if context_db else "")
-                sources = attachment_sources + sources
-            else:
-                context = context_db
-            usage: Dict = {}
-            if client:
-                try:
-                    lang = os.getenv("OPENAI_LANG")
-                    if not lang:
-                        try:
-                            lang = detect(q)
-                        except Exception:  # pragma: no cover - detection optional
-                            lang = None
-                    lang_instruction = (
-                        f"Reply in {lang}." if lang else "Reply in the same language as the question."
-                    )
-                    completion = client.chat.completions.create(
-                        model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": f"Answer the user's question using the supplied context. {lang_instruction}",
-                            },
-                            {
-                                "role": "user",
-                                "content": f"Context:\n{context}\n\nQuestion:\n{q}",
-                            },
-                        ],
-                        stream=True,
-                    )
-                    for chunk in completion:
-                        if chunk.choices:
-                            delta = chunk.choices[0].delta
-                            token = getattr(delta, "content", None)
-                            if token:
-                                yield {"event": "token", "data": token}
-                        if getattr(chunk, "usage", None):
-                            u = chunk.usage
-                            usage = {
-                                "prompt_tokens": u.prompt_tokens,
-                                "completion_tokens": u.completion_tokens,
-                                "total_tokens": u.total_tokens,
-                            }
-                except Exception:
-                    answer = context or f"You asked: {q}"
-                    for token in answer.split():
-                        yield {"event": "token", "data": token}
-                    n = len(answer.split())
-                    usage = {
-                        "prompt_tokens": 0,
-                        "completion_tokens": n,
-                        "total_tokens": n,
-                    }
-            else:
+    usage: Dict = {}
+    context = ""
+    sources: List[Dict] = []
+
+    async def token_iter():
+        nonlocal usage, context, sources
+        context_db, sources_db = build_context(combined_q, k)
+        if attachment_context:
+            context = attachment_context + ("\n\n" + context_db if context_db else "")
+            sources = attachment_sources + sources_db
+        else:
+            context = context_db
+            sources = sources_db
+        if client:
+            try:
+                lang = os.getenv("OPENAI_LANG")
+                if not lang:
+                    try:
+                        lang = detect(q)
+                    except Exception:  # pragma: no cover - detection optional
+                        lang = None
+                lang_instruction = (
+                    f"Reply in {lang}." if lang else "Reply in the same language as the question."
+                )
+                completion = client.chat.completions.create(
+                    model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": f"Answer the user's question using the supplied context. {lang_instruction}",
+                        },
+                        {
+                            "role": "user",
+                            "content": f"Context:\n{context}\n\nQuestion:\n{q}",
+                        },
+                    ],
+                    stream=True,
+                )
+                for chunk in completion:
+                    if chunk.choices:
+                        delta = chunk.choices[0].delta
+                        token = getattr(delta, "content", None)
+                        if token:
+                            yield token
+                    if getattr(chunk, "usage", None):
+                        u = chunk.usage
+                        usage = {
+                            "prompt_tokens": u.prompt_tokens,
+                            "completion_tokens": u.completion_tokens,
+                            "total_tokens": u.total_tokens,
+                        }
+            except Exception:
                 answer = context or f"You asked: {q}"
                 for token in answer.split():
-                    yield {"event": "token", "data": token}
+                    yield token
                 n = len(answer.split())
                 usage = {
                     "prompt_tokens": 0,
                     "completion_tokens": n,
                     "total_tokens": n,
                 }
-            yield {"event": "sources", "data": json.dumps(sources)}
-            yield {"event": "done", "data": json.dumps({"usage": usage})}
-        except Exception as e:
-            yield {"event": "error", "data": str(e)}
+        else:
+            answer = context or f"You asked: {q}"
+            for token in answer.split():
+                yield token
+            n = len(answer.split())
+            usage = {
+                "prompt_tokens": 0,
+                "completion_tokens": n,
+                "total_tokens": n,
+            }
 
-    return EventSourceResponse(event_gen())
+    async def event_stream():
+        try:
+            async for chunk in sse_word_buffer(token_iter()):
+                if await request.is_disconnected():
+                    break
+                yield chunk
+            if sources:
+                yield "event: sources\n" + "data: " + json.dumps(sources, ensure_ascii=False) + "\n\n"
+            yield "event: done\n" + "data: " + json.dumps({"usage": usage}) + "\n\n"
+        except Exception as e:
+            msg = str(e).replace("\n", " ")
+            yield f"event: error\ndata: {msg}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 app.mount(
     "/",
