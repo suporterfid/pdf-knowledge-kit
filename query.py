@@ -40,14 +40,14 @@ def _answer_with_context(question: str, context: str) -> str:
                     },
                     {
                         "role": "user",
-                        "content": f"Context:\n{context}\n\nQuestion:\n{question}",
+                        "content": f"Contexto:\n{context}\n\nPergunta:\n{question}",
                     },
                 ],
             )
             return completion.choices[0].message["content"].strip()
         except Exception:  # pragma: no cover - openai optional
             pass
-    return context or f"You asked: {question}"
+    return context or f"Você perguntou: {question}"
 
 def main():
     load_dotenv()
