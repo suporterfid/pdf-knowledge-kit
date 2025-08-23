@@ -19,7 +19,7 @@ function ChatPage() {
   } = useChat();
 
   return (
-    <div className="app">
+    <div className="flex flex-1 flex-col">
       <Header />
       {error && (
         <ErrorBanner message={error} onClose={clearError} onRetry={retry} />
