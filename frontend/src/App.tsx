@@ -11,29 +11,31 @@ import AdminRoute from './admin/AdminRoute';
 export default function App() {
   return (
     <BrowserRouter>
-      <ToastContainer />
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/"
-          element={
-            <RequireApiKey>
-              <ChatPage />
-            </RequireApiKey>
-          }
-        />
-        <Route
-          path="/admin/*"
-          element={
-            <RequireApiKey>
-              <AdminRoute>
-                <AdminApp />
-              </AdminRoute>
-            </RequireApiKey>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+      <div className="flex h-screen flex-col bg-gray-900 text-gray-100">
+        <ToastContainer />
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/"
+            element={
+              <RequireApiKey>
+                <ChatPage />
+              </RequireApiKey>
+            }
+          />
+          <Route
+            path="/admin/*"
+            element={
+              <RequireApiKey>
+                <AdminRoute>
+                  <AdminApp />
+                </AdminRoute>
+              </RequireApiKey>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </div>
     </BrowserRouter>
   );
 }

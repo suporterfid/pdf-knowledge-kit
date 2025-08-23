@@ -1,20 +1,41 @@
 :root {
-  --brand-bg: #ffffff;
-  --brand-fg: #000000;
-  --brand-accent: #007bff;
+  --color-bg: #f7f7f8;
+  --color-surface: #ffffff;
+  --color-text: #343541;
+  --color-accent: #10a37f;
+  --color-border: #e5e7eb;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #343541;
+    --color-surface: #444654;
+    --color-text: #ececf1;
+    --color-accent: #10a37f;
+    --color-border: #565869;
+  }
 }
 
 body {
   margin: 0;
-  background-color: var(--brand-bg);
-  color: var(--brand-fg);
-  font-family: sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
 }
 
-header,
-footer {
-  background-color: var(--brand-accent);
-  color: var(--brand-bg);
+/* Utility classes */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-1 { flex: 1 1 0%; }
+.h-screen { height: 100vh; }
+.bg-gray-900 { background-color: var(--color-bg); }
+.text-gray-100 { color: var(--color-text); }
+.p-4 { padding: 1rem; }
+
+header, footer {
+  background-color: var(--color-surface);
   padding: 1rem;
 }
 
@@ -22,25 +43,42 @@ header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
 }
 
-header img.logo {
-  height: 40px;
+footer {
+  border-top: 1px solid var(--color-border);
 }
 
-button {
-  background-color: var(--brand-accent);
-  color: var(--brand-bg);
-  border: none;
-  padding: 0.5rem 1rem;
-  cursor: pointer;
+.conversation {
+  flex: 1 1 0%;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.composer {
+  padding: 1rem;
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  display: flex;
+  gap: 0.5rem;
 }
 
 .composer textarea {
-  background-color: var(--brand-bg);
-  color: var(--brand-fg);
+  flex: 1;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+button {
+  background-color: var(--color-accent);
+  color: var(--color-surface);
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
 }
 
 a {
-  color: var(--brand-accent);
+  color: var(--color-accent);
 }
