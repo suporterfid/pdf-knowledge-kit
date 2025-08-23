@@ -336,42 +336,45 @@ curl http://localhost:8000/api/health
 
 ## Respostas humanizadas com OpenAI
 
-Para gerar uma resposta em linguagem natural a partir dos trechos recuperados, o projeto pode consultar a API da OpenAI.
-Configure as variáveis de ambiente antes de executar:
+O kit pode complementar os trechos retornados com uma resposta em linguagem natural gerada pela API da OpenAI.
+
+1. Configure as variáveis de ambiente:
 
 ```bash
 export OPENAI_API_KEY="sua-chave"
-export OPENAI_MODEL="gpt-4o-mini"    # ou outro modelo compatível
-export OPENAI_LANG="pt"              # opcional: força o idioma da resposta
+export OPENAI_MODEL="gpt-4o-mini"  # ou outro modelo compatível
+export OPENAI_LANG="pt"            # opcional: força o idioma da resposta
 ```
 
-O script `query.py` detecta automaticamente o idioma da pergunta (ou usa `OPENAI_LANG` caso definido) e retorna a resposta no mesmo idioma:
+Se `OPENAI_LANG` não for definido, o idioma da pergunta é detectado automaticamente e a resposta é devolvida no mesmo idioma.
+
+### Exemplo (CLI)
 
 ```bash
-python query.py --q "Qual é o objetivo deste projeto?" --k 3
+python query.py --q "¿Cuál es la capital de Francia?" --k 3
 ```
 
-Saída (exemplo):
+Saída:
 
 ```
 ================================================================================
 Resposta:
-Este projeto cria uma base de conhecimento a partir de PDFs e arquivos Markdown...
+La capital de Francia es París.
 ================================================================================
 ```
 
-Também é possível obter a resposta pela API:
+### Exemplo (API)
 
 ```bash
 curl -s -X POST http://localhost:8000/api/ask \
   -H 'Content-Type: application/json' \
-  -d '{"q":"¿Cuál es la capital de Francia?"}'
+  -d '{"q":"Qual é a capital da Alemanha?"}'
 ```
 
 Resposta:
 
 ```json
-{"answer": "La capital de Francia es París.", "from_llm": true}
+{"answer": "A capital da Alemanha é Berlim.", "from_llm": true}
 ```
 
 ## Admin Ingestion
