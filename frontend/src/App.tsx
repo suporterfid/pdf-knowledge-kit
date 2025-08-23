@@ -15,8 +15,9 @@ export default function App() {
         <ToastContainer />
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/" element={<Navigate to="/chat/new" replace />} />
           <Route
-            path="/"
+            path="/chat/:id"
             element={
               <RequireApiKey>
                 <ChatPage />
@@ -33,7 +34,7 @@ export default function App() {
               </RequireApiKey>
             }
           />
-          <Route path="*" element={<Navigate to="/" />} />
+          <Route path="*" element={<Navigate to="/chat/new" replace />} />
         </Routes>
       </div>
     </BrowserRouter>

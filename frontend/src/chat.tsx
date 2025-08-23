@@ -34,13 +34,20 @@ interface ChatContextValue {
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
 
-export function ChatProvider({ children }: { children: React.ReactNode }) {
+export function ChatProvider({
+  children,
+  conversationId = 'default',
+}: {
+  children: React.ReactNode;
+  conversationId?: string;
+}) {
+  const storageKey = `messages-${conversationId}`;
   const [messages, setMessages] = useState<Message[]>(() => {
-    const stored = localStorage.getItem('messages');
+    const stored = localStorage.getItem(storageKey);
     return stored ? JSON.parse(stored) : [];
   });
   const [sources, setSources] = useState<Source[] | null>(null);
-  const [sessionId, setSessionId] = useState('');
+  const sessionId = conversationId;
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
@@ -49,17 +56,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const apiFetch = useApiFetch();
 
   useEffect(() => {
-    let id = localStorage.getItem('sessionId');
-    if (!id) {
-      id = crypto.randomUUID();
-      localStorage.setItem('sessionId', id);
-    }
-    setSessionId(id);
-  }, []);
+    localStorage.setItem(storageKey, JSON.stringify(messages));
+  }, [messages, storageKey]);
 
   useEffect(() => {
-    localStorage.setItem('messages', JSON.stringify(messages));
-  }, [messages]);
+    const stored = localStorage.getItem(storageKey);
+    setMessages(stored ? JSON.parse(stored) : []);
+    setSources(null);
+  }, [storageKey]);
 
   const send = async (text: string, files: File[] = []) => {
     if (text.length > 5000) {
