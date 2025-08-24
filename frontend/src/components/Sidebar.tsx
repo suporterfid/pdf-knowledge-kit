@@ -12,7 +12,13 @@ function loadConversations(): ConversationMeta[] {
   return stored ? JSON.parse(stored) : [];
 }
 
-export default function Sidebar({ currentId }: { currentId: string }) {
+interface Props {
+  currentId: string;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export default function Sidebar({ currentId, isOpen, onClose }: Props) {
   const [conversations, setConversations] = useState<ConversationMeta[]>([]);
   const navigate = useNavigate();
 
@@ -61,11 +67,28 @@ export default function Sidebar({ currentId }: { currentId: string }) {
     }
   };
 
+  const navigateTo = (id: string) => {
+    navigate(`/chat/${id}`);
+    onClose();
+  };
+
   return (
-    <div className="w-64 bg-gray-800 p-4 flex flex-col">
+    <nav
+      className={
+        `bg-gray-800 p-4 flex flex-col w-64 z-20 fixed inset-y-0 left-0 transform transition-transform duration-200 ` +
+        `md:static md:translate-x-0 md:flex ${isOpen ? 'translate-x-0' : '-translate-x-full'}`
+      }
+      aria-label="Histórico de conversas"
+    >
+      <div className="flex justify-end md:hidden">
+        <button onClick={onClose} aria-label="Fechar menu">
+          ✕
+        </button>
+      </div>
       <button
         className="mb-4 rounded bg-blue-600 px-3 py-2 text-sm"
         onClick={createNew}
+        aria-label="Iniciar novo chat"
       >
         Novo Chat
       </button>
@@ -76,12 +99,35 @@ export default function Sidebar({ currentId }: { currentId: string }) {
             className={`rounded p-2 text-sm cursor-pointer ${
               c.id === currentId ? 'bg-gray-700' : 'hover:bg-gray-700'
             }`}
+            role="button"
+            tabIndex={0}
+            aria-pressed={c.id === currentId}
+            onClick={() => navigateTo(c.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') navigateTo(c.id);
+            }}
           >
             <div className="flex justify-between items-center">
-              <span onClick={() => navigate(`/chat/${c.id}`)}>{c.title}</span>
+              <span>{c.title}</span>
               <div className="space-x-1">
-                <button onClick={() => rename(c.id)}>✏️</button>
-                <button onClick={() => remove(c.id)}>🗑️</button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    rename(c.id);
+                  }}
+                  aria-label="Renomear conversa"
+                >
+                  ✏️
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    remove(c.id);
+                  }}
+                  aria-label="Excluir conversa"
+                >
+                  🗑️
+                </button>
               </div>
             </div>
             <div className="text-xs text-gray-400">
@@ -90,6 +136,6 @@ export default function Sidebar({ currentId }: { currentId: string }) {
           </div>
         ))}
       </div>
-    </div>
+    </nav>
   );
 }
