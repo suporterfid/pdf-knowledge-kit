@@ -26,7 +26,9 @@ export default function ConversationPane({ messages, sources }: Props) {
   useEffect(() => {
     if (autoScroll) {
       const el = containerRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
+      if (el) {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      }
     }
   }, [messages, autoScroll]);
 
