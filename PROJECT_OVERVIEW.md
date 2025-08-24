@@ -49,7 +49,7 @@ Key environment variables (see `.env.example`):
 | `DATABASE_URL` / `PG*` | PostgreSQL connection details. |
 | `LOG_DIR`, `LOG_LEVEL`, `LOG_JSON` | Logging configuration. |
 | `DOCS_DIR`, `ENABLE_OCR`, `OCR_LANG` | Ingestion and OCR behaviour. |
-| `UPLOAD_DIR`, `UPLOAD_MAX_SIZE`, `CHAT_MAX_MESSAGE_LENGTH` | Upload and chat limits. |
+| `UPLOAD_DIR`, `UPLOAD_MAX_SIZE`, `UPLOAD_MAX_FILES`, `CHAT_MAX_MESSAGE_LENGTH` | Upload and chat limits. |
 | `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_LANG` | Optional LLM integration. |
 
 ### Docker Deployment

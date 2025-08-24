@@ -61,13 +61,69 @@ footer {
   border-top: 1px solid var(--color-border);
   background-color: var(--color-surface);
   display: flex;
+  flex-direction: column;
   gap: 0.5rem;
+}
+
+.composer-input {
+  position: relative;
+  display: flex;
 }
 
 .composer textarea {
   flex: 1;
+  resize: none;
   background-color: var(--color-bg);
   color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  padding: 0.5rem 2.5rem 0.5rem 0.5rem;
+  min-height: 2.5rem;
+  max-height: 10rem;
+  overflow-y: auto;
+}
+
+.composer-toolbar {
+  position: absolute;
+  right: 0.25rem;
+  bottom: 0.25rem;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.composer .icon-button {
+  background: none;
+  border: none;
+  color: var(--color-text);
+  padding: 0.25rem;
+  cursor: pointer;
+}
+
+.attachment-preview {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+}
+
+.pdf-container {
+  position: relative;
+}
+
+.pdf-preview {
+  width: 100px;
+  height: 120px;
+  border: 1px solid var(--color-border);
+}
+
+button.remove-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: var(--color-accent);
+  color: var(--color-surface);
+  border: none;
+  padding: 0.1rem 0.25rem;
+  cursor: pointer;
 }
 
 button {

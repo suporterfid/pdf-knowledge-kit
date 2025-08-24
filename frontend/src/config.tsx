@@ -6,6 +6,7 @@ export interface AppConfig {
   POWERED_BY_LABEL: string;
   LOGO_URL: string;
   UPLOAD_MAX_SIZE: number;
+  UPLOAD_MAX_FILES: number;
 }
 
 const defaultConfig: AppConfig = {
@@ -13,6 +14,7 @@ const defaultConfig: AppConfig = {
   POWERED_BY_LABEL: 'Powered by PDF Knowledge Kit',
   LOGO_URL: '',
   UPLOAD_MAX_SIZE: 5 * 1024 * 1024,
+  UPLOAD_MAX_FILES: 5,
 };
 
 const ConfigContext = createContext<AppConfig>(defaultConfig);

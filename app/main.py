@@ -41,6 +41,7 @@ load_dotenv()
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "tmp/uploads")
 UPLOAD_TTL = int(os.getenv("UPLOAD_TTL", "3600"))
 UPLOAD_MAX_SIZE = int(os.getenv("UPLOAD_MAX_SIZE", str(5 * 1024 * 1024)))
+UPLOAD_MAX_FILES = int(os.getenv("UPLOAD_MAX_FILES", "5"))
 UPLOAD_ALLOWED_MIME_TYPES = os.getenv("UPLOAD_ALLOWED_MIME_TYPES", "application/pdf").split(",")
 
 CHAT_MAX_MESSAGE_LENGTH = int(os.getenv("CHAT_MAX_MESSAGE_LENGTH", "5000"))
@@ -145,6 +146,7 @@ async def config():
         ),
         "LOGO_URL": os.getenv("LOGO_URL", ""),
         "UPLOAD_MAX_SIZE": UPLOAD_MAX_SIZE,
+        "UPLOAD_MAX_FILES": UPLOAD_MAX_FILES,
     }
 
 
