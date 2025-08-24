@@ -4,6 +4,7 @@ import Header from './components/Header';
 import ConversationPane from './components/ConversationPane';
 import Composer from './components/Composer';
 import Footer from './components/Footer';
+import Disclaimer from './components/Disclaimer';
 import ErrorBanner from './components/ErrorBanner';
 import Sidebar from './components/Sidebar';
 import { ChatProvider, useChat } from './chat';
@@ -34,6 +35,7 @@ function ChatContent({ onMenuClick }: { onMenuClick: () => void }) {
       )}
       <ConversationPane messages={messages} sources={sources ?? undefined} />
       <Composer onSend={send} onCancel={cancel} isStreaming={isStreaming} />
+      <Disclaimer />
       <Footer />
     </div>
   );
