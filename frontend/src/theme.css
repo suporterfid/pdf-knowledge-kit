@@ -82,3 +82,46 @@ button {
 a {
   color: var(--color-accent);
 }
+
+/* Message bubbles */
+.msg {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.msg.user {
+  flex-direction: row-reverse;
+}
+
+.msg .avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  background-color: var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0.5rem;
+  font-size: 1.25rem;
+}
+
+.msg.user .avatar {
+  margin-left: 0.5rem;
+  margin-right: 0;
+}
+
+.msg .bubble {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  max-width: 80%;
+}
+
+.msg.assistant .bubble {
+  background-color: var(--color-surface);
+}
+
+.msg.user .bubble {
+  background-color: var(--color-accent);
+  color: var(--color-surface);
+}
