@@ -1,3 +1,4 @@
+/* Light theme (default) */
 :root {
   --color-bg: #f7f7f8;
   --color-surface: #ffffff;
@@ -8,14 +9,13 @@
     'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #343541;
-    --color-surface: #444654;
-    --color-text: #ececf1;
-    --color-accent: #10a37f;
-    --color-border: #565869;
-  }
+/* Dark theme */
+:root[data-theme='dark'] {
+  --color-bg: #343541;
+  --color-surface: #444654;
+  --color-text: #ececf1;
+  --color-accent: #10a37f;
+  --color-border: #565869;
 }
 
 body {
@@ -33,6 +33,13 @@ body {
 .bg-gray-900 { background-color: var(--color-bg); }
 .text-gray-100 { color: var(--color-text); }
 .p-4 { padding: 1rem; }
+.icon-button {
+  background: none;
+  border: none;
+  color: var(--color-text);
+  padding: 0.25rem;
+  cursor: pointer;
+}
 
 header, footer {
   background-color: var(--color-surface);
@@ -42,12 +49,56 @@ header, footer {
 header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
   border-bottom: 1px solid var(--color-border);
 }
 
+header .brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.user-menu {
+  position: relative;
+}
+
+.user-menu .menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.25rem);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  min-width: 8rem;
+  z-index: 10;
+}
+
+.user-menu .menu a {
+  padding: 0.5rem 1rem;
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.user-menu .menu a:hover {
+  background-color: var(--color-bg);
+}
+
 footer {
   border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: center;
 }
 
 .conversation {
