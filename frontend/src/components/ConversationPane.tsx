@@ -1,13 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ChatMessage from './Message';
-import { Message, Source } from '../chat';
+import { Message } from '../chat';
 
 interface Props {
   messages: Message[];
-  sources?: Source[] | null;
 }
 
-export default function ConversationPane({ messages, sources }: Props) {
+export default function ConversationPane({ messages }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -35,15 +34,7 @@ export default function ConversationPane({ messages, sources }: Props) {
   return (
     <div className="conversation" ref={containerRef} role="list">
       {messages.map((m, i) => (
-        <ChatMessage
-          key={i}
-          message={m}
-          sources={
-            i === messages.length - 1 && m.role === 'assistant'
-              ? sources || undefined
-              : undefined
-          }
-        />
+        <ChatMessage key={i} message={m} />
       ))}
     </div>
   );

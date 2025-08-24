@@ -16,16 +16,8 @@ interface ConversationMeta {
 }
 
 function ChatContent({ onMenuClick }: { onMenuClick: () => void }) {
-  const {
-    messages,
-    sources,
-    send,
-    isStreaming,
-    cancel,
-    error,
-    clearError,
-    retry,
-  } = useChat();
+  const { messages, send, isStreaming, cancel, error, clearError, retry } =
+    useChat();
 
   return (
     <div className="flex flex-1 flex-col">
@@ -33,7 +25,7 @@ function ChatContent({ onMenuClick }: { onMenuClick: () => void }) {
       {error && (
         <ErrorBanner message={error} onClose={clearError} onRetry={retry} />
       )}
-      <ConversationPane messages={messages} sources={sources ?? undefined} />
+      <ConversationPane messages={messages} />
       <Composer onSend={send} onCancel={cancel} isStreaming={isStreaming} />
       <Disclaimer />
       <Footer />
