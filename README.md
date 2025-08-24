@@ -2,6 +2,8 @@
 
 Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** e **Markdown** em uma pasta local e habilite **busca semântica** para um agente de IA.
 
+Inclui uma interface web inspirada no ChatGPT com histórico de conversas, anexos, destaque de código e alternância de tema claro/escuro.
+
 ## Visão geral
 1. **Extrai** textos dos PDFs e arquivos Markdown.
 2. **Divide** em *chunks* (trechos) com sobreposição.
@@ -44,7 +46,7 @@ pytest
 ```bash
 uvicorn app.main:app --reload
 ```
-6. (Opcional) Para a interface, entre em `frontend/` e rode `npm install && npm run dev`.
+6. (Opcional) Para a interface web estilo ChatGPT (histórico, anexos, temas), entre em `frontend/` e rode `npm install && npm run dev`.
 
 ## Passo a passo (rápido)
 ```bash
@@ -276,6 +278,13 @@ tesseract --list-langs
 3. Envie mensagens pelo campo de texto. Opcionalmente, anexe um PDF pequeno para enriquecer o contexto.
 4. Durante a geração da resposta, use **Cancelar** para interromper o streaming e **Enviar** novamente para retomar.
 
+Recursos da interface:
+- Barra lateral com histórico de conversas (criar, renomear, excluir).
+- Avatares e bolhas com realce de código via Prism.
+- Botões para copiar, regenerar e avaliar cada resposta.
+- Pré-visualização de PDFs anexados.
+- Alternância entre tema claro e escuro.
+
 ## Estrutura
 ```
 pdf_knowledge_kit/
@@ -352,15 +361,7 @@ Se `OPENAI_LANG` não for definido, o idioma da pergunta é detectado automatica
 
 ```bash
 python query.py --q "¿Cuál es la capital de Francia?" --k 3
-```
-
-Saída:
-
-```
-================================================================================
-Resposta:
-La capital de Francia es París.
-================================================================================
+# Resposta: La capital de Francia es París.
 ```
 
 ### Exemplo (API)
