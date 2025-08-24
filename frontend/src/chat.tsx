@@ -30,6 +30,7 @@ interface ChatContextValue {
   error: string | null;
   clearError: () => void;
   retry: () => void;
+  regenerate: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
@@ -231,6 +232,13 @@ export function ChatProvider({
     }
   };
 
+  const regenerate = async () => {
+    if (lastRequestRef.current) {
+      const { text, files } = lastRequestRef.current;
+      await send(text, files);
+    }
+  };
+
   return (
     <ChatContext.Provider
       value={{
@@ -243,6 +251,7 @@ export function ChatProvider({
         error,
         clearError,
         retry,
+        regenerate,
       }}
     >
       {children}

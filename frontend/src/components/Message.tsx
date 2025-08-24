@@ -8,7 +8,7 @@ import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-bash';
 import 'prismjs/components/prism-json';
-import { Message as MessageType, Source } from '../chat';
+import { Message as MessageType, Source, useChat } from '../chat';
 import SourcesList from './SourcesList';
 
 const md = new MarkdownIt({
@@ -29,6 +29,31 @@ interface Props {
 
 export default function Message({ message, sources }: Props) {
   const avatar = message.role === 'assistant' ? '🤖' : '🧑';
+  const { regenerate } = useChat();
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard?.writeText(message.content);
+    } catch (e) {
+      console.log('copy failed', e);
+    }
+  };
+
+  const handleRegenerate = () => {
+    regenerate();
+  };
+
+  const handleFeedback = async (positive: boolean) => {
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message.content, positive }),
+      });
+    } catch {
+      console.log('feedback', { message: message.content, positive });
+    }
+  };
 
   return (
     <div
@@ -42,6 +67,31 @@ export default function Message({ message, sources }: Props) {
     >
       <div className="avatar">{avatar}</div>
       <div className="bubble">
+        <div className="toolbar">
+          <button onClick={handleCopy} aria-label="Copiar">📋</button>
+          {message.role === 'assistant' && (
+            <>
+              <button
+                onClick={handleRegenerate}
+                aria-label="Regenerar"
+              >
+                🔄
+              </button>
+              <button
+                onClick={() => handleFeedback(true)}
+                aria-label="Feedback positivo"
+              >
+                👍
+              </button>
+              <button
+                onClick={() => handleFeedback(false)}
+                aria-label="Feedback negativo"
+              >
+                👎
+              </button>
+            </>
+          )}
+        </div>
         <div
           dangerouslySetInnerHTML={{
             __html: DOMPurify.sanitize(md.render(message.content)),
