@@ -14,7 +14,7 @@ interface ConversationMeta {
   createdAt: string;
 }
 
-function ChatContent() {
+function ChatContent({ onMenuClick }: { onMenuClick: () => void }) {
   const {
     messages,
     sources,
@@ -28,7 +28,7 @@ function ChatContent() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <Header />
+      <Header onMenuClick={onMenuClick} />
       {error && (
         <ErrorBanner message={error} onClose={clearError} onRetry={retry} />
       )}
@@ -43,6 +43,7 @@ export default function ChatPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [convId, setConvId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const stored: ConversationMeta[] = JSON.parse(
@@ -74,9 +75,20 @@ export default function ChatPage() {
 
   return (
     <ChatProvider conversationId={convId}>
-      <div className="flex flex-1">
-        <Sidebar currentId={convId} />
-        <ChatContent />
+      <div className="flex flex-1 relative">
+        <Sidebar
+          currentId={convId}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 md:hidden z-10"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+        <ChatContent onMenuClick={() => setSidebarOpen(true)} />
       </div>
     </ChatProvider>
   );

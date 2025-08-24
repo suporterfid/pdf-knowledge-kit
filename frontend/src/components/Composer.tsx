@@ -107,9 +107,14 @@ export default function Composer({ onSend, onCancel, isStreaming }: Props) {
           placeholder="Pergunte algo"
           onKeyDown={handleKeyDown}
           maxLength={5000}
+          aria-label="Mensagem"
         />
         <div className="composer-toolbar">
-          <label htmlFor="composer-file" className="icon-button">
+          <label
+            htmlFor="composer-file"
+            className="icon-button"
+            aria-label="Anexar arquivo"
+          >
             <AttachIcon />
           </label>
           {isStreaming ? (
@@ -120,11 +125,16 @@ export default function Composer({ onSend, onCancel, isStreaming }: Props) {
                 onCancel();
                 textareaRef.current?.focus();
               }}
+              aria-label="Interromper resposta"
             >
               <StopIcon />
             </button>
           ) : (
-            <button type="submit" className="icon-button">
+            <button
+              type="submit"
+              className="icon-button"
+              aria-label="Enviar mensagem"
+            >
               <SendIcon />
             </button>
           )}
@@ -149,6 +159,7 @@ export default function Composer({ onSend, onCancel, isStreaming }: Props) {
                 onClick={() =>
                   setFiles((prev) => prev.filter((_, i) => i !== idx))
                 }
+                aria-label="Remover arquivo"
               >
                 ✕
               </button>
