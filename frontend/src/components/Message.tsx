@@ -11,7 +11,9 @@ import 'prismjs/components/prism-json';
 import { Message as MessageType, Source, useChat } from '../chat';
 import SourcesList from './SourcesList';
 
-const md = new MarkdownIt({
+const md: MarkdownIt = new MarkdownIt();
+
+md.set({
   highlight: function (str, lang) {
     if (lang && Prism.languages[lang]) {
       try {
@@ -98,7 +100,11 @@ export default function Message({ message, sources }: Props) {
           }}
         />
         {message.status === 'streaming' && (
-          <div className="typing-indicator">Digitando...</div>
+          <div className="typing-indicator" aria-label="Digitando...">
+            <span />
+            <span />
+            <span />
+          </div>
         )}
         {message.role === 'assistant' && sources && (
           <SourcesList sources={sources} />
