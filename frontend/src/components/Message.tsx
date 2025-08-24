@@ -8,8 +8,7 @@ import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-bash';
 import 'prismjs/components/prism-json';
-import { Message as MessageType, Source, useChat } from '../chat';
-import SourcesList from './SourcesList';
+import { Message as MessageType, useChat } from '../chat';
 
 const md: MarkdownIt = new MarkdownIt();
 
@@ -26,10 +25,9 @@ md.set({
 
 interface Props {
   message: MessageType;
-  sources?: Source[];
 }
 
-export default function Message({ message, sources }: Props) {
+export default function Message({ message }: Props) {
   const avatar = message.role === 'assistant' ? '🤖' : '🧑';
   const { regenerate } = useChat();
 
@@ -105,9 +103,6 @@ export default function Message({ message, sources }: Props) {
             <span />
             <span />
           </div>
-        )}
-        {message.role === 'assistant' && sources && (
-          <SourcesList sources={sources} />
         )}
       </div>
     </div>
