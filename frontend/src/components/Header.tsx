@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useConfig } from '../config';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useConfig } from "../config";
+import { useTheme } from "../theme";
 
 interface Props {
   onMenuClick?: () => void;
@@ -9,19 +10,8 @@ interface Props {
 export default function Header({ onMenuClick }: Props) {
   const { BRAND_NAME, LOGO_URL } = useConfig();
   const navigate = useNavigate();
-  const [theme, setTheme] = useState(
-    localStorage.getItem('theme') || 'light'
-  );
   const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
-  };
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <header className="flex items-center justify-between p-4">
@@ -36,17 +26,12 @@ export default function Header({ onMenuClick }: Props) {
           </button>
         )}
         <div className="brand flex items-center">
-          {LOGO_URL && (
-            <img src={LOGO_URL} alt={BRAND_NAME} className="logo" />
-          )}
+          {LOGO_URL && <img src={LOGO_URL} alt={BRAND_NAME} className="logo" />}
           <h1>{BRAND_NAME}</h1>
         </div>
       </div>
       <div className="header-actions flex items-center space-x-2">
-        <button
-          onClick={() => navigate('/chat/new')}
-          aria-label="Novo chat"
-        >
+        <button onClick={() => navigate("/chat/new")} aria-label="Novo chat">
           Novo Chat
         </button>
         <button
@@ -54,7 +39,7 @@ export default function Header({ onMenuClick }: Props) {
           onClick={toggleTheme}
           aria-label="Alternar tema"
         >
-          {theme === 'light' ? '🌙' : '☀️'}
+          {theme === "light" ? "🌙" : "☀️"}
         </button>
         <div className="user-menu relative">
           <button
