@@ -10,7 +10,10 @@ import { vi, beforeAll, afterEach, afterAll, test, expect } from 'vitest';
 
 const server = setupServer(
   http.get('/api/config', () =>
-    HttpResponse.json({ UPLOAD_MAX_SIZE: 5 * 1024 * 1024 })
+    HttpResponse.json({
+      UPLOAD_MAX_SIZE: 5 * 1024 * 1024,
+      UPLOAD_MAX_FILES: 5,
+    })
   )
 );
 
@@ -210,4 +213,20 @@ test('regenerate resends last request', async () => {
   await waitFor(() => result.current.messages[3].status === 'done');
   expect(calls).toBe(2);
   expect(result.current.messages.length).toBe(4);
+
+test('too many files trigger local validation', async () => {
+  const fetchSpy = vi.spyOn(global, 'fetch');
+  const { result } = renderChat();
+  await waitFor(() => fetchSpy.mock.calls.length > 0).catch(() => {});
+  fetchSpy.mockClear();
+  const files = Array.from({ length: 6 }, (_, i) =>
+    new File(['hi'], `${i}.pdf`, { type: 'application/pdf' })
+  );
+  await act(async () => {
+    await result.current.send('Hi', files);
+  });
+  expect(fetchSpy).not.toHaveBeenCalled();
+  expect(result.current.error).toBe('Muitos arquivos');
+  fetchSpy.mockRestore();
+
 });

@@ -53,7 +53,7 @@ export function ChatProvider({
   const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const lastRequestRef = useRef<{ text: string; files: File[] } | null>(null);
-  const { UPLOAD_MAX_SIZE } = useConfig();
+  const { UPLOAD_MAX_SIZE, UPLOAD_MAX_FILES } = useConfig();
   const apiFetch = useApiFetch();
 
   useEffect(() => {
@@ -69,6 +69,10 @@ export function ChatProvider({
   const send = async (text: string, files: File[] = []) => {
     if (text.length > 5000) {
       setError('Mensagem muito longa');
+      return;
+    }
+    if (files.length > UPLOAD_MAX_FILES) {
+      setError('Muitos arquivos');
       return;
     }
     for (const f of files) {
