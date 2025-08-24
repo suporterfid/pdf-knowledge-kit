@@ -184,6 +184,36 @@ test('oversized file triggers local validation without network calls', async () 
   fetchSpy.mockRestore();
 });
 
+test('regenerate resends last request', async () => {
+  let calls = 0;
+  server.use(
+    http.get('/api/chat', () => {
+      calls++;
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('event: token\ndata: Hi\n\n'));
+          controller.enqueue(encoder.encode('event: done\ndata:\n\n'));
+          controller.close();
+        },
+      });
+      return new HttpResponse(stream, {
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+    })
+  );
+  const { result } = renderChat();
+  await act(async () => {
+    await result.current.send('Hi');
+  });
+  await waitFor(() => result.current.messages[1].status === 'done');
+  await act(async () => {
+    await result.current.regenerate();
+  });
+  await waitFor(() => result.current.messages[3].status === 'done');
+  expect(calls).toBe(2);
+  expect(result.current.messages.length).toBe(4);
+
 test('too many files trigger local validation', async () => {
   const fetchSpy = vi.spyOn(global, 'fetch');
   const { result } = renderChat();
@@ -198,4 +228,5 @@ test('too many files trigger local validation', async () => {
   expect(fetchSpy).not.toHaveBeenCalled();
   expect(result.current.error).toBe('Muitos arquivos');
   fetchSpy.mockRestore();
+
 });
