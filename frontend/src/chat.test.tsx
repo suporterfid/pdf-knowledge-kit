@@ -1,8 +1,18 @@
 import React from 'react';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import {
+  renderHook,
+  act,
+  waitFor,
+  render,
+  screen,
+  fireEvent,
+} from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ChatProvider, useChat } from './chat';
+import ChatPage from './ChatPage';
 import { ConfigProvider } from './config';
 import { ApiKeyProvider } from './apiKey';
+import { ThemeProvider } from './theme';
 import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
 import 'whatwg-fetch';
@@ -231,4 +241,49 @@ test('too many files trigger local validation', async () => {
   expect(result.current.error).toBe('Muitos arquivos');
   fetchSpy.mockRestore();
 
+});
+
+test('Novo Chat button creates a new conversation ID', async () => {
+  // mock scrollTo for jsdom
+  window.HTMLElement.prototype.scrollTo = vi.fn();
+  const LocationDisplay = () => {
+    const location = useLocation();
+    return <span data-testid="location">{location.pathname}</span>;
+  };
+
+  render(
+    <ApiKeyProvider>
+      <ConfigProvider>
+        <ThemeProvider>
+          <MemoryRouter initialEntries={['/chat/first']}>
+            <LocationDisplay />
+            <Routes>
+              <Route path="/chat/:id" element={<ChatPage />} />
+            </Routes>
+          </MemoryRouter>
+        </ThemeProvider>
+      </ConfigProvider>
+    </ApiKeyProvider>
+  );
+
+  await waitFor(() => {
+    const convs = JSON.parse(localStorage.getItem('conversations') || '[]');
+    return convs.length === 1;
+  });
+  expect(screen.getByTestId('location').textContent).toBe('/chat/first');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Novo chat' }));
+
+  await waitFor(() => screen.getByTestId('location').textContent !== '/chat/first');
+
+  await waitFor(() => {
+    const convs = JSON.parse(localStorage.getItem('conversations') || '[]');
+    return convs.length === 2;
+  });
+
+  const convs = JSON.parse(localStorage.getItem('conversations') || '[]');
+  const newId = convs[1].id;
+  expect(convs[0].id).toBe('first');
+  expect(newId).not.toBe('first');
+  expect(screen.getByTestId('location').textContent).toBe(`/chat/${newId}`);
 });
