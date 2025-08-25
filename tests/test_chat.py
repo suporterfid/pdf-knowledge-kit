@@ -174,3 +174,42 @@ def test_chat_with_llm_prompt(client):
     assert any(e[0] == "done" for e in events)
     assert dummy_client.messages[0]["content"] == "Answer the user's question using the supplied context. Reply in en."
 
+
+def test_chat_with_custom_system_prompt(client, monkeypatch):
+    headers = {"X-Forwarded-For": "3.3.3.4"}
+
+    class DummyStream:
+        def __iter__(self):
+            yield types.SimpleNamespace(
+                choices=[types.SimpleNamespace(delta=types.SimpleNamespace(content="hi"))],
+                usage=None,
+            )
+            yield types.SimpleNamespace(
+                choices=[],
+                usage=types.SimpleNamespace(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+            )
+
+    class DummyClient:
+        def __init__(self):
+            self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
+            self.messages = None
+
+        def create(self, **kwargs):
+            self.messages = kwargs.get("messages")
+            return DummyStream()
+
+    dummy_client = DummyClient()
+    monkeypatch.setenv("SYSTEM_PROMPT", "You are a helper.")
+    with patch("app.main.build_context", dummy_build_context), \
+        patch("app.main.client", dummy_client), \
+        patch("app.main.detect", lambda _: "en"):
+        data = {"q": "hi", "k": "1", "sessionId": "sllm2"}
+        with client.stream("POST", "/api/chat", data=data, headers=headers) as resp:
+            events = _parse_events(resp)
+    assert any(e[0] == "token" for e in events)
+    assert any(e[0] == "done" for e in events)
+    assert (
+        dummy_client.messages[0]["content"]
+        == "You are a helper. Answer the user's question using the supplied context. Reply in en."
+    )
+
