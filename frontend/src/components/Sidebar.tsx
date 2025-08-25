@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import clsx from 'clsx';
 
 interface ConversationMeta {
   id: string;
@@ -74,10 +75,12 @@ export default function Sidebar({ currentId, isOpen, onClose }: Props) {
 
   return (
     <nav
-      className={
-        `bg-gray-800 p-4 flex flex-col w-64 z-20 fixed inset-y-0 left-0 transform transition-transform duration-200 ` +
-        `md:static md:translate-x-0 md:flex ${isOpen ? 'translate-x-0' : '-translate-x-full'}`
-      }
+      className={clsx(
+        'fixed inset-y-0 left-0 w-64 transform transition-transform duration-200 bg-gray-800 p-4 flex flex-col z-20 md:static md:translate-x-0 md:flex',
+        isOpen
+          ? 'translate-x-0 pointer-events-auto'
+          : '-translate-x-full pointer-events-none'
+      )}
       aria-label="Histórico de conversas"
     >
       <div className="flex justify-end md:hidden">
