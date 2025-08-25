@@ -112,12 +112,16 @@ def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
     )
     if client:
         try:  # pragma: no cover - openai optional
+            base_prompt = "Answer the user's question using the supplied context."
+            custom_prompt = os.getenv("SYSTEM_PROMPT")
+            system_prompt = f"{custom_prompt} {base_prompt}" if custom_prompt else base_prompt
+            system_prompt = f"{system_prompt} {lang_instruction}"
             completion = client.chat.completions.create(
                 model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
                 messages=[
                     {
                         "role": "system",
-                        "content": f"Answer the user's question using the supplied context. {lang_instruction}",
+                        "content": system_prompt,
                     },
                     {
                         "role": "user",
@@ -278,12 +282,16 @@ async def chat_stream(
                 lang_instruction = (
                     f"Reply in {lang}." if lang else "Reply in the same language as the question."
                 )
+                base_prompt = "Answer the user's question using the supplied context."
+                custom_prompt = os.getenv("SYSTEM_PROMPT")
+                system_prompt = f"{custom_prompt} {base_prompt}" if custom_prompt else base_prompt
+                system_prompt = f"{system_prompt} {lang_instruction}"
                 completion = client.chat.completions.create(
                     model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
                     messages=[
                         {
                             "role": "system",
-                            "content": f"Answer the user's question using the supplied context. {lang_instruction}",
+                            "content": system_prompt,
                         },
                         {
                             "role": "user",
