@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* Light theme (default) */
 :root {
   --color-bg: #f7f7f8;
@@ -25,14 +29,6 @@ body {
   font-family: var(--font-sans);
 }
 
-/* Utility classes */
-.flex { display: flex; }
-.flex-col { flex-direction: column; }
-.flex-1 { flex: 1 1 0%; }
-.h-screen { height: 100vh; }
-.bg-gray-900 { background-color: var(--color-bg); }
-.text-gray-100 { color: var(--color-text); }
-.p-4 { padding: 1rem; }
 .icon-button {
   background: none;
   border: none;
