@@ -76,7 +76,7 @@ header .brand {
   display: flex;
   flex-direction: column;
   min-width: 8rem;
-  z-index: 10;
+  z-index: 30;
 }
 
 .user-menu .menu a {

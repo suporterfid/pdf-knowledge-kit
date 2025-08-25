@@ -76,9 +76,9 @@ export default function Sidebar({ currentId, isOpen, onClose }: Props) {
   return (
     <nav
       className={clsx(
-        'fixed inset-y-0 left-0 w-64 transform transition-transform duration-200 bg-gray-800 p-4 flex flex-col z-20 md:static md:translate-x-0 md:flex',
+        'fixed inset-y-0 left-0 w-64 transform transition-transform duration-200 bg-gray-800 p-4 flex flex-col md:static md:translate-x-0 md:flex',
         isOpen
-          ? 'translate-x-0 pointer-events-auto'
+          ? 'translate-x-0 pointer-events-auto z-20'
           : '-translate-x-full pointer-events-none'
       )}
       aria-label="Histórico de conversas"
