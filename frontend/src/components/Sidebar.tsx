@@ -56,13 +56,14 @@ export default function Sidebar({ currentId, isOpen, onClose }: Props) {
   };
 
   const remove = (id: string) => {
-    if (!confirm('Excluir conversa?')) return;
-    const list = conversations.filter((c) => c.id !== id);
-    persist(list);
+    if (!window.confirm('Excluir conversa?')) return;
+    const updated = conversations.filter((c) => c.id !== id);
+    persist(updated);
     localStorage.removeItem(`messages-${id}`);
     if (id === currentId) {
-      if (list.length > 0) {
-        navigate(`/chat/${list[list.length - 1].id}`);
+      const next = updated.at(-1);
+      if (next) {
+        navigate(`/chat/${next.id}`);
       } else {
         createNew();
       }
