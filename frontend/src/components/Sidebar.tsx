@@ -46,13 +46,14 @@ export default function Sidebar({ currentId, isOpen, onClose }: Props) {
   };
 
   const rename = (id: string) => {
-    const title = prompt('Novo título?');
-    if (title) {
-      const list = conversations.map((c) =>
-        c.id === id ? { ...c, title } : c
-      );
-      persist(list);
-    }
+    const current = conversations.find((c) => c.id === id);
+    const title = prompt('Novo título?', current?.title);
+    if (!title) return;
+
+    const updated = conversations.map((c) =>
+      c.id === id ? { ...c, title } : c
+    );
+    persist(updated);
   };
 
   const remove = (id: string) => {
