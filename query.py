@@ -7,6 +7,7 @@ import psycopg
 from pgvector.psycopg import register_vector
 
 from fastembed import TextEmbedding
+import embedding  # registers custom CLS-pooled model
 
 from langdetect import detect
 
@@ -61,7 +62,7 @@ def main():
     register_vector(conn)
 
     # Use a supported multilingual embedding model
-    embedder = TextEmbedding(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    embedder = TextEmbedding(model_name="paraphrase-multilingual-MiniLM-L12-v2-cls")
     qvec = list(embedder.embed([f'query: {args.q}']))[0]  # E5 prefix para consulta
 
     sql = """
