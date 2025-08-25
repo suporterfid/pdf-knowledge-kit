@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
+import { generateUUID } from '../utils/uuid';
 
 interface ConversationMeta {
   id: string;
@@ -33,7 +34,7 @@ export default function Sidebar({ currentId, isOpen, onClose }: Props) {
   };
 
   const createNew = () => {
-    const id = crypto.randomUUID();
+    const id = generateUUID();
     const conv: ConversationMeta = {
       id,
       title: 'Novo chat',

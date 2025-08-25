@@ -8,6 +8,7 @@ import Disclaimer from './components/Disclaimer';
 import ErrorBanner from './components/ErrorBanner';
 import Sidebar from './components/Sidebar';
 import { ChatProvider, useChat } from './chat';
+import { generateUUID } from './utils/uuid';
 
 interface ConversationMeta {
   id: string;
@@ -52,7 +53,7 @@ export default function ChatPage() {
       localStorage.getItem('conversations') || '[]'
     );
     if (!id || id === 'new') {
-      const newId = crypto.randomUUID();
+      const newId = generateUUID();
       const conv: ConversationMeta = {
         id: newId,
         title: 'Novo chat',
