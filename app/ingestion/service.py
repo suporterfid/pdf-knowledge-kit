@@ -12,6 +12,7 @@ from contextlib import contextmanager
 import requests
 from bs4 import BeautifulSoup
 from fastembed import TextEmbedding
+import embedding  # registers custom CLS-pooled model
 from pdf2image import convert_from_path
 from pypdf import PdfReader
 import pytesseract
@@ -23,7 +24,7 @@ from .models import Job, JobLogSlice, JobStatus, SourceType
 from .runner import IngestionRunner
 
 # Multilingual embedding model
-EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2-cls"
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema.sql"
 
 # ---------------------------------------------------------------------------
@@ -292,7 +293,7 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                     )
                     return
 
-                embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
+                embedder = TextEmbedding(model_name="paraphrase-multilingual-MiniLM-L12-v2-cls")
                 embeddings: list[list[float]] = []
                 for emb in embedder.embed(chunks):
                     if cancel_event.is_set():
@@ -365,7 +366,7 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
                     log_path=str(log_path),
                 )
 
-                embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
+                embedder = TextEmbedding(model_name="paraphrase-multilingual-MiniLM-L12-v2-cls")
 
                 for url in urls:
                     if cancel_event.is_set():

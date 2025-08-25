@@ -2,10 +2,11 @@ import os
 import psycopg
 from pgvector.psycopg import register_vector
 from fastembed import TextEmbedding
+import embedding  # registers custom CLS-pooled model
 from typing import List, Tuple, Dict
 
 # Use a supported multilingual embedding model
-embedder = TextEmbedding(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+embedder = TextEmbedding(model_name="paraphrase-multilingual-MiniLM-L12-v2-cls")
 
 
 def get_conn():
