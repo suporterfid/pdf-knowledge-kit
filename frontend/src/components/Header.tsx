@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfig } from "../config";
 import { useTheme } from "../theme";
@@ -11,7 +11,22 @@ export default function Header({ onMenuClick }: Props) {
   const { BRAND_NAME, LOGO_URL } = useConfig();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (
+        menuOpen &&
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node)
+      ) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [menuOpen]);
 
   return (
     <header className="flex items-center justify-between p-4">
@@ -41,7 +56,7 @@ export default function Header({ onMenuClick }: Props) {
         >
           {theme === "light" ? "🌙" : "☀️"}
         </button>
-        <div className="user-menu relative">
+        <div className="user-menu relative" ref={menuRef}>
           <button
             className="icon-button"
             onClick={() => setMenuOpen((o) => !o)}
