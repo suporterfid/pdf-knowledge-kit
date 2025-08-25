@@ -8,7 +8,8 @@ import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-bash';
 import 'prismjs/components/prism-json';
-import { Message as MessageType, useChat } from '../chat';
+import { Message as MessageType, Source, useChat } from '../chat';
+import SourcesList from './SourcesList';
 
 const md: MarkdownIt = new MarkdownIt();
 
@@ -25,9 +26,10 @@ md.set({
 
 interface Props {
   message: MessageType;
+  sources?: Source[];
 }
 
-export default function Message({ message }: Props) {
+export default function Message({ message, sources }: Props) {
   const avatar = message.role === 'assistant' ? '🤖' : '🧑';
   const { regenerate } = useChat();
 
@@ -66,44 +68,47 @@ export default function Message({ message }: Props) {
       }
     >
       <div className="avatar">{avatar}</div>
-      <div className="bubble">
-        <div className="toolbar">
-          <button onClick={handleCopy} aria-label="Copiar">📋</button>
-          {message.role === 'assistant' && (
-            <>
-              <button
-                onClick={handleRegenerate}
-                aria-label="Regenerar"
-              >
-                🔄
-              </button>
-              <button
-                onClick={() => handleFeedback(true)}
-                aria-label="Feedback positivo"
-              >
-                👍
-              </button>
-              <button
-                onClick={() => handleFeedback(false)}
-                aria-label="Feedback negativo"
-              >
-                👎
-              </button>
-            </>
+      <div>
+        <div className="bubble">
+          <div className="toolbar">
+            <button onClick={handleCopy} aria-label="Copiar">📋</button>
+            {message.role === 'assistant' && (
+              <>
+                <button
+                  onClick={handleRegenerate}
+                  aria-label="Regenerar"
+                >
+                  🔄
+                </button>
+                <button
+                  onClick={() => handleFeedback(true)}
+                  aria-label="Feedback positivo"
+                >
+                  👍
+                </button>
+                <button
+                  onClick={() => handleFeedback(false)}
+                  aria-label="Feedback negativo"
+                >
+                  👎
+                </button>
+              </>
+            )}
+          </div>
+          <div
+            dangerouslySetInnerHTML={{
+              __html: DOMPurify.sanitize(md.render(message.content)),
+            }}
+          />
+          {message.status === 'streaming' && (
+            <div className="typing-indicator" aria-label="Digitando...">
+              <span />
+              <span />
+              <span />
+            </div>
           )}
         </div>
-        <div
-          dangerouslySetInnerHTML={{
-            __html: DOMPurify.sanitize(md.render(message.content)),
-          }}
-        />
-        {message.status === 'streaming' && (
-          <div className="typing-indicator" aria-label="Digitando...">
-            <span />
-            <span />
-            <span />
-          </div>
-        )}
+        {sources && <SourcesList sources={sources} />}
       </div>
     </div>
   );

@@ -214,6 +214,8 @@ test('regenerate resends last request', async () => {
   expect(calls).toBe(2);
   expect(result.current.messages.length).toBe(4);
 
+});
+
 test('too many files trigger local validation', async () => {
   const fetchSpy = vi.spyOn(global, 'fetch');
   const { result } = renderChat();
