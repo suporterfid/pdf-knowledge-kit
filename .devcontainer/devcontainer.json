@@ -4,8 +4,10 @@
 	"name": "Existing Dockerfile",
         "dockerComposeFile": ["../docker-compose.yml"],
         "service": "app",
+        "runServices": ["app", "frontend"],
         "workspaceFolder": "/app",
-        "forwardPorts": [8000,5432,5678],
+        "overrideCommand": false,
+        "forwardPorts": [8000,5432,5678,5173],
 	"features": {
 		"ghcr.io/devcontainers/features/python:1": {
 			"installTools": true,

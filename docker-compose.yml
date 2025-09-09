@@ -42,9 +42,11 @@ services:
       -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
+      - "5678:5678"
     expose:
       - "8000"
     volumes:
+      - ./:/app
       - ./docs:/app/docs:ro
       - ./logs:/var/log/app
       # - ./tessdata:/usr/share/tesseract-ocr/tessdata:ro
@@ -54,6 +56,25 @@ services:
         aliases:
           - backend
           - api
+
+  frontend:
+    image: node:20
+    working_dir: /workspace/frontend
+    depends_on:
+      - app
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    command: bash -lc "npm ci && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/workspace/frontend
+    restart: unless-stopped
+    networks:
+      appnet:
+        aliases:
+          - web
 
 volumes:
   pgdata:
