@@ -1,0 +1,11 @@
+{
+  "configurations": [
+    {
+      "name": "Attach to FastAPI",
+      "type": "python",
+      "request": "attach",
+      "connect": {"host": "localhost", "port": 5678},
+      "justMyCode": true
+    }
+  ]
+}
