@@ -1,0 +1,22 @@
+{
+  "name": "Fullstack Dev Container",
+  "build": {
+  "dockerfile": "../Dockerfile"
+  },
+
+  "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash"
+  },
+  "extensions": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "ms-vscode.vscode-typescript-tslint-plugin",
+    "ms-azuretools.vscode-docker",
+    "ms-vscode.sqltools"
+  ],
+  "forwardPorts": [3000,5173, 8000],
+  "postCreateCommand": "pip install -r requirements.txt",
+  "remoteUser": "vscode"
+}

@@ -4,7 +4,7 @@ try:  # fastembed >=0.8 exposes ``add_custom_model``
     from fastembed import add_custom_model  # type: ignore
 except Exception:  # pragma: no cover - fallback for older versions
     from fastembed import TextEmbedding
-    from fastembed.common.model_description import PoolingType
+    from fastembed import PoolingType
 
     def add_custom_model(*, name: str, base: str, pooling: str) -> None:
         base_info = next(
