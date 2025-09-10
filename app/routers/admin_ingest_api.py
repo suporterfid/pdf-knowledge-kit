@@ -60,6 +60,19 @@ def start_local_job(
     return JobCreated(job_id=job_id)
 
 
+@router.post("/reindex_all", response_model=ListResponse[JobCreated])
+def reindex_all_sources(role: str = Depends(require_role("operator"))) -> ListResponse[JobCreated]:
+    """Reindex all active sources, returning the created job IDs."""
+    with _get_conn() as conn:
+        sources = list(storage.list_sources(conn, active=True))
+    job_ids: list[JobCreated] = []
+    for src in sources:
+        job_id = service.reindex_source(src.id)
+        if job_id:
+            job_ids.append(JobCreated(job_id=job_id))
+    return ListResponse[JobCreated](items=job_ids, total=len(job_ids))
+
+
 @router.post("/url", response_model=JobCreated)
 def start_url_job(
     req: UrlIngestRequest,

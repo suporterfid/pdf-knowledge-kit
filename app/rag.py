@@ -3,6 +3,13 @@ import psycopg
 from pgvector.psycopg import register_vector
 from fastembed import TextEmbedding
 import embedding  # attempts to register custom CLS-pooled model (no-op if unsupported)
+from typing import Iterable
+
+try:
+    # Lightweight lexical reranker
+    from rank_bm25 import BM25Okapi  # type: ignore
+except Exception:  # pragma: no cover - optional dep
+    BM25Okapi = None  # type: ignore
 from typing import List, Tuple, Dict
 
 # Use a supported multilingual embedding model. Fallback to base model if
@@ -28,10 +35,28 @@ def get_conn():
     return conn
 
 
+def _tokenize(text: str) -> List[str]:
+    return [t.lower() for t in ''.join(c if c.isalnum() else ' ' for c in text).split() if t]
+
+
+def _bm25_rerank(query: str, sources: List[Dict]) -> List[Dict]:
+    if not BM25Okapi or not sources:
+        return sources
+    corpus = [src["content"] or "" for src in sources]
+    tokenized_corpus = [_tokenize(c) for c in corpus]
+    bm25 = BM25Okapi(tokenized_corpus)
+    scores = bm25.get_scores(_tokenize(query))
+    ranked = sorted(zip(scores, sources), key=lambda x: x[0], reverse=True)
+    return [s for _, s in ranked]
+
+
 def build_context(question: str, k: int) -> Tuple[str, List[Dict]]:
-    """Retrieve top-k chunks relevant to the question and build a text context."""
+    """Retrieve top-k chunks via vector search, then apply a lightweight reranker."""
     conn = get_conn()
-    qvec = list(embedder.embed([f"query: {question}"]))[0]
+    # Embed the raw question (no prefix) for current model family
+    qvec = list(embedder.embed([question]))[0]
+    # Retrieve a larger candidate set for reranking
+    pre_k = max(k * 4, 20)
     sql = """
     SELECT d.path, c.chunk_index, c.content, (c.embedding <-> %s) AS distance
     FROM chunks c
@@ -41,10 +66,10 @@ def build_context(question: str, k: int) -> Tuple[str, List[Dict]]:
     LIMIT %s;
     """
     with conn.cursor() as cur:
-        cur.execute(sql, (qvec, qvec, k))
+        cur.execute(sql, (qvec, qvec, pre_k))
         rows = cur.fetchall()
     conn.close()
-    sources = [
+    candidates = [
         {
             "path": path,
             "chunk_index": idx,
@@ -53,5 +78,7 @@ def build_context(question: str, k: int) -> Tuple[str, List[Dict]]:
         }
         for path, idx, content, dist in rows
     ]
-    context = "\n\n".join(src["content"] for src in sources)
-    return context, sources
+    # Rerank lexically and select top-k
+    ranked = _bm25_rerank(question, candidates)[:k]
+    context = "\n\n".join(src["content"] for src in ranked)
+    return context, ranked
