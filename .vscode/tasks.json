@@ -5,12 +5,28 @@
       "label": "compose: up",
       "type": "shell",
       "command": "docker compose up -d --build",
+      "windows": {
+        "options": {
+          "shell": {
+            "executable": "powershell.exe",
+            "args": ["-NoProfile", "-Command"]
+          }
+        }
+      },
       "problemMatcher": []
     },
     {
       "label": "compose: down",
       "type": "shell",
       "command": "docker compose down",
+      "windows": {
+        "options": {
+          "shell": {
+            "executable": "powershell.exe",
+            "args": ["-NoProfile", "-Command"]
+          }
+        }
+      },
       "problemMatcher": []
     }
   ]
