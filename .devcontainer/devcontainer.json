@@ -8,18 +8,7 @@
         "workspaceFolder": "/app",
         "overrideCommand": false,
         "forwardPorts": [8000,5432,5678,5173],
-	"features": {
-		"ghcr.io/devcontainers/features/python:1": {
-			"installTools": true,
-			"version": "latest"
-		},
-		"ghcr.io/devcontainers-extra/features/surge-cli:1": {
-			"version": "latest"
-		},
-		"ghcr.io/devcontainers-extra/features/tsx:1": {
-			"version": "latest"
-		}
-	}
+    "features": {}
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
