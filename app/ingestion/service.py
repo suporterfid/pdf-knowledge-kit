@@ -1,4 +1,13 @@
-"""High level ingestion service and helpers."""
+"""High‑level ingestion service and helpers for the knowledge base.
+
+Responsibilities
+----------------
+- Ensure database schema/migrations are applied (idempotent).
+- Read and normalize content from Markdown/PDF (with optional OCR) and URLs.
+- Chunk text with overlap, embed using fastembed, and persist to Postgres
+  (documents/chunks with a pgvector column for embeddings).
+- Track ingestion as background jobs with on-disk logs for progress/debugging.
+"""
 from __future__ import annotations
 
 import logging
@@ -205,6 +214,11 @@ def connect_and_init(db_url: str):
 
 
 def upsert_document(conn: psycopg.Connection, path: str | Path, bytes_len: int, page_count: int) -> uuid.UUID:
+    """Create a new document row if absent and return its UUID.
+
+    The combination of path (or URL) is treated as a unique identifier for
+    documents; chunks refer to documents via ``doc_id``.
+    """
     with conn.cursor() as cur:
         cur.execute("SELECT id FROM documents WHERE path = %s", (str(path),))
         row = cur.fetchone()
@@ -221,6 +235,7 @@ def upsert_document(conn: psycopg.Connection, path: str | Path, bytes_len: int, 
 
 
 def insert_chunks(conn: psycopg.Connection, doc_id: uuid.UUID, chunks: Iterable[str], embeddings: Iterable[list[float]]) -> None:
+    """Insert chunk rows with embeddings; ignore duplicates by (doc_id, index)."""
     with conn.cursor() as cur:
         for i, (ch, emb) in enumerate(zip(chunks, embeddings)):
             cur.execute(
@@ -237,6 +252,7 @@ _runner = IngestionRunner()
 
 
 def _setup_job_logging(job_id: uuid.UUID) -> tuple[logging.Logger, Path]:
+    """Create a dedicated logger + file for a job and return them."""
     log_dir = Path("logs/jobs")
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{job_id}.log"
@@ -248,7 +264,7 @@ def _setup_job_logging(job_id: uuid.UUID) -> tuple[logging.Logger, Path]:
 
 
 def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = None) -> uuid.UUID:
-    """Ingest a local Markdown or PDF file."""
+    """Ingest a local Markdown or PDF file as a background job."""
 
     db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
     with connect_and_init(db_url) as conn:
@@ -355,6 +371,7 @@ def ingest_url(url: str) -> uuid.UUID:
 
 
 def ingest_urls(urls: List[str]) -> uuid.UUID:
+    """Ingest multiple public URLs as a background job."""
     if not urls:
         raise ValueError("no URLs provided")
 

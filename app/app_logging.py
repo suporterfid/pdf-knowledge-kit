@@ -1,3 +1,17 @@
+"""Application and access logging setup.
+
+This module centralizes logging configuration for the FastAPI app. It provides:
+
+- A simple JSON formatter (opt-in via LOG_JSON) or a human-readable formatter.
+- Timed rotation of log files for both application logs (app.log) and access
+  logs (access.log), honoring retention and timezone options.
+- An HTTP middleware that records structured access logs (method, path,
+  status, latency, client IP, headers, optional body) with basic PII scrubbing.
+
+Environment variables (see README for details): LOG_DIR, LOG_LEVEL, LOG_JSON,
+LOG_REQUEST_BODIES, LOG_RETENTION_DAYS, LOG_ROTATE_UTC.
+"""
+
 from __future__ import annotations
 
 import json
@@ -11,7 +25,7 @@ from fastapi import FastAPI, Request
 
 
 class JsonFormatter(logging.Formatter):
-    """Minimal JSON log formatter."""
+    """Minimal JSON log formatter used when LOG_JSON=true."""
 
     def format(self, record: logging.LogRecord) -> str:  # pragma: no cover - simple
         log_record = {
@@ -55,7 +69,12 @@ def _scrub(data: object) -> object:
 
 
 def _install_access_logging(app: FastAPI) -> None:
-    """Install request/response access logging middleware."""
+    """Install request/response access logging middleware.
+
+    The middleware logs one JSON line per request (excluding health/metrics),
+    including a generated X-Request-Id that is also echoed back in the
+    response headers for easy correlation.
+    """
 
     log_request_bodies = os.getenv("LOG_REQUEST_BODIES", "false").lower() == "true"
     skip_paths = {"/api/health", "/api/metrics"}

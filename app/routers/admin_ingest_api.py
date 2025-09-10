@@ -1,3 +1,9 @@
+"""Admin ingestion API endpoints.
+
+This router exposes endpoints for operators to start ingestion jobs, inspect
+their progress, (re)index sources and read job logs. Access is controlled via
+simple role-based API keys (see security/auth.py).
+"""
 from __future__ import annotations
 
 """Admin ingestion API using Pydantic models."""

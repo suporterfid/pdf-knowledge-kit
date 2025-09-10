@@ -1,4 +1,9 @@
-"""Database helpers for ingestion."""
+"""Database helpers for ingestion.
+
+This module wraps common SQL operations for sources, ingestion jobs,
+documents and chunks. It keeps ingestion code focused on I/O and
+embedding while centralizing persistence logic here.
+"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -122,6 +127,7 @@ def create_job(
     source_id: UUID,
     status: JobStatus = JobStatus.QUEUED,
 ) -> UUID:
+    """Create a new ingestion job for a given source and return its id."""
     job_id = uuid4()
     with conn.transaction():
         with conn.cursor() as cur:
@@ -169,6 +175,7 @@ def update_job_status(
 
 
 def get_job(conn: psycopg.Connection, job_id: UUID) -> Optional[Job]:
+    """Return a single job by id or ``None`` if not found."""
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -255,7 +262,7 @@ def update_source(
     active: bool | None = None,
     params: dict | None = None,
 ) -> None:
-    """Update fields for a source."""
+    """Update fields for a source (partial update)."""
 
     fields: list[sql.SQL] = []
     values: list = []
@@ -292,7 +299,7 @@ def update_source(
 
 
 def soft_delete_source(conn: psycopg.Connection, source_id: UUID) -> None:
-    """Soft delete a source by marking its ``deleted_at`` timestamp and disabling it."""
+    """Soft delete a source (mark deleted_at and set active=false)."""
 
     with conn.transaction():
         with conn.cursor() as cur:
