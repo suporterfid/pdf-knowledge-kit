@@ -8,3 +8,5 @@ frontend/dist/
 .env
 /docs
 /node_modules
+logs/
+tmp_readme.txt
