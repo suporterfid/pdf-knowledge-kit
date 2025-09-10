@@ -12,7 +12,7 @@ from contextlib import contextmanager
 import requests
 from bs4 import BeautifulSoup
 from fastembed import TextEmbedding
-import embedding  # registers custom CLS-pooled model
+import embedding  # attempts to register custom CLS-pooled model (no-op if unsupported)
 from pdf2image import convert_from_path
 from pypdf import PdfReader
 import pytesseract
@@ -32,10 +32,16 @@ SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema.sql"
 # ---------------------------------------------------------------------------
 
 def read_md_text(md_path: Path) -> str:
-    """Read a Markdown file as UTF-8 text."""
-    try:
-        with md_path.open("r", encoding="utf-8") as f:
-            return f.read()
+    """Read a Markdown file with reasonable encoding fallbacks."""
+    for enc in ("utf-8-sig", "utf-8", "utf-16", "utf-16le", "utf-16be", "latin-1"):
+        try:
+            with md_path.open("r", encoding=enc) as f:
+                return f.read()
+        except Exception:
+            continue
+    try:  # last resort: best-effort decode
+        with md_path.open("rb") as f:
+            return f.read().decode("utf-8", errors="ignore")
     except Exception as e:  # pragma: no cover - defensive
         print(f"[WARN] Falha ao ler {md_path}: {e}")
         return ""
@@ -293,7 +299,12 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                     )
                     return
 
-                embedder = TextEmbedding(model_name="paraphrase-multilingual-MiniLM-L12-v2-cls")
+                try:
+                    embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
+                except Exception:
+                    embedder = TextEmbedding(
+                        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+                    )
                 embeddings: list[list[float]] = []
                 for emb in embedder.embed(chunks):
                     if cancel_event.is_set():
@@ -366,7 +377,12 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
                     log_path=str(log_path),
                 )
 
-                embedder = TextEmbedding(model_name="paraphrase-multilingual-MiniLM-L12-v2-cls")
+                try:
+                    embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
+                except Exception:
+                    embedder = TextEmbedding(
+                        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+                    )
 
                 for url in urls:
                     if cancel_event.is_set():
