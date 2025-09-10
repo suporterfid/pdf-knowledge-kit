@@ -1,10 +1,13 @@
-version: "3.8"
-
 services:
   db:
     image: pgvector/pgvector:pg16
     env_file:
       - .env
+    environment:
+      # Initialize database and user on first run, matching values from .env
+      POSTGRES_USER: ${PGUSER:-pdfkb}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-pdfkb}
+      POSTGRES_DB: ${PGDATABASE:-pdfkb}
     ports:
       - "5432:5432"
     expose:
@@ -13,7 +16,8 @@ services:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h localhost || exit 1"]
+      # Use initialized vars and connect to loopback to avoid DNS issues
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5

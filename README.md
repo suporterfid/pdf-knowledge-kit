@@ -322,12 +322,37 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 curl http://localhost:8000/api/health
 ```
 
+## Debug com Dev Containers (VS Code)
+
+- Pré-requisitos: Docker Desktop; VS Code com extensão "Dev Containers"; acesso à internet para baixar imagens.
+- Abrir no container:
+  - Abra a pasta do projeto no VS Code.
+  - Paleta de Comandos → "Dev Containers: Reopen in Container" (ou "Rebuild and Reopen in Container").
+  - O VS Code usa `.devcontainer/devcontainer.json` + `docker-compose.yml` e sobe `db`, `app` e `frontend`.
+- Aguardar o banco ficar healthy:
+  - O serviço `db` fica "healthy" via `pg_isready`; a primeira execução pode demorar por download de imagens.
+  - Para um reset completo: `docker compose down -v` e depois `docker compose up -d`.
+- Iniciar o debug:
+  - Backend: pressione F5 e selecione "Attach to FastAPI (Docker)". O backend já inicia com `debugpy` em `0.0.0.0:5678` e `--wait-for-client`, então ele começa a rodar após o attach. Quebre em `app/` normalmente.
+  - Full‑stack: selecione "Fullstack: Backend + Frontend" para anexar ao backend e abrir o Vite dev server no navegador.
+- Portas úteis:
+  - API: `http://localhost:8000` (OpenAPI em `/docs`, health em `/api/health`)
+  - Frontend: `http://localhost:5173`
+  - Debug Python (debugpy): `5678`
+- Conexão ao Postgres nos containers:
+  - Use o host `db` (não `localhost`). A `.env` já define `PGHOST=db` e `DATABASE_URL=postgresql://pdfkb:pdfkb@db:5432/pdfkb`.
+- Dicas rápidas:
+  - Logs: `docker compose logs -f db app frontend`
+  - Shell no container: `docker compose exec app bash`
+  - Reset do banco (apaga volume): `docker compose down -v`
+
 ### Docker
 1. Copie `.env.example` para `.env` e ajuste.
 2. Construa e suba os serviços:
 ```bash
 docker compose up --build -d
 ```
+> Nota (Docker/Dev Containers): dentro dos containers use o host `db` (não `localhost`) para acessar o Postgres. A `.env` já define `PGHOST=db` e `DATABASE_URL=postgresql://pdfkb:pdfkb@db:5432/pdfkb`.
 3. Ingerir documentos dentro do container:
 ```bash
 docker compose run --rm app python ingest.py --docs /app/docs
