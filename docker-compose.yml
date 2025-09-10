@@ -42,7 +42,7 @@ services:
     env_file:
       - .env
     command: >
-      python -m debugpy --listen 0.0.0.0:5678 --wait-for-client
+      python -Xfrozen_modules=off -m debugpy --listen 0.0.0.0:5678
       -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
@@ -74,6 +74,8 @@ services:
       - "5173:5173"
     volumes:
       - ./frontend:/workspace/frontend
+      # Keep node_modules inside a Linux volume to avoid Windows ACL and locking issues
+      - frontend_node_modules:/workspace/frontend/node_modules
     restart: unless-stopped
     networks:
       appnet:
@@ -82,6 +84,7 @@ services:
 
 volumes:
   pgdata:
+  frontend_node_modules:
 
 networks:
   appnet:

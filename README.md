@@ -198,6 +198,29 @@ Esses dados podem ser coletados por Prometheus ou outras ferramentas de monitora
 
 ## Build do chat e frontend
 
+
+## Depuração com VS Code + Docker Desktop
+
+Use as configurações já incluídas em `.vscode/launch.json` para depurar o stack completo:
+
+- Abra o projeto no VS Code e certifique-se de que o Docker Desktop está em execução.
+- Pressione F5 e selecione "Fullstack: Backend + Frontend".
+  - O VS Code executa `docker compose up -d --build` (db, backend e frontend).
+  - O backend inicia com `debugpy` e aguarda o debugger na porta `5678`.
+  - O VS Code se anexa ao backend (mapeamento de código fonte `/app` ⇄ workspace).
+  - O Chrome é aberto em `http://localhost:5173` (Vite) para depuração do React.
+
+Também é possível iniciar individualmente:
+
+- "Backend: Attach FastAPI (Docker)" para apenas o backend.
+- "Frontend: Launch Chrome (Vite)" para apenas o frontend.
+
+Observações:
+
+- Hot reload habilitado: `uvicorn --reload` no backend e Vite no frontend.
+- Quebre pontos normalmente nos arquivos locais; o mapeamento com os containers já está configurado.
+- Após a sessão, você pode parar os serviços com a tarefa `compose: down` no VS Code (Terminal > Run Task).
+
 ```bash
 # Backend standalone
 uvicorn app.main:app --reload  # roda em http://localhost:8000

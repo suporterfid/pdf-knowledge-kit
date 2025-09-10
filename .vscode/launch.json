@@ -2,26 +2,35 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Attach to FastAPI (Docker)",
-      "type": "node",
+      "name": "Backend: Attach FastAPI (Docker)",
+      "type": "python",
       "request": "attach",
+      "connect": { "host": "localhost", "port": 5678 },
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "/app"
+        }
+      ],
+      "justMyCode": false,
       "preLaunchTask": "compose: up"
     },
     {
-      "name": "Frontend: Launch Chrome to Vite",
-      "type": "chrome",
+      "name": "Frontend: Launch Chrome (Vite)",
+      "type": "pwa-chrome",
       "request": "launch",
       "url": "http://localhost:5173",
       "webRoot": "${workspaceFolder}/frontend",
-      "preLaunchTask": "compose: up"
+      "runtimeArgs": ["--new-window"],
+      "sourceMaps": true
     }
   ],
   "compounds": [
     {
       "name": "Fullstack: Backend + Frontend",
       "configurations": [
-        "Attach to FastAPI (Docker)",
-        "Frontend: Launch Chrome to Vite"
+        "Backend: Attach FastAPI (Docker)",
+        "Frontend: Launch Chrome (Vite)"
       ]
     }
   ]
