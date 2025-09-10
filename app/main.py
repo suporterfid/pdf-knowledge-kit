@@ -1,3 +1,19 @@
+"""FastAPI application wiring for PDF Knowledge Kit.
+
+This module bootstraps the HTTP API used by the project:
+
+- Configures logging, CORS (optional for the admin UI), Prometheus metrics
+  and rate limiting.
+- Serves static uploads and exposes endpoints for health/config, file upload,
+  question answering (RAG), and chat streaming.
+- Integrates optional OpenAI responses when an API key is configured, falling
+  back to deterministic answers based on retrieved context otherwise.
+
+The code is structured to be readable for new contributors: each route has a
+short docstring and helper functions explain non-obvious details (e.g., LLM
+language handling, upload limits, SSE pipeline).
+"""
+
 from fastapi import (
     FastAPI,
     UploadFile,
@@ -51,6 +67,11 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
  
 
 def get_client_ip(request: Request) -> str:
+    """Extract a best-effort client IP for rate limiting.
+
+    Prefer ``X-Forwarded-For`` (first hop) if present, otherwise use the
+    socket peer address. This function is used by SlowAPI to key the limiter.
+    """
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()
@@ -88,6 +109,11 @@ client = OpenAI() if (OpenAI and os.getenv("OPENAI_API_KEY")) else None
 
 
 async def remove_file_after_ttl(path: str, ttl: int) -> None:
+    """Delete a temporary uploaded file after a time-to-live (seconds).
+
+    Runs in the background via ``BackgroundTasks`` to keep request latency
+    low for the upload endpoint.
+    """
     await asyncio.sleep(ttl)
     try:
         os.remove(path)
@@ -96,12 +122,21 @@ async def remove_file_after_ttl(path: str, ttl: int) -> None:
 
 
 class AskRequest(BaseModel):
+    """Payload for the question-answering endpoint."""
     q: str
     k: int = 5
 
 
 def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
-    """Generate an answer given a question and context using the LLM if available."""
+    """Return an answer for ``question`` based on ``context``.
+
+    If an OpenAI client is configured (``OPENAI_API_KEY`` set), the function
+    prompts the model with the supplied context; otherwise it falls back to a
+    simple deterministic response so the system remains usable in development
+    and CI without network access.
+
+    Returns a pair ``(answer, used_llm)`` indicating whether an LLM was used.
+    """
     lang = os.getenv("OPENAI_LANG")
     if not lang:
         try:
@@ -139,11 +174,13 @@ def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
 
 @app.get("/api/health")
 async def health():
+    """Liveness/readiness probe with a minimal JSON body."""
     return {"status": "ok"}
 
 
 @app.get("/api/config")
 async def config():
+    """Expose selected frontend configuration from environment variables."""
     return {
         "BRAND_NAME": os.getenv("BRAND_NAME", "PDF Knowledge Kit"),
         "POWERED_BY_LABEL": os.getenv(
@@ -159,6 +196,12 @@ async def config():
 async def upload(
     background_tasks: BackgroundTasks, file: UploadFile = File(...)
 ):
+    """Accept a single PDF upload for temporary use in chat sessions.
+
+    The file is validated by MIME type and size, stored under ``UPLOAD_DIR``
+    and scheduled for deletion after ``UPLOAD_TTL`` seconds. The response
+    includes a relative URL that the frontend can attach to a chat turn.
+    """
     if file.content_type not in UPLOAD_ALLOWED_MIME_TYPES:
         raise HTTPException(status_code=400, detail="Invalid file type")
     contents = await file.read()
@@ -175,6 +218,11 @@ async def upload(
 
 @app.post("/api/ask")
 async def ask(req: AskRequest):
+    """Answer a question using RAG.
+
+    Retrieves the most relevant chunks (vector search + reranker) to build a
+    context string, then generates the final answer with or without LLM.
+    """
     context, sources = build_context(req.q, req.k)
     answer, used_llm = _answer_with_context(req.q, context)
     return {"answer": answer, "sources": sources, "used_llm": used_llm}
@@ -190,6 +238,11 @@ async def chat(
     sessionId: str = Form(...),
     files: List[UploadFile] = File([]),
 ):
+    """Streaming chat endpoint (SSE) with optional file attachments.
+
+    Rate-limited by client IP. Validates message and session lengths, checks
+    each uploaded file type, and then streams tokens using SSE utilities.
+    """
     if len(q) > CHAT_MAX_MESSAGE_LENGTH:
         raise HTTPException(status_code=400, detail="Message too long")
     if len(sessionId) > SESSION_ID_MAX_LENGTH:
@@ -203,6 +256,7 @@ async def chat(
 @app.get("/api/chat")
 @limiter.limit("5/minute")
 async def chat_get(request: Request, q: str, k: int = 5, sessionId: str = ""):
+    """GET variant for chat streaming (no file uploads)."""
     if len(q) > CHAT_MAX_MESSAGE_LENGTH:
         raise HTTPException(status_code=400, detail="Message too long")
     if sessionId and len(sessionId) > SESSION_ID_MAX_LENGTH:
@@ -217,6 +271,13 @@ async def chat_stream(
     files: List[UploadFile],
     attachments_meta: List[Dict],
 ):
+    """Shared implementation for chat endpoints.
+
+    - Extracts text from in-memory uploads (PDFs) and from previously uploaded
+      temporary files referenced by ``attachments_meta``.
+    - Builds an attachment context and concatenates with user query for
+      retrieval/answering, streaming tokens via SSE.
+    """
     attachment_texts: List[str] = []
     attachment_sources: List[Dict] = []
     for f in files:
