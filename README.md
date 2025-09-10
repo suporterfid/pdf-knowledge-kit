@@ -526,3 +526,41 @@ If you need to serve the UI from another origin, set `ADMIN_UI_ORIGINS` before s
 
 Boa construÃ§Ã£o! ðŸš€
 (gerado em 2025-08-18)
+
+## Reranqueamento (BM25)
+
+- A busca agora ocorre em duas etapas: (1) recuperação vetorial via pgvector, (2) reranqueamento léxico com BM25 nos candidatos.
+- Benefícios: melhora a precisão do top-K final em consultas curtas/termos específicos, com custo baixo.
+- Implementação:
+  - O backend busca um conjunto maior (pré-K = `max(k*4, 20)`) e aplica BM25 para ordenar e cortar para `k`.
+  - Embeddings: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (mean pooling).
+  - Código: `app/rag.py` (`_bm25_rerank` e `build_context`).
+- Ajustes: valores são fixos no código; podemos expor variáveis se quiser calibrar `k`/pré-K.
+
+## Feedback de Qualidade
+
+- Endpoint para registrar feedback de respostas e apoiar melhoria contínua.
+- Rota: `POST /api/feedback`
+- Corpo (JSON):
+  - `helpful` (bool): se a resposta ajudou.
+  - `question` (string, opcional): pergunta do usuário.
+  - `answer` (string, opcional): resposta fornecida.
+  - `sessionId` (string, opcional): sessão/conversa.
+  - `sources` (json, opcional): fontes citadas (ex.: lista com `path`, `chunk_index`, etc.).
+- Exemplo (curl):
+
+```bash
+curl -s -X POST http://localhost:8000/api/feedback \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "helpful": true,
+    "question": "Como configuro potencia de leitura?",
+    "answer": "...",
+    "sessionId": "S123",
+    "sources": [{"path": "/app/docs/manual.pdf", "chunk_index": 0}]
+  }'
+```
+
+- Persistência: registros na tabela `feedbacks` (migração `migrations/005_add_feedback_table.sql`).
+- Inicialização: o backend garante schema/migrações antes de inserir (idempotente).
+- Métricas: simples agregar por `helpful=false`, período (`created_at`) e origem (`session_id`/`sources`). Se quiser, expomos endpoints de agregação.
