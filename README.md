@@ -1,22 +1,22 @@
-# PDF/Markdown → Vector DB (pgvector) Starter Kit
+# PDF/Markdown â†’ Vector DB (pgvector) Starter Kit
 
-Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** e **Markdown** em uma pasta local e habilite **busca semântica** para um agente de IA.
+Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** e **Markdown** em uma pasta local e habilite **busca semÃ¢ntica** para um agente de IA.
 
-Inclui uma interface web inspirada no ChatGPT com histórico de conversas, anexos, destaque de código e alternância de tema claro/escuro.
+Inclui uma interface web inspirada no ChatGPT com histÃ³rico de conversas, anexos, destaque de cÃ³digo e alternÃ¢ncia de tema claro/escuro.
 
-## Visão geral
+## VisÃ£o geral
 1. **Extrai** textos dos PDFs e arquivos Markdown.
-2. **Divide** em *chunks* (trechos) com sobreposição.
-3. **Gera embeddings** (multilíngue, PT/EN) com `fastembed`.
+2. **Divide** em *chunks* (trechos) com sobreposiÃ§Ã£o.
+3. **Gera embeddings** (multilÃ­ngue, PT/EN) com `fastembed`.
 4. **Armazena** em **PostgreSQL + pgvector**.
-5. **Consulta** por similaridade (kNN) com `query.py` — pronto para integrar no seu agente.
+5. **Consulta** por similaridade (kNN) com `query.py` â€” pronto para integrar no seu agente.
 
-> Dimensão dos vetores: **384** (modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`).
+> DimensÃ£o dos vetores: **384** (modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`).
 
 ### Suporte a idiomas
 O modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` atende mais de 50 idiomas
-e foi verificado com frases em **inglês**, **português brasileiro** e **espanhol**.
-Línguas fora desse conjunto podem gerar embeddings de qualidade reduzida e
+e foi verificado com frases em **inglÃªs**, **portuguÃªs brasileiro** e **espanhol**.
+LÃ­nguas fora desse conjunto podem gerar embeddings de qualidade reduzida e
 resultados menos precisos.
 
 ---
@@ -25,11 +25,11 @@ resultados menos precisos.
 - **Docker** + **Docker Compose** (para o Postgres com pgvector).
 - **Python 3.10+** com `pip`.
 - *(Opcional p/ OCR)* `tesseract-ocr`, pacotes de idioma (`tesseract-ocr-eng`, `tesseract-ocr-por`, `tesseract-ocr-spa`) e `poppler-utils`.
-O `Dockerfile` já instala esses pacotes.
+O `Dockerfile` jÃ¡ instala esses pacotes.
 
 ## Ambiente de desenvolvimento
-1. Clone este repositório.
-2. Crie um ambiente virtual e instale as dependências:
+1. Clone este repositÃ³rio.
+2. Crie um ambiente virtual e instale as dependÃªncias:
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
@@ -46,61 +46,61 @@ pytest
 ```bash
 uvicorn app.main:app --reload
 ```
-6. (Opcional) Para a interface web estilo ChatGPT (histórico, anexos, temas), entre em `frontend/` e rode `npm install && npm run dev`.
+6. (Opcional) Para a interface web estilo ChatGPT (histÃ³rico, anexos, temas), entre em `frontend/` e rode `npm install && npm run dev`.
 
-## Passo a passo (rápido)
+## Passo a passo (rÃ¡pido)
 ```bash
 # 1) Suba o Postgres com pgvector
 docker compose up -d db
 
-# 2) Instale as dependências Python
+# 2) Instale as dependÃªncias Python
 python -m venv .venv && source .venv/bin/activate  # no Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 3) Configure variáveis de ambiente (opcional)
+# 3) Configure variÃ¡veis de ambiente (opcional)
 cp .env.example .env  # edite se quiser
 
 # 4) Coloque seus PDFs e arquivos Markdown (.md) na pasta ./docs/
-#    Arquivos .md nessa pasta são ingeridos junto com os PDFs
+#    Arquivos .md nessa pasta sÃ£o ingeridos junto com os PDFs
 #    (ou aponte outra pasta com --docs / DOCS_DIR)
 
-# 5) Ingestão
+# 5) IngestÃ£o
 python ingest.py --docs ./docs  # use --ocr (ex.: --ocr-lang eng+por) ou ENABLE_OCR=1 para PDFs escaneados
 
 # 6) Consulta (exemplo)
-python query.py --q "Como configuro potência de leitura?" --k 5
+python query.py --q "Como configuro potÃªncia de leitura?" --k 5
 ```
 
-## Ingestão de PDFs/Markdown com Docker
+## IngestÃ£o de PDFs/Markdown com Docker
 
-1. **Tornar os arquivos acessíveis ao container**
+1. **Tornar os arquivos acessÃ­veis ao container**
 
    - Coloque os arquivos na pasta `docs/` do projeto.
-   - Essa pasta já está mapeada dentro do container; tudo nela ficará disponível em `/app/docs` quando o serviço subir.
+   - Essa pasta jÃ¡ estÃ¡ mapeada dentro do container; tudo nela ficarÃ¡ disponÃ­vel em `/app/docs` quando o serviÃ§o subir.
 
 2. **Ingerir os arquivos no banco**
 
-   No diretório raiz do projeto, execute:
+   No diretÃ³rio raiz do projeto, execute:
 
    ```bash
    docker compose run --rm app python ingest.py --docs /app/docs  # adicione --ocr/--ocr-lang ou ENABLE_OCR=1 se preciso
    ```
 
-   Esse script lê os PDFs e arquivos Markdown e grava os vetores no **PostgreSQL/pgvector**.
+   Esse script lÃª os PDFs e arquivos Markdown e grava os vetores no **PostgreSQL/pgvector**.
 
-3. **Subir a aplicação**
+3. **Subir a aplicaÃ§Ã£o**
 
-   Inicie os serviços normalmente:
+   Inicie os serviÃ§os normalmente:
 
    ```bash
    docker compose up --build
    ```
 
-   Isso lança o backend e o frontend, que já podem consultar os documentos ingeridos.
+   Isso lanÃ§a o backend e o frontend, que jÃ¡ podem consultar os documentos ingeridos.
 
 4. **(Opcional) Usar outra pasta local**
 
-   Se preferir outra pasta, **antes** de subir os containers, altere o mapeamento de volume em `docker-compose.yml` para apontar para o diretório desejado.
+   Se preferir outra pasta, **antes** de subir os containers, altere o mapeamento de volume em `docker-compose.yml` para apontar para o diretÃ³rio desejado.
 
    Exemplo para Windows:
 
@@ -109,13 +109,13 @@ python query.py --q "Como configuro potência de leitura?" --k 5
      - C:/Users/alexa/Dropbox/Delivery/Impinj/R700/FAQ:/app/docs:ro
    ```
 
-   Depois, rode a ingestão:
+   Depois, rode a ingestÃ£o:
 
    ```bash
    docker compose run --rm app python ingest.py --docs /app/docs  # adicione --ocr/--ocr-lang ou ENABLE_OCR=1 se preciso
    ```
 
-   Ou mapeie o volume diretamente na execução:
+   Ou mapeie o volume diretamente na execuÃ§Ã£o:
 
    ```bash
    docker compose run --rm \
@@ -124,9 +124,9 @@ python query.py --q "Como configuro potência de leitura?" --k 5
    ```
 
 
-## Ingestão de páginas web públicas
+## IngestÃ£o de pÃ¡ginas web pÃºblicas
 
-Além de arquivos locais, o `ingest.py` também pode buscar e indexar páginas da web acessíveis publicamente.
+AlÃ©m de arquivos locais, o `ingest.py` tambÃ©m pode buscar e indexar pÃ¡ginas da web acessÃ­veis publicamente.
 
 ```bash
 # Uma ou mais URLs diretamente na linha de comando
@@ -134,33 +134,33 @@ python ingest.py --url https://exemplo.com/sobre --url https://example.com/en/do
 
 # Lista de URLs (uma por linha)
 python ingest.py --urls-file urls.txt
-# ou defina URLS_FILE=urls.txt e o script usará esse caminho por padrão
+# ou defina URLS_FILE=urls.txt e o script usarÃ¡ esse caminho por padrÃ£o
 ```
 
-O conteúdo dessas páginas deve estar em **inglês**, **português** ou **espanhol** (EN/PT/ES).
+O conteÃºdo dessas pÃ¡ginas deve estar em **inglÃªs**, **portuguÃªs** ou **espanhol** (EN/PT/ES).
 
 ## Logging
 
-A aplicação grava dois arquivos de log em `LOG_DIR` (padrão `logs/` localmente):
+A aplicaÃ§Ã£o grava dois arquivos de log em `LOG_DIR` (padrÃ£o `logs/` localmente):
 
-- `app.log` – eventos da aplicação.
-- `access.log` – requisições/respostas HTTP.
+- `app.log` â€“ eventos da aplicaÃ§Ã£o.
+- `access.log` â€“ requisiÃ§Ãµes/respostas HTTP.
 
-Os arquivos são **rotacionados diariamente à meia-noite** e mantidos por `LOG_RETENTION_DAYS` dias (padrão: 7).
+Os arquivos sÃ£o **rotacionados diariamente Ã  meia-noite** e mantidos por `LOG_RETENTION_DAYS` dias (padrÃ£o: 7).
 Defina `LOG_ROTATE_UTC=true` para rotacionar em UTC.
 
-Principais variáveis de ambiente:
+Principais variÃ¡veis de ambiente:
 
-| Variável              | Padrão    | Descrição |
+| VariÃ¡vel              | PadrÃ£o    | DescriÃ§Ã£o |
 |----------------------|-----------|-----------|
-| `LOG_DIR`            | `logs/`   | Diretório dos arquivos de log (no Docker: `/var/log/app`). |
-| `LOG_LEVEL`          | `INFO`    | Nível mínimo de log. |
-| `LOG_JSON`           | `false`   | Saída em formato JSON. |
-| `LOG_REQUEST_BODIES` | `false`   | Inclui corpo da requisição no access log. |
-| `LOG_RETENTION_DAYS` | `7`       | Quantidade de dias mantidos após rotação. |
+| `LOG_DIR`            | `logs/`   | DiretÃ³rio dos arquivos de log (no Docker: `/var/log/app`). |
+| `LOG_LEVEL`          | `INFO`    | NÃ­vel mÃ­nimo de log. |
+| `LOG_JSON`           | `false`   | SaÃ­da em formato JSON. |
+| `LOG_REQUEST_BODIES` | `false`   | Inclui corpo da requisiÃ§Ã£o no access log. |
+| `LOG_RETENTION_DAYS` | `7`       | Quantidade de dias mantidos apÃ³s rotaÃ§Ã£o. |
 | `LOG_ROTATE_UTC`     | `false`   | Rotaciona usando UTC. |
 
-Para verificar rapidamente os valores efetivos dessas configurações, execute:
+Para verificar rapidamente os valores efetivos dessas configuraÃ§Ãµes, execute:
 
 ```bash
 python -m tools.print_log_config
@@ -185,10 +185,10 @@ app:
     - ./logs:/var/log/app
 ```
 
-## Métricas
+## MÃ©tricas
 
-A aplicação expõe métricas no formato **Prometheus** em `/api/metrics`.
-Ao rodar localmente ou via Docker, você pode verificar as métricas com:
+A aplicaÃ§Ã£o expÃµe mÃ©tricas no formato **Prometheus** em `/api/metrics`.
+Ao rodar localmente ou via Docker, vocÃª pode verificar as mÃ©tricas com:
 
 ```bash
 curl http://localhost:8000/api/metrics
@@ -199,27 +199,27 @@ Esses dados podem ser coletados por Prometheus ou outras ferramentas de monitora
 ## Build do chat e frontend
 
 
-## Depuração com VS Code + Docker Desktop
+## DepuraÃ§Ã£o com VS Code + Docker Desktop
 
-Use as configurações já incluídas em `.vscode/launch.json` para depurar o stack completo:
+Use as configuraÃ§Ãµes jÃ¡ incluÃ­das em `.vscode/launch.json` para depurar o stack completo:
 
-- Abra o projeto no VS Code e certifique-se de que o Docker Desktop está em execução.
+- Abra o projeto no VS Code e certifique-se de que o Docker Desktop estÃ¡ em execuÃ§Ã£o.
 - Pressione F5 e selecione "Fullstack: Backend + Frontend".
   - O VS Code executa `docker compose up -d --build` (db, backend e frontend).
-  - O backend inicia com `debugpy` ouvindo em `5678` (não bloqueia a API). Você pode anexar a qualquer momento.
-  - O VS Code se anexa ao backend (mapeamento de código fonte `/app` ⇄ workspace).
-  - O Chrome é aberto em `http://localhost:5173` (Vite) para depuração do React.
+  - O backend inicia com `debugpy` ouvindo em `5678` (nÃ£o bloqueia a API). VocÃª pode anexar a qualquer momento.
+  - O VS Code se anexa ao backend (mapeamento de cÃ³digo fonte `/app` â‡„ workspace).
+  - O Chrome Ã© aberto em `http://localhost:5173` (Vite) para depuraÃ§Ã£o do React.
 
-Também é possível iniciar individualmente:
+TambÃ©m Ã© possÃ­vel iniciar individualmente:
 
 - "Backend: Attach FastAPI (Docker)" para apenas o backend.
 - "Frontend: Launch Chrome (Vite)" para apenas o frontend.
 
-Observações:
+ObservaÃ§Ãµes:
 
 - Hot reload habilitado: `uvicorn --reload` no backend e Vite no frontend.
-- Quebre pontos normalmente nos arquivos locais; o mapeamento com os containers já está configurado.
-- Após a sessão, você pode parar os serviços com a tarefa `compose: down` no VS Code (Terminal > Run Task).
+- Quebre pontos normalmente nos arquivos locais; o mapeamento com os containers jÃ¡ estÃ¡ configurado.
+- ApÃ³s a sessÃ£o, vocÃª pode parar os serviÃ§os com a tarefa `compose: down` no VS Code (Terminal > Run Task).
 
 ```bash
 # Backend standalone
@@ -234,40 +234,40 @@ npm install
 npm run build  # gera os arquivos em app/static
 ```
 
-## Variáveis de ambiente
-Copie `.env.example` para `.env` e ajuste conforme necessário. Exemplo mínimo:
+## VariÃ¡veis de ambiente
+Copie `.env.example` para `.env` e ajuste conforme necessÃ¡rio. Exemplo mÃ­nimo:
 
 ```env
 DOCS_DIR=./docs           # PDFs e Markdown (.md) lidos desta pasta
-ENABLE_OCR=0              # OCR só para PDFs escaneados (não afeta .md)
-OCR_LANG=eng+por+spa      # ex.: PDFs em inglês, português e espanhol
+ENABLE_OCR=0              # OCR sÃ³ para PDFs escaneados (nÃ£o afeta .md)
+OCR_LANG=eng+por+spa      # ex.: PDFs em inglÃªs, portuguÃªs e espanhol
 ```
 
-Principais chaves disponíveis:
+Principais chaves disponÃ­veis:
 
-- **PGHOST**, **PGPORT**, **PGDATABASE**, **PGUSER**, **PGPASSWORD** – conexão com o Postgres/pgvector (padrões: `db`, `5432`, `pdfkb`, `pdfkb`, `pdfkb`).
-- **DOCS_DIR** – pasta padrão para os arquivos. Qualquer `.md` nessa pasta é ingerido junto com os PDFs.
-  - **OPENAI_API_KEY**, **OPENAI_MODEL**, **OPENAI_LANG**, **SYSTEM_PROMPT**, **USE_LLM** – integrações com LLM (opcional). `SYSTEM_PROMPT` permite configurar o tom/persona do agente.
-- **TOP_K**, **MAX_CONTEXT_CHARS** – ajustes de recuperação de trechos.
-- **UPLOAD_DIR**, **UPLOAD_TTL**, **UPLOAD_MAX_SIZE**, **UPLOAD_MAX_FILES**, **UPLOAD_ALLOWED_MIME_TYPES** – controle de uploads temporários.
-- **CORS_ALLOW_ORIGINS**, **BRAND_NAME**, **POWERED_BY_LABEL**, **LOGO_URL** – personalização da UI. `POWERED_BY_LABEL` define o texto do rodapé (padrão: "Powered by PDF Knowledge Kit").
-- **ENABLE_OCR** – habilita OCR em execuções não interativas (override de `--ocr`).
-- **OCR_LANG** – idiomas do Tesseract para OCR. Combine múltiplos códigos com `+` (ex.: `eng+por`).
+- **PGHOST**, **PGPORT**, **PGDATABASE**, **PGUSER**, **PGPASSWORD** â€“ conexÃ£o com o Postgres/pgvector (padrÃµes: `db`, `5432`, `pdfkb`, `pdfkb`, `pdfkb`).
+- **DOCS_DIR** â€“ pasta padrÃ£o para os arquivos. Qualquer `.md` nessa pasta Ã© ingerido junto com os PDFs.
+  - **OPENAI_API_KEY**, **OPENAI_MODEL**, **OPENAI_LANG**, **SYSTEM_PROMPT**, **USE_LLM** â€“ integraÃ§Ãµes com LLM (opcional). `SYSTEM_PROMPT` permite configurar o tom/persona do agente.
+- **TOP_K**, **MAX_CONTEXT_CHARS** â€“ ajustes de recuperaÃ§Ã£o de trechos.
+- **UPLOAD_DIR**, **UPLOAD_TTL**, **UPLOAD_MAX_SIZE**, **UPLOAD_MAX_FILES**, **UPLOAD_ALLOWED_MIME_TYPES** â€“ controle de uploads temporÃ¡rios.
+- **CORS_ALLOW_ORIGINS**, **BRAND_NAME**, **POWERED_BY_LABEL**, **LOGO_URL** â€“ personalizaÃ§Ã£o da UI. `POWERED_BY_LABEL` define o texto do rodapÃ© (padrÃ£o: "Powered by PDF Knowledge Kit").
+- **ENABLE_OCR** â€“ habilita OCR em execuÃ§Ãµes nÃ£o interativas (override de `--ocr`).
+- **OCR_LANG** â€“ idiomas do Tesseract para OCR. Combine mÃºltiplos cÃ³digos com `+` (ex.: `eng+por`).
 
 ## OCR (Tesseract)
 
-Por padrão, o OCR usa `OCR_LANG=eng+por+spa` (Inglês, Português e Espanhol). Altere os idiomas com `--ocr-lang` ou definindo a variável `OCR_LANG` antes da execução.
+Por padrÃ£o, o OCR usa `OCR_LANG=eng+por+spa` (InglÃªs, PortuguÃªs e Espanhol). Altere os idiomas com `--ocr-lang` ou definindo a variÃ¡vel `OCR_LANG` antes da execuÃ§Ã£o.
 
-### Instalação
+### InstalaÃ§Ã£o
 
-Para PDFs escaneados, instale o mecanismo de OCR, os pacotes de idioma e os conversores de PDF (o `Dockerfile` já inclui `tesseract-ocr-eng`, `tesseract-ocr-por` e `tesseract-ocr-spa`):
+Para PDFs escaneados, instale o mecanismo de OCR, os pacotes de idioma e os conversores de PDF (o `Dockerfile` jÃ¡ inclui `tesseract-ocr-eng`, `tesseract-ocr-por` e `tesseract-ocr-spa`):
 
 ```bash
 # Ubuntu/Debian
 sudo apt install tesseract-ocr tesseract-ocr-eng tesseract-ocr-por tesseract-ocr-spa poppler-utils
 # macOS (Homebrew)
 brew install tesseract poppler
-# Ver idiomas disponíveis
+# Ver idiomas disponÃ­veis
 tesseract --list-langs
 ```
 
@@ -279,7 +279,7 @@ tesseract --list-langs
   python ingest.py --ocr --ocr-lang eng --docs ./docs
   ```
 
-- **Variáveis de ambiente (override):**
+- **VariÃ¡veis de ambiente (override):**
 
   ```bash
   ENABLE_OCR=1 OCR_LANG=spa+por python ingest.py --docs ./docs
@@ -287,51 +287,51 @@ tesseract --list-langs
 
 ### Desempenho e suporte a idiomas
 
-- OCR aumenta o tempo de ingestão (cada página é renderizada e processada).
-- `OCR_LANG` e `--ocr-lang` aceitam múltiplos códigos (ex.: `eng+por+spa`). Cada idioma extra deixa o processamento mais lento, mas pode melhorar a precisão em documentos multilíngues; instale os pacotes correspondentes.
+- OCR aumenta o tempo de ingestÃ£o (cada pÃ¡gina Ã© renderizada e processada).
+- `OCR_LANG` e `--ocr-lang` aceitam mÃºltiplos cÃ³digos (ex.: `eng+por+spa`). Cada idioma extra deixa o processamento mais lento, mas pode melhorar a precisÃ£o em documentos multilÃ­ngues; instale os pacotes correspondentes.
 
-### Solução de problemas
+### SoluÃ§Ã£o de problemas
 
-- `tesseract: command not found` ou `pdftoppm: command not found` → instale `tesseract-ocr` e `poppler-utils` e verifique o `PATH`.
-- `Error opening data file` ou `Failed loading language` → o pacote de idioma não está instalado. Rode `tesseract --list-langs` e instale, por exemplo, `sudo apt install tesseract-ocr-spa`.
+- `tesseract: command not found` ou `pdftoppm: command not found` â†’ instale `tesseract-ocr` e `poppler-utils` e verifique o `PATH`.
+- `Error opening data file` ou `Failed loading language` â†’ o pacote de idioma nÃ£o estÃ¡ instalado. Rode `tesseract --list-langs` e instale, por exemplo, `sudo apt install tesseract-ocr-spa`.
 
 ## Uso do chat
 1. Garanta que o backend esteja rodando (com `uvicorn` ou Docker).
 2. Acesse `http://localhost:8000` no navegador.
 3. Envie mensagens pelo campo de texto. Opcionalmente, anexe um PDF pequeno para enriquecer o contexto.
-4. Durante a geração da resposta, use **Cancelar** para interromper o streaming e **Enviar** novamente para retomar.
+4. Durante a geraÃ§Ã£o da resposta, use **Cancelar** para interromper o streaming e **Enviar** novamente para retomar.
 
 Recursos da interface:
-- Barra lateral com histórico de conversas (criar, renomear, excluir).
-- Avatares e bolhas com realce de código via Prism.
-- Botões para copiar, regenerar e avaliar cada resposta.
-- Pré-visualização de PDFs anexados.
-- Alternância entre tema claro e escuro.
+- Barra lateral com histÃ³rico de conversas (criar, renomear, excluir).
+- Avatares e bolhas com realce de cÃ³digo via Prism.
+- BotÃµes para copiar, regenerar e avaliar cada resposta.
+- PrÃ©-visualizaÃ§Ã£o de PDFs anexados.
+- AlternÃ¢ncia entre tema claro e escuro.
 
 ## Estrutura
 ```
 pdf_knowledge_kit/
-├─ docker-compose.yml      # Postgres + pgvector
-├─ requirements.txt        # Dependências
-├─ schema.sql              # Criação de tabelas/índices
-├─ migrations/             # Migrações incrementais do banco de dados
-├─ ingest.py               # Varre PDFs/Markdown, extrai, fatia e insere
-├─ query.py                # Busca semântica
-├─ .env.example            # Configs de conexão
-└─ docs/                   # Coloque seus PDFs e Markdown aqui
+â”œâ”€ docker-compose.yml      # Postgres + pgvector
+â”œâ”€ requirements.txt        # DependÃªncias
+â”œâ”€ schema.sql              # CriaÃ§Ã£o de tabelas/Ã­ndices
+â”œâ”€ migrations/             # MigraÃ§Ãµes incrementais do banco de dados
+â”œâ”€ ingest.py               # Varre PDFs/Markdown, extrai, fatia e insere
+â”œâ”€ query.py                # Busca semÃ¢ntica
+â”œâ”€ .env.example            # Configs de conexÃ£o
+â””â”€ docs/                   # Coloque seus PDFs e Markdown aqui
 ```
 
-## Deploy em produção
+## Deploy em produÃ§Ã£o
 
 ### Bare metal
-1. Instale **PostgreSQL** com a extensão **pgvector** e crie o banco:
+1. Instale **PostgreSQL** com a extensÃ£o **pgvector** e crie o banco:
 ```bash
 psql -c 'CREATE EXTENSION IF NOT EXISTS vector;' "$PGDATABASE"
 psql -f schema.sql "$PGDATABASE"
 psql -f migrations/002_add_admin_ingestion.sql "$PGDATABASE"
 psql -f migrations/003_extend_ingestion_tables.sql "$PGDATABASE"  # novas colunas de metadados
 ```
-2. Configure as variáveis de ambiente (veja `.env.example`).
+2. Configure as variÃ¡veis de ambiente (veja `.env.example`).
 3. Ingestione os documentos:
 ```bash
 python ingest.py --docs ./docs
@@ -347,35 +347,35 @@ curl http://localhost:8000/api/health
 
 ## Debug com Dev Containers (VS Code)
 
-- Pré-requisitos: Docker Desktop; VS Code com extensão "Dev Containers"; acesso à internet para baixar imagens.
+- PrÃ©-requisitos: Docker Desktop; VS Code com extensÃ£o "Dev Containers"; acesso Ã  internet para baixar imagens.
 - Abrir no container:
   - Abra a pasta do projeto no VS Code.
-  - Paleta de Comandos → "Dev Containers: Reopen in Container" (ou "Rebuild and Reopen in Container").
+  - Paleta de Comandos â†’ "Dev Containers: Reopen in Container" (ou "Rebuild and Reopen in Container").
   - O VS Code usa `.devcontainer/devcontainer.json` + `docker-compose.yml` e sobe `db`, `app` e `frontend`.
 - Aguardar o banco ficar healthy:
-  - O serviço `db` fica "healthy" via `pg_isready`; a primeira execução pode demorar por download de imagens.
+  - O serviÃ§o `db` fica "healthy" via `pg_isready`; a primeira execuÃ§Ã£o pode demorar por download de imagens.
   - Para um reset completo: `docker compose down -v` e depois `docker compose up -d`.
 - Iniciar o debug:
-  - Backend: pressione F5 e selecione "Attach to FastAPI (Docker)". O backend já inicia com `debugpy` em `0.0.0.0:5678` e `--wait-for-client`, então ele começa a rodar após o attach. Quebre em `app/` normalmente.
-  - Full‑stack: selecione "Fullstack: Backend + Frontend" para anexar ao backend e abrir o Vite dev server no navegador.
-- Portas úteis:
+  - Backend: pressione F5 e selecione "Attach to FastAPI (Docker)". O backend jÃ¡ inicia com `debugpy` em `0.0.0.0:5678` e `--wait-for-client`, entÃ£o ele comeÃ§a a rodar apÃ³s o attach. Quebre em `app/` normalmente.
+  - Fullâ€‘stack: selecione "Fullstack: Backend + Frontend" para anexar ao backend e abrir o Vite dev server no navegador.
+- Portas Ãºteis:
   - API: `http://localhost:8000` (OpenAPI em `/docs`, health em `/api/health`)
   - Frontend: `http://localhost:5173`
   - Debug Python (debugpy): `5678`
-- Conexão ao Postgres nos containers:
-  - Use o host `db` (não `localhost`). A `.env` já define `PGHOST=db` e `DATABASE_URL=postgresql://pdfkb:pdfkb@db:5432/pdfkb`.
-- Dicas rápidas:
+- ConexÃ£o ao Postgres nos containers:
+  - Use o host `db` (nÃ£o `localhost`). A `.env` jÃ¡ define `PGHOST=db` e `DATABASE_URL=postgresql://pdfkb:pdfkb@db:5432/pdfkb`.
+- Dicas rÃ¡pidas:
   - Logs: `docker compose logs -f db app frontend`
   - Shell no container: `docker compose exec app bash`
   - Reset do banco (apaga volume): `docker compose down -v`
 
 ### Docker
 1. Copie `.env.example` para `.env` e ajuste.
-2. Construa e suba os serviços:
+2. Construa e suba os serviÃ§os:
 ```bash
 docker compose up --build -d
 ```
-> Nota (Docker/Dev Containers): dentro dos containers use o host `db` (não `localhost`) para acessar o Postgres. A `.env` já define `PGHOST=db` e `DATABASE_URL=postgresql://pdfkb:pdfkb@db:5432/pdfkb`.
+> Nota (Docker/Dev Containers): dentro dos containers use o host `db` (nÃ£o `localhost`) para acessar o Postgres. A `.env` jÃ¡ define `PGHOST=db` e `DATABASE_URL=postgresql://pdfkb:pdfkb@db:5432/pdfkb`.
 3. Ingerir documentos dentro do container:
 ```bash
 docker compose run --rm app python ingest.py --docs /app/docs
@@ -385,31 +385,31 @@ docker compose run --rm app python ingest.py --docs /app/docs
 curl http://localhost:8000/api/health
 ```
 
-## Integração no seu agente de IA (resumo)
-- Use `query.py` como referência: gere embedding da pergunta e rode SQL:
+## IntegraÃ§Ã£o no seu agente de IA (resumo)
+- Use `query.py` como referÃªncia: gere embedding da pergunta e rode SQL:
   `SELECT ... ORDER BY embedding <-> :vec LIMIT :k`.
   - Traga os trechos + metadados e alimente o *prompt* do agente (*RAG*).
-  - Para respostas fiéis, **mostre as fontes** (caminho do arquivo e página, quando houver).
+  - Para respostas fiÃ©is, **mostre as fontes** (caminho do arquivo e pÃ¡gina, quando houver).
 
 ## Respostas humanizadas com OpenAI
 
 O kit pode complementar os trechos retornados com uma resposta em linguagem natural gerada pela API da OpenAI.
 
-1. Configure as variáveis de ambiente:
+1. Configure as variÃ¡veis de ambiente:
 
 ```bash
 export OPENAI_API_KEY="sua-chave"
-export OPENAI_MODEL="gpt-4o-mini"  # ou outro modelo compatível
-export OPENAI_LANG="pt"            # opcional: força o idioma da resposta
+export OPENAI_MODEL="gpt-4o-mini"  # ou outro modelo compatÃ­vel
+export OPENAI_LANG="pt"            # opcional: forÃ§a o idioma da resposta
 ```
 
-Se `OPENAI_LANG` não for definido, o idioma da pergunta é detectado automaticamente e a resposta é devolvida no mesmo idioma.
+Se `OPENAI_LANG` nÃ£o for definido, o idioma da pergunta Ã© detectado automaticamente e a resposta Ã© devolvida no mesmo idioma.
 
 ### Exemplo (CLI)
 
 ```bash
-python query.py --q "¿Cuál es la capital de Francia?" --k 3
-# Resposta: La capital de Francia es París.
+python query.py --q "Â¿CuÃ¡l es la capital de Francia?" --k 3
+# Resposta: La capital de Francia es ParÃ­s.
 ```
 
 ### Exemplo (API)
@@ -417,13 +417,13 @@ python query.py --q "¿Cuál es la capital de Francia?" --k 3
 ```bash
 curl -s -X POST http://localhost:8000/api/ask \
   -H 'Content-Type: application/json' \
-  -d '{"q":"Qual é a capital da Alemanha?"}'
+  -d '{"q":"Qual Ã© a capital da Alemanha?"}'
 ```
 
 Resposta:
 
 ```json
-{"answer": "A capital da Alemanha é Berlim.", "from_llm": true}
+{"answer": "A capital da Alemanha Ã© Berlim.", "from_llm": true}
 ```
 
 ## Admin Ingestion
@@ -434,9 +434,9 @@ The `/api/admin/ingest/*` endpoints let operators trigger ingestion jobs remotel
 
 Requests must send an API key in the `X-API-Key` header. Keys map to roles in a strict hierarchy:
 
-- **viewer** – read-only access to jobs and sources.
-- **operator** – all viewer permissions plus start and cancel jobs.
-- **admin** – reserved for advanced operations.
+- **viewer** â€“ read-only access to jobs and sources.
+- **operator** â€“ all viewer permissions plus start and cancel jobs.
+- **admin** â€“ reserved for advanced operations.
 
 Configure the keys with single-value environment variables:
 
@@ -448,7 +448,7 @@ VIEW_API_KEY=view      # read-only
 
 ### Job lifecycle, logs, and monitoring
 
-Jobs move from `pending` → `running` → `completed`/`failed`/`canceled`. Logs are stored per job and exposed via `GET /api/admin/ingest/jobs/<JOB_ID>/logs`. The endpoint returns a slice of text and the next byte offset so clients can poll to tail progress.
+Jobs move from `pending` â†’ `running` â†’ `completed`/`failed`/`canceled`. Logs are stored per job and exposed via `GET /api/admin/ingest/jobs/<JOB_ID>/logs`. The endpoint returns a slice of text and the next byte offset so clients can poll to tail progress.
 
 ```bash
 # List jobs
@@ -514,38 +514,38 @@ If you need to serve the UI from another origin, set `ADMIN_UI_ORIGINS` before s
 
 ## Dicas francas
 - PDFs escaneados (sem texto) exigem **OCR** (ex.: Tesseract). Habilite com `--ocr` (opcionalmente `--ocr-lang`) ou `ENABLE_OCR=1`/`OCR_LANG`.
-- Para lotes grandes (milhares de páginas), rode ingestão em *batches* e crie o índice **depois**.
-- Se já usa Postgres no seu stack, pgvector é simples e barato. Se quiser um serviço dedicado, olhe **Qdrant** ou **Weaviate**.
- 
-## Critérios de acessibilidade e desempenho
-- Texto alternativo e rótulos ARIA para componentes interativos.
-- Navegação total por teclado e foco visível.
-- Contraste mínimo de 4.5:1 nas cores da interface.
-- Respostas transmitidas via **SSE** para reduzir latência.
-- Limpeza automática de uploads e limites de tamanho para preservar recursos.
+- A busca agora ocorre em duas etapas: (1) recuperação vetorial via pgvector, (2) reranqueamento léxico com BM25 nos candidatos.
+- Benefícios: melhora a precisão do top-K final em consultas curtas/termos específicos, com custo baixo.
+- Implementação:
+  - O backend busca um conjunto maior (pré-K = `max(k*4, 20)`) e aplica BM25 para ordenar e cortar para `k`.
+  - Código: `app/rag.py` (`_bm25_rerank` e `build_context`).
+- Ajustes: valores são fixos no código; podemos expor variáveis se quiser calibrar `k`/`pré-K`.
+- Endpoint para registrar feedback de respostas e apoiar melhoria contínua.
+  - `question` (string, opcional): pergunta do usuário.
+  - `sessionId` (string, opcional): sessão/conversa.
 
-Boa construção! 🚀
-(gerado em 2025-08-18)
+    "question": "Como configuro potência de leitura?",
+- Persistência: registros na tabela `feedbacks` (migração `migrations/005_add_feedback_table.sql`).
+- Inicialização: o backend garante schema/migrações antes de inserir (idempotente).
+- Métricas: simples agregar por `helpful=false`, período (`created_at`) e origem (`session_id`/`sources`). Se quiser, expomos endpoints de agregação.
 
-## Reranqueamento (BM25)
-
-- A busca agora ocorre em duas etapas: (1) recupera��o vetorial via pgvector, (2) reranqueamento l�xico com BM25 nos candidatos.
-- Benef�cios: melhora a precis�o do top-K final em consultas curtas/termos espec�ficos, com custo baixo.
-- Implementa��o:
-  - O backend busca um conjunto maior (pr�-K = `max(k*4, 20)`) e aplica BM25 para ordenar e cortar para `k`.
+- A busca agora ocorre em duas etapas: (1) recuperação vetorial via pgvector, (2) reranqueamento léxico com BM25 nos candidatos.
+- Benefícios: melhora a precisão do top-K final em consultas curtas/termos específicos, com custo baixo.
+- Implementação:
+  - O backend busca um conjunto maior (pré-K = `max(k*4, 20)`) e aplica BM25 para ordenar e cortar para `k`.
   - Embeddings: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (mean pooling).
-  - C�digo: `app/rag.py` (`_bm25_rerank` e `build_context`).
-- Ajustes: valores s�o fixos no c�digo; podemos expor vari�veis se quiser calibrar `k`/pr�-K.
+  - Código: `app/rag.py` (`_bm25_rerank` e `build_context`).
+- Ajustes: valores são fixos no código; podemos expor variáveis se quiser calibrar `k`/pré-K.
 
 ## Feedback de Qualidade
 
-- Endpoint para registrar feedback de respostas e apoiar melhoria cont�nua.
+- Endpoint para registrar feedback de respostas e apoiar melhoria contínua.
 - Rota: `POST /api/feedback`
 - Corpo (JSON):
   - `helpful` (bool): se a resposta ajudou.
-  - `question` (string, opcional): pergunta do usu�rio.
+  - `question` (string, opcional): pergunta do usuário.
   - `answer` (string, opcional): resposta fornecida.
-  - `sessionId` (string, opcional): sess�o/conversa.
+  - `sessionId` (string, opcional): sessão/conversa.
   - `sources` (json, opcional): fontes citadas (ex.: lista com `path`, `chunk_index`, etc.).
 - Exemplo (curl):
 
@@ -561,6 +561,6 @@ curl -s -X POST http://localhost:8000/api/feedback \
   }'
 ```
 
-- Persist�ncia: registros na tabela `feedbacks` (migra��o `migrations/005_add_feedback_table.sql`).
-- Inicializa��o: o backend garante schema/migra��es antes de inserir (idempotente).
-- M�tricas: simples agregar por `helpful=false`, per�odo (`created_at`) e origem (`session_id`/`sources`). Se quiser, expomos endpoints de agrega��o.
+- Persistência: registros na tabela `feedbacks` (migração `migrations/005_add_feedback_table.sql`).
+- Inicialização: o backend garante schema/migrações antes de inserir (idempotente).
+- Métricas: simples agregar por `helpful=false`, período (`created_at`) e origem (`session_id`/`sources`). Se quiser, expomos endpoints de agregação.
