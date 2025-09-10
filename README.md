@@ -206,7 +206,7 @@ Use as configurações já incluídas em `.vscode/launch.json` para depurar o st
 - Abra o projeto no VS Code e certifique-se de que o Docker Desktop está em execução.
 - Pressione F5 e selecione "Fullstack: Backend + Frontend".
   - O VS Code executa `docker compose up -d --build` (db, backend e frontend).
-  - O backend inicia com `debugpy` e aguarda o debugger na porta `5678`.
+  - O backend inicia com `debugpy` ouvindo em `5678` (não bloqueia a API). Você pode anexar a qualquer momento.
   - O VS Code se anexa ao backend (mapeamento de código fonte `/app` ⇄ workspace).
   - O Chrome é aberto em `http://localhost:5173` (Vite) para depuração do React.
 
