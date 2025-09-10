@@ -8,6 +8,7 @@ import psycopg
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from psycopg.types.json import Jsonb
+from ..ingestion.service import ensure_schema
 
 
 router = APIRouter(prefix="/api", tags=["feedback"])
@@ -41,6 +42,11 @@ def submit_feedback(payload: FeedbackIn) -> FeedbackCreated:
     """Persist a feedback entry for quality monitoring."""
     fb_id = uuid.uuid4()
     with _get_conn() as conn:
+        # Ensure schema/migrations are applied (creates feedbacks table if missing)
+        try:
+            ensure_schema(conn)
+        except Exception:
+            pass
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -58,4 +64,3 @@ def submit_feedback(payload: FeedbackIn) -> FeedbackCreated:
             )
         conn.commit()
     return FeedbackCreated(id=str(fb_id))
-
