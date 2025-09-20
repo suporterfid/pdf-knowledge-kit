@@ -1,3 +1,15 @@
+"""Simple API-key based role authentication for FastAPI routers.
+
+This module reads single API keys for roles from environment variables and
+exposes a dependency factory ``require_role(min_role)`` that validates
+``X-API-Key`` headers.
+
+Role hierarchy (least → most privileged): ``viewer`` < ``operator`` < ``admin``.
+
+Note: keys are loaded at import time; if you change the environment, restart
+the server for changes to take effect.
+"""
+
 from __future__ import annotations
 
 import os
@@ -36,11 +48,21 @@ _API_KEY_ROLES = _load_api_key_roles()
 
 
 def require_role(min_role: str) -> Callable:
-    """Return a dependency that validates the caller's role.
+    """Create a dependency to validate the caller's role.
 
     The caller must supply an ``X-API-Key`` header whose value maps to a role
-    with at least ``min_role`` privileges. Roles are hierarchical in the order:
-    ``viewer`` < ``operator`` < ``admin``.
+    with at least ``min_role`` privileges.
+
+    Parameters
+    ----------
+    min_role:
+        Minimum role name required (``viewer``, ``operator`` or ``admin``).
+
+    Returns
+    -------
+    Callable
+        FastAPI dependency that returns the resolved role string on success and
+        raises ``HTTPException`` on failure.
     """
 
     if min_role not in _ROLE_LEVELS:

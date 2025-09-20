@@ -1,10 +1,13 @@
-version: "3.8"
-
 services:
   db:
     image: pgvector/pgvector:pg16
     env_file:
       - .env
+    environment:
+      # Initialize database and user on first run, matching values from .env
+      POSTGRES_USER: ${PGUSER:-pdfkb}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-pdfkb}
+      POSTGRES_DB: ${PGDATABASE:-pdfkb}
     ports:
       - "5432:5432"
     expose:
@@ -13,7 +16,8 @@ services:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h localhost || exit 1"]
+      # Use initialized vars and connect to loopback to avoid DNS issues
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -37,11 +41,18 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      LOG_DIR: /var/log/app
+    command: >
+      python -Xfrozen_modules=off -m debugpy --listen 0.0.0.0:5678
+      -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
+      - "5678:5678"
     expose:
       - "8000"
     volumes:
+      - ./:/app
       - ./docs:/app/docs:ro
       - ./logs:/var/log/app
       # - ./tessdata:/usr/share/tesseract-ocr/tessdata:ro
@@ -52,8 +63,30 @@ services:
           - backend
           - api
 
+  frontend:
+    image: node:20
+    working_dir: /workspace/frontend
+    depends_on:
+      - app
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    command: bash -lc "npm ci && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/workspace/frontend
+      # Keep node_modules inside a Linux volume to avoid Windows ACL and locking issues
+      - frontend_node_modules:/workspace/frontend/node_modules
+    restart: unless-stopped
+    networks:
+      appnet:
+        aliases:
+          - web
+
 volumes:
   pgdata:
+  frontend_node_modules:
 
 networks:
   appnet:

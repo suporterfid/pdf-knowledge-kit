@@ -198,6 +198,29 @@ Esses dados podem ser coletados por Prometheus ou outras ferramentas de monitora
 
 ## Build do chat e frontend
 
+
+## Depuração com VS Code + Docker Desktop
+
+Use as configurações já incluídas em `.vscode/launch.json` para depurar o stack completo:
+
+- Abra o projeto no VS Code e certifique-se de que o Docker Desktop está em execução.
+- Pressione F5 e selecione "Fullstack: Backend + Frontend".
+  - O VS Code executa `docker compose up -d --build` (db, backend e frontend).
+  - O backend inicia com `debugpy` ouvindo em `5678` (não bloqueia a API). Você pode anexar a qualquer momento.
+  - O VS Code se anexa ao backend (mapeamento de código fonte `/app` ⇄ workspace).
+  - O Chrome é aberto em `http://localhost:5173` (Vite) para depuração do React.
+
+Também é possível iniciar individualmente:
+
+- "Backend: Attach FastAPI (Docker)" para apenas o backend.
+- "Frontend: Launch Chrome (Vite)" para apenas o frontend.
+
+Observações:
+
+- Hot reload habilitado: `uvicorn --reload` no backend e Vite no frontend.
+- Quebre pontos normalmente nos arquivos locais; o mapeamento com os containers já está configurado.
+- Após a sessão, você pode parar os serviços com a tarefa `compose: down` no VS Code (Terminal > Run Task).
+
 ```bash
 # Backend standalone
 uvicorn app.main:app --reload  # roda em http://localhost:8000
@@ -322,12 +345,37 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 curl http://localhost:8000/api/health
 ```
 
+## Debug com Dev Containers (VS Code)
+
+- Pré-requisitos: Docker Desktop; VS Code com extensão "Dev Containers"; acesso à internet para baixar imagens.
+- Abrir no container:
+  - Abra a pasta do projeto no VS Code.
+  - Paleta de Comandos → "Dev Containers: Reopen in Container" (ou "Rebuild and Reopen in Container").
+  - O VS Code usa `.devcontainer/devcontainer.json` + `docker-compose.yml` e sobe `db`, `app` e `frontend`.
+- Aguardar o banco ficar healthy:
+  - O serviço `db` fica "healthy" via `pg_isready`; a primeira execução pode demorar por download de imagens.
+  - Para um reset completo: `docker compose down -v` e depois `docker compose up -d`.
+- Iniciar o debug:
+  - Backend: pressione F5 e selecione "Attach to FastAPI (Docker)". O backend já inicia com `debugpy` em `0.0.0.0:5678` e `--wait-for-client`, então ele começa a rodar após o attach. Quebre em `app/` normalmente.
+  - Full‑stack: selecione "Fullstack: Backend + Frontend" para anexar ao backend e abrir o Vite dev server no navegador.
+- Portas úteis:
+  - API: `http://localhost:8000` (OpenAPI em `/docs`, health em `/api/health`)
+  - Frontend: `http://localhost:5173`
+  - Debug Python (debugpy): `5678`
+- Conexão ao Postgres nos containers:
+  - Use o host `db` (não `localhost`). A `.env` já define `PGHOST=db` e `DATABASE_URL=postgresql://pdfkb:pdfkb@db:5432/pdfkb`.
+- Dicas rápidas:
+  - Logs: `docker compose logs -f db app frontend`
+  - Shell no container: `docker compose exec app bash`
+  - Reset do banco (apaga volume): `docker compose down -v`
+
 ### Docker
 1. Copie `.env.example` para `.env` e ajuste.
 2. Construa e suba os serviços:
 ```bash
 docker compose up --build -d
 ```
+> Nota (Docker/Dev Containers): dentro dos containers use o host `db` (não `localhost`) para acessar o Postgres. A `.env` já define `PGHOST=db` e `DATABASE_URL=postgresql://pdfkb:pdfkb@db:5432/pdfkb`.
 3. Ingerir documentos dentro do container:
 ```bash
 docker compose run --rm app python ingest.py --docs /app/docs
@@ -466,15 +514,53 @@ If you need to serve the UI from another origin, set `ADMIN_UI_ORIGINS` before s
 
 ## Dicas francas
 - PDFs escaneados (sem texto) exigem **OCR** (ex.: Tesseract). Habilite com `--ocr` (opcionalmente `--ocr-lang`) ou `ENABLE_OCR=1`/`OCR_LANG`.
-- Para lotes grandes (milhares de páginas), rode ingestão em *batches* e crie o índice **depois**.
-- Se já usa Postgres no seu stack, pgvector é simples e barato. Se quiser um serviço dedicado, olhe **Qdrant** ou **Weaviate**.
- 
-## Critérios de acessibilidade e desempenho
-- Texto alternativo e rótulos ARIA para componentes interativos.
-- Navegação total por teclado e foco visível.
-- Contraste mínimo de 4.5:1 nas cores da interface.
-- Respostas transmitidas via **SSE** para reduzir latência.
-- Limpeza automática de uploads e limites de tamanho para preservar recursos.
+- A busca agora ocorre em duas etapas: (1) recuperação vetorial via pgvector, (2) reranqueamento léxico com BM25 nos candidatos.
+- Benefícios: melhora a precisão do top-K final em consultas curtas/termos específicos, com custo baixo.
+- Implementação:
+  - O backend busca um conjunto maior (pré-K = `max(k*4, 20)`) e aplica BM25 para ordenar e cortar para `k`.
+  - Código: `app/rag.py` (`_bm25_rerank` e `build_context`).
+- Ajustes: valores são fixos no código; podemos expor variáveis se quiser calibrar `k`/`pré-K`.
+- Endpoint para registrar feedback de respostas e apoiar melhoria contínua.
+  - `question` (string, opcional): pergunta do usuário.
+  - `sessionId` (string, opcional): sessão/conversa.
 
-Boa construção! 🚀
-(gerado em 2025-08-18)
+    "question": "Como configuro potência de leitura?",
+- Persistência: registros na tabela `feedbacks` (migração `migrations/005_add_feedback_table.sql`).
+- Inicialização: o backend garante schema/migrações antes de inserir (idempotente).
+- Métricas: simples agregar por `helpful=false`, período (`created_at`) e origem (`session_id`/`sources`). Se quiser, expomos endpoints de agregação.
+
+- A busca agora ocorre em duas etapas: (1) recuperação vetorial via pgvector, (2) reranqueamento léxico com BM25 nos candidatos.
+- Benefícios: melhora a precisão do top-K final em consultas curtas/termos específicos, com custo baixo.
+- Implementação:
+  - O backend busca um conjunto maior (pré-K = `max(k*4, 20)`) e aplica BM25 para ordenar e cortar para `k`.
+  - Embeddings: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (mean pooling).
+  - Código: `app/rag.py` (`_bm25_rerank` e `build_context`).
+- Ajustes: valores são fixos no código; podemos expor variáveis se quiser calibrar `k`/pré-K.
+
+## Feedback de Qualidade
+
+- Endpoint para registrar feedback de respostas e apoiar melhoria contínua.
+- Rota: `POST /api/feedback`
+- Corpo (JSON):
+  - `helpful` (bool): se a resposta ajudou.
+  - `question` (string, opcional): pergunta do usuário.
+  - `answer` (string, opcional): resposta fornecida.
+  - `sessionId` (string, opcional): sessão/conversa.
+  - `sources` (json, opcional): fontes citadas (ex.: lista com `path`, `chunk_index`, etc.).
+- Exemplo (curl):
+
+```bash
+curl -s -X POST http://localhost:8000/api/feedback \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "helpful": true,
+    "question": "Como configuro potencia de leitura?",
+    "answer": "...",
+    "sessionId": "S123",
+    "sources": [{"path": "/app/docs/manual.pdf", "chunk_index": 0}]
+  }'
+```
+
+- Persistência: registros na tabela `feedbacks` (migração `migrations/005_add_feedback_table.sql`).
+- Inicialização: o backend garante schema/migrações antes de inserir (idempotente).
+- Métricas: simples agregar por `helpful=false`, período (`created_at`) e origem (`session_id`/`sources`). Se quiser, expomos endpoints de agregação.

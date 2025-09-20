@@ -1,4 +1,13 @@
-"""High level ingestion service and helpers."""
+"""High‑level ingestion service and helpers for the knowledge base.
+
+Responsibilities
+----------------
+- Ensure database schema/migrations are applied (idempotent).
+- Read and normalize content from Markdown/PDF (with optional OCR) and URLs.
+- Chunk text with overlap, embed using fastembed, and persist to Postgres
+  (documents/chunks with a pgvector column for embeddings).
+- Track ingestion as background jobs with on-disk logs for progress/debugging.
+"""
 from __future__ import annotations
 
 import logging
@@ -12,7 +21,7 @@ from contextlib import contextmanager
 import requests
 from bs4 import BeautifulSoup
 from fastembed import TextEmbedding
-import embedding  # registers custom CLS-pooled model
+import embedding  # attempts to register custom CLS-pooled model (no-op if unsupported)
 from pdf2image import convert_from_path
 from pypdf import PdfReader
 import pytesseract
@@ -32,10 +41,16 @@ SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema.sql"
 # ---------------------------------------------------------------------------
 
 def read_md_text(md_path: Path) -> str:
-    """Read a Markdown file as UTF-8 text."""
-    try:
-        with md_path.open("r", encoding="utf-8") as f:
-            return f.read()
+    """Read a Markdown file with reasonable encoding fallbacks."""
+    for enc in ("utf-8-sig", "utf-8", "utf-16", "utf-16le", "utf-16be", "latin-1"):
+        try:
+            with md_path.open("r", encoding=enc) as f:
+                return f.read()
+        except Exception:
+            continue
+    try:  # last resort: best-effort decode
+        with md_path.open("rb") as f:
+            return f.read().decode("utf-8", errors="ignore")
     except Exception as e:  # pragma: no cover - defensive
         print(f"[WARN] Falha ao ler {md_path}: {e}")
         return ""
@@ -199,6 +214,11 @@ def connect_and_init(db_url: str):
 
 
 def upsert_document(conn: psycopg.Connection, path: str | Path, bytes_len: int, page_count: int) -> uuid.UUID:
+    """Create a new document row if absent and return its UUID.
+
+    The combination of path (or URL) is treated as a unique identifier for
+    documents; chunks refer to documents via ``doc_id``.
+    """
     with conn.cursor() as cur:
         cur.execute("SELECT id FROM documents WHERE path = %s", (str(path),))
         row = cur.fetchone()
@@ -215,6 +235,7 @@ def upsert_document(conn: psycopg.Connection, path: str | Path, bytes_len: int, 
 
 
 def insert_chunks(conn: psycopg.Connection, doc_id: uuid.UUID, chunks: Iterable[str], embeddings: Iterable[list[float]]) -> None:
+    """Insert chunk rows with embeddings; ignore duplicates by (doc_id, index)."""
     with conn.cursor() as cur:
         for i, (ch, emb) in enumerate(zip(chunks, embeddings)):
             cur.execute(
@@ -231,6 +252,7 @@ _runner = IngestionRunner()
 
 
 def _setup_job_logging(job_id: uuid.UUID) -> tuple[logging.Logger, Path]:
+    """Create a dedicated logger + file for a job and return them."""
     log_dir = Path("logs/jobs")
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{job_id}.log"
@@ -242,7 +264,7 @@ def _setup_job_logging(job_id: uuid.UUID) -> tuple[logging.Logger, Path]:
 
 
 def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = None) -> uuid.UUID:
-    """Ingest a local Markdown or PDF file."""
+    """Ingest a local Markdown or PDF file as a background job."""
 
     db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
     with connect_and_init(db_url) as conn:
@@ -293,7 +315,12 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                     )
                     return
 
-                embedder = TextEmbedding(model_name="paraphrase-multilingual-MiniLM-L12-v2-cls")
+                try:
+                    embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
+                except Exception:
+                    embedder = TextEmbedding(
+                        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+                    )
                 embeddings: list[list[float]] = []
                 for emb in embedder.embed(chunks):
                     if cancel_event.is_set():
@@ -344,6 +371,7 @@ def ingest_url(url: str) -> uuid.UUID:
 
 
 def ingest_urls(urls: List[str]) -> uuid.UUID:
+    """Ingest multiple public URLs as a background job."""
     if not urls:
         raise ValueError("no URLs provided")
 
@@ -366,7 +394,12 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
                     log_path=str(log_path),
                 )
 
-                embedder = TextEmbedding(model_name="paraphrase-multilingual-MiniLM-L12-v2-cls")
+                try:
+                    embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
+                except Exception:
+                    embedder = TextEmbedding(
+                        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+                    )
 
                 for url in urls:
                     if cancel_event.is_set():
