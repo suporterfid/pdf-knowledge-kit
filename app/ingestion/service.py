@@ -15,7 +15,7 @@ import os
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict, List, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Sequence, Tuple
 from contextlib import contextmanager
 
 import requests
@@ -28,7 +28,7 @@ import psycopg
 from pgvector.psycopg import register_vector
 
 from . import storage
-from .models import ChunkMetadata, Job, JobLogSlice, JobStatus, SourceType
+from .models import ChunkMetadata, Job, JobLogSlice, JobStatus, Source, SourceType
 from .runner import IngestionRunner
 from .parsers import (
     Chunk,
@@ -39,6 +39,10 @@ from .parsers import (
     read_txt_text,
     read_xlsx_text,
 )
+from .chunking import chunk_text
+from .connectors import ConnectorRecord
+from .connectors.rest import RestConnector
+from .connectors.sql import SqlConnector
 
 # Multilingual embedding model
 EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2-cls"
@@ -153,64 +157,6 @@ def read_url_text(url: str) -> str:
     except Exception as e:
         print(f"[WARN] Falha ao ler URL {url}: {e}")
         return ""
-
-
-def chunk_text(
-    text: str,
-    *,
-    source_path: str,
-    mime_type: str,
-    page_number: int | None = None,
-    sheet_name: str | None = None,
-    row_number: int | None = None,
-    extra_metadata: Dict[str, object] | None = None,
-    max_chars: int = 1200,
-    overlap: int = 200,
-) -> List[Chunk]:
-    """Split text into :class:`Chunk` objects with optional metadata."""
-
-    if not text:
-        return []
-    text = text.replace("\r", "")
-    parts = text.split("\n\n")
-    text_chunks: List[str] = []
-    buf = ""
-    for part in parts:
-        if len(buf) + len(part) + 2 <= max_chars:
-            buf += (("\n\n" if buf else "") + part)
-        else:
-            if buf:
-                text_chunks.append(buf.strip())
-            buf = part
-            while len(buf) > max_chars:
-                text_chunks.append(buf[:max_chars].strip())
-                buf = buf[max_chars - overlap:]
-    if buf:
-        text_chunks.append(buf.strip())
-
-    normalized: List[str] = []
-    for i, ch in enumerate(text_chunks):
-        if i == 0:
-            normalized.append(ch)
-        else:
-            prev = normalized[-1]
-            tail = prev[-overlap:] if len(prev) > overlap else prev
-            merged = (tail + "\n\n" + ch).strip() if tail else ch
-            normalized.append(merged if len(merged) <= max_chars + overlap else ch)
-
-    extra = dict(extra_metadata or {})
-    return [
-        Chunk(
-            content=chunk_text,
-            source_path=source_path,
-            mime_type=mime_type,
-            page_number=page_number,
-            sheet_name=sheet_name,
-            row_number=row_number,
-            extra=extra,
-        )
-        for chunk_text in normalized
-    ]
 
 
 def ensure_schema(
@@ -330,6 +276,67 @@ def insert_chunks(
         metadatas=metadata_payloads,
     )
 
+
+def _process_connector_stream(
+    conn: psycopg.Connection,
+    *,
+    source: Source,
+    connector: Any,
+    embedder: TextEmbedding,
+    cancel_event,
+    logger: logging.Logger,
+    job_id: uuid.UUID,
+) -> tuple[int, int, bool]:
+    """Stream records from a connector, embed them and persist to storage."""
+
+    documents = 0
+    chunks_total = 0
+    canceled = False
+
+    for record in connector.stream(cancel_event):
+        if cancel_event.is_set():
+            canceled = True
+            break
+        if not isinstance(record, ConnectorRecord):
+            continue
+        if not record.chunks:
+            continue
+
+        texts_for_embedding = [chunk.content for chunk in record.chunks if chunk.content]
+        embeddings: list[list[float]] = []
+        if texts_for_embedding:
+            for emb in embedder.embed(texts_for_embedding):
+                if cancel_event.is_set():
+                    canceled = True
+                    break
+                embeddings.append(emb)
+        if canceled:
+            break
+
+        version = storage.upsert_document(
+            conn,
+            path=str(record.document_path),
+            bytes_len=record.bytes_len,
+            page_count=record.page_count,
+            source_id=source.id,
+            connector_type=source.connector_type or source.type.value,
+            sync_state=record.document_sync_state,
+        )
+        insert_chunks(conn, version.document_id, record.chunks, embeddings)
+        documents += 1
+        chunks_total += len(record.chunks)
+        logger.info("document=%s chunks=%d", record.document_path, len(record.chunks))
+
+    if not canceled:
+        next_state = getattr(connector, "next_sync_state", None)
+        if next_state is not None:
+            storage.update_source_sync_state(conn, source.id, sync_state=next_state)
+        job_params = dict(getattr(connector, "job_metadata", {}))
+        job_params.update({"documents": documents, "chunks": chunks_total})
+        storage.update_job_params(conn, job_id, job_params)
+
+    return documents, chunks_total, canceled
+
 # ---------------------------------------------------------------------------
 # High level service API
 # ---------------------------------------------------------------------------
@@ -347,6 +354,120 @@ def _setup_job_logging(job_id: uuid.UUID) -> tuple[logging.Logger, Path]:
     fh = logging.FileHandler(log_path, encoding="utf-8")
     logger.addHandler(fh)
     return logger, log_path
+
+
+def ingest_source(source_id: uuid.UUID) -> uuid.UUID:
+    """Ingest a connector-backed source such as a database or REST API."""
+
+    db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+    with connect_and_init(db_url) as conn:
+        source = storage.get_source(conn, source_id)
+        if not source:
+            raise ValueError(f"source {source_id} not found")
+        if source.type not in {SourceType.DATABASE, SourceType.API}:
+            raise ValueError(
+                f"ingest_source only supports database/api types, got {source.type.value}"
+            )
+        job_id = storage.create_job(
+            conn,
+            source_id,
+            params={"source_type": source.type.value},
+        )
+
+    logger, log_path = _setup_job_logging(job_id)
+
+    def _work(cancel_event):
+        try:
+            with connect_and_init(db_url) as conn:
+                storage.update_job_status(
+                    conn,
+                    job_id,
+                    JobStatus.RUNNING,
+                    started_at=datetime.utcnow(),
+                    log_path=str(log_path),
+                )
+
+                source = storage.get_source(conn, source_id)
+                if not source:
+                    raise ValueError(f"source {source_id} not found")
+
+                try:
+                    embedder = TextEmbedding(model_name=EMBEDDING_MODEL)
+                except Exception:
+                    embedder = TextEmbedding(
+                        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+                    )
+
+                documents = 0
+                chunks_total = 0
+                canceled = False
+
+                if source.type == SourceType.DATABASE:
+                    connector = SqlConnector(source, logger=logger)
+                    documents, chunks_total, canceled = _process_connector_stream(
+                        conn,
+                        source=source,
+                        connector=connector,
+                        embedder=embedder,
+                        cancel_event=cancel_event,
+                        logger=logger,
+                        job_id=job_id,
+                    )
+                elif source.type == SourceType.API:
+                    connector = RestConnector(source, logger=logger)
+                    documents, chunks_total, canceled = _process_connector_stream(
+                        conn,
+                        source=source,
+                        connector=connector,
+                        embedder=embedder,
+                        cancel_event=cancel_event,
+                        logger=logger,
+                        job_id=job_id,
+                    )
+                else:
+                    raise ValueError(
+                        f"ingest_source only supports database/api types, got {source.type.value}"
+                    )
+
+                if cancel_event.is_set() or canceled:
+                    storage.update_job_status(
+                        conn,
+                        job_id,
+                        JobStatus.CANCELED,
+                        finished_at=datetime.utcnow(),
+                    )
+                    return
+
+                logger.info(
+                    "ingestion complete documents=%d chunks=%d", documents, chunks_total
+                )
+                storage.update_job_status(
+                    conn,
+                    job_id,
+                    JobStatus.SUCCEEDED,
+                    finished_at=datetime.utcnow(),
+                )
+        except Exception as e:  # pragma: no cover - defensive
+            logger.exception("ingestion failed: %s", e)
+            try:
+                with psycopg.connect(db_url) as conn:
+                    storage.update_job_status(
+                        conn,
+                        job_id,
+                        JobStatus.FAILED,
+                        error=str(e),
+                        finished_at=datetime.utcnow(),
+                    )
+            finally:
+                pass
+        finally:
+            for h in list(logger.handlers):
+                h.close()
+                logger.removeHandler(h)
+            _runner.clear(job_id)
+
+    _runner.submit(job_id, _work)
+    return job_id
 
 
 def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = None) -> uuid.UUID:
@@ -656,6 +777,8 @@ def reindex_source(_source_id: uuid.UUID) -> uuid.UUID | None:
         return ingest_local(Path(path))
     if source_type == SourceType.URL and url:
         return ingest_url(url)
+    if source_type in {SourceType.DATABASE, SourceType.API}:
+        return ingest_source(source_id)
     return None
 
 

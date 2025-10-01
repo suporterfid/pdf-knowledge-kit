@@ -11,12 +11,12 @@ from .service import (
     read_md_text,
     read_pdf_text,
     read_url_text,
-    chunk_text,
     upsert_document,
     insert_chunks,
     ingest_local,
     ingest_url,
     ingest_urls,
+    ingest_source,
     reindex_source,
     rerun_job,
     cancel_job,
@@ -26,6 +26,7 @@ from .service import (
     TextEmbedding,
     EMBEDDING_MODEL,
 )
+from .chunking import chunk_text
 
 __all__ = [
     "Chunk",
@@ -43,6 +44,7 @@ __all__ = [
     "ingest_local",
     "ingest_url",
     "ingest_urls",
+    "ingest_source",
     "reindex_source",
     "rerun_job",
     "cancel_job",
