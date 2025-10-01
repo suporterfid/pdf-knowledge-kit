@@ -15,11 +15,10 @@ import os
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, List
+from typing import Callable, Dict, List, Sequence, Tuple
 from contextlib import contextmanager
 
 import requests
-from bs4 import BeautifulSoup
 from fastembed import TextEmbedding
 import embedding  # attempts to register custom CLS-pooled model (no-op if unsupported)
 from pdf2image import convert_from_path
@@ -27,14 +26,54 @@ from pypdf import PdfReader
 import pytesseract
 import psycopg
 from pgvector.psycopg import register_vector
+from psycopg.types.json import Jsonb
 
 from . import storage
 from .models import Job, JobLogSlice, JobStatus, SourceType
 from .runner import IngestionRunner
+from .parsers import (
+    Chunk,
+    ParsedSegment,
+    extract_html_text,
+    read_csv_text,
+    read_docx_text,
+    read_txt_text,
+    read_xlsx_text,
+)
 
 # Multilingual embedding model
 EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2-cls"
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema.sql"
+
+_PDF_SEGMENT_CACHE: Dict[Tuple[str, bool, str | None], List[ParsedSegment]] = {}
+
+
+def _pdf_cache_key(pdf_path: Path, use_ocr: bool, ocr_lang: str | None) -> Tuple[str, bool, str | None]:
+    resolved = str(pdf_path.resolve())
+    if not use_ocr:
+        return (resolved, False, None)
+    effective = ocr_lang or os.getenv("OCR_LANG") or "eng+por+spa"
+    return (resolved, True, effective)
+
+
+def _resolve_pdf_segments(
+    pdf_path: Path, use_ocr: bool, ocr_lang: str | None
+) -> List[ParsedSegment]:
+    key = _pdf_cache_key(pdf_path, use_ocr, ocr_lang)
+    cached = _PDF_SEGMENT_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    # ``read_pdf_text`` populates the cache and remains the public API used by tests.
+    _ = read_pdf_text(pdf_path, use_ocr=use_ocr, ocr_lang=ocr_lang)
+    cached = _PDF_SEGMENT_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    # Fallback: in case ``read_pdf_text`` was patched or cleared the cache unexpectedly.
+    segments = _read_pdf_segments(pdf_path, use_ocr=use_ocr, ocr_lang=ocr_lang)
+    _PDF_SEGMENT_CACHE[key] = segments
+    return segments
 
 # ---------------------------------------------------------------------------
 # Helper functions moved from the legacy ``ingest.py`` script
@@ -56,19 +95,21 @@ def read_md_text(md_path: Path) -> str:
         return ""
 
 
-def read_pdf_text(pdf_path: Path, use_ocr: bool = False, ocr_lang: str | None = None) -> str:
+def _read_pdf_segments(
+    pdf_path: Path, use_ocr: bool = False, ocr_lang: str | None = None
+) -> List[ParsedSegment]:
+    segments: List[ParsedSegment] = []
     try:
         reader = PdfReader(str(pdf_path))
-        pages_text = []
-        for p in reader.pages:
+        for idx, page in enumerate(reader.pages, start=1):
             try:
-                t = p.extract_text() or ""
+                text = page.extract_text() or ""
             except Exception:
-                t = ""
-            pages_text.append(t)
+                text = ""
+            segments.append((text, {"mime_type": "application/pdf", "page_number": idx}))
 
-        if any(t.strip() for t in pages_text):
-            return "\n".join(pages_text)
+        if any(text.strip() for text, _ in segments):
+            return segments
 
         if use_ocr:
             try:
@@ -80,21 +121,28 @@ def read_pdf_text(pdf_path: Path, use_ocr: bool = False, ocr_lang: str | None = 
                     print(f"[WARN] Missing OCR language(s): {', '.join(sorted(missing_langs))}")
 
                 images = convert_from_path(str(pdf_path))
-                ocr_texts = []
-                for img in images:
+                ocr_segments: List[ParsedSegment] = []
+                for idx, img in enumerate(images, start=1):
                     try:
                         txt = pytesseract.image_to_string(img, lang=ocr_lang)
                     except Exception:
                         txt = ""
-                    ocr_texts.append(txt)
-                return "\n".join(ocr_texts)
+                    ocr_segments.append((txt, {"mime_type": "application/pdf", "page_number": idx}))
+                return ocr_segments
             except Exception as e:
                 print(f"[WARN] Falha no OCR para {pdf_path}: {e}")
-                return ""
-        return ""
+                return segments
+        return segments
     except Exception as e:
         print(f"[WARN] Falha ao ler {pdf_path}: {e}")
-        return ""
+        return []
+
+
+def read_pdf_text(pdf_path: Path, use_ocr: bool = False, ocr_lang: str | None = None) -> str:
+    key = _pdf_cache_key(pdf_path, use_ocr, ocr_lang)
+    segments = _read_pdf_segments(pdf_path, use_ocr=use_ocr, ocr_lang=ocr_lang)
+    _PDF_SEGMENT_CACHE[key] = segments
+    return "\n".join(text for text, _ in segments)
 
 
 def read_url_text(url: str) -> str:
@@ -102,45 +150,68 @@ def read_url_text(url: str) -> str:
     try:
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        for tag in soup(["script", "style"]):
-            tag.decompose()
-        return " ".join(soup.stripped_strings)
+        return extract_html_text(resp.text)
     except Exception as e:
         print(f"[WARN] Falha ao ler URL {url}: {e}")
         return ""
 
 
-def chunk_text(text: str, max_chars: int = 1200, overlap: int = 200) -> List[str]:
+def chunk_text(
+    text: str,
+    *,
+    source_path: str,
+    mime_type: str,
+    page_number: int | None = None,
+    sheet_name: str | None = None,
+    row_number: int | None = None,
+    extra_metadata: Dict[str, object] | None = None,
+    max_chars: int = 1200,
+    overlap: int = 200,
+) -> List[Chunk]:
+    """Split text into :class:`Chunk` objects with optional metadata."""
+
     if not text:
         return []
     text = text.replace("\r", "")
     parts = text.split("\n\n")
-    chunks: List[str] = []
+    text_chunks: List[str] = []
     buf = ""
     for part in parts:
         if len(buf) + len(part) + 2 <= max_chars:
             buf += (("\n\n" if buf else "") + part)
         else:
             if buf:
-                chunks.append(buf.strip())
+                text_chunks.append(buf.strip())
             buf = part
             while len(buf) > max_chars:
-                chunks.append(buf[:max_chars].strip())
+                text_chunks.append(buf[:max_chars].strip())
                 buf = buf[max_chars - overlap:]
     if buf:
-        chunks.append(buf.strip())
+        text_chunks.append(buf.strip())
 
-    out: List[str] = []
-    for i, ch in enumerate(chunks):
+    normalized: List[str] = []
+    for i, ch in enumerate(text_chunks):
         if i == 0:
-            out.append(ch)
+            normalized.append(ch)
         else:
-            prev = out[-1]
+            prev = normalized[-1]
             tail = prev[-overlap:] if len(prev) > overlap else prev
             merged = (tail + "\n\n" + ch).strip() if tail else ch
-            out.append(merged if len(merged) <= max_chars + overlap else ch)
-    return out
+            normalized.append(merged if len(merged) <= max_chars + overlap else ch)
+
+    extra = dict(extra_metadata or {})
+    return [
+        Chunk(
+            content=chunk_text,
+            source_path=source_path,
+            mime_type=mime_type,
+            page_number=page_number,
+            sheet_name=sheet_name,
+            row_number=row_number,
+            extra=extra,
+        )
+        for chunk_text in normalized
+    ]
 
 
 def ensure_schema(
@@ -234,13 +305,26 @@ def upsert_document(conn: psycopg.Connection, path: str | Path, bytes_len: int, 
         return doc_id
 
 
-def insert_chunks(conn: psycopg.Connection, doc_id: uuid.UUID, chunks: Iterable[str], embeddings: Iterable[list[float]]) -> None:
+def insert_chunks(
+    conn: psycopg.Connection,
+    doc_id: uuid.UUID,
+    chunks: Sequence[Chunk],
+    embeddings: Sequence[list[float]],
+) -> None:
     """Insert chunk rows with embeddings; ignore duplicates by (doc_id, index)."""
+
     with conn.cursor() as cur:
-        for i, (ch, emb) in enumerate(zip(chunks, embeddings)):
+        for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
             cur.execute(
-                "INSERT INTO chunks (doc_id, chunk_index, content, token_est, embedding) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (doc_id, chunk_index) DO NOTHING",
-                (doc_id, i, ch, int(len(ch) / 4), emb),
+                "INSERT INTO chunks (doc_id, chunk_index, content, token_est, metadata, embedding) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (doc_id, chunk_index) DO NOTHING",
+                (
+                    doc_id,
+                    i,
+                    chunk.content,
+                    int(len(chunk.content) / 4),
+                    Jsonb(chunk.to_metadata()),
+                    emb,
+                ),
             )
     conn.commit()
 
@@ -284,16 +368,39 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                     log_path=str(log_path),
                 )
 
+                registry: Dict[str, Callable[[], Sequence[ParsedSegment]]] = {
+                    ".pdf": lambda: _resolve_pdf_segments(path, use_ocr, ocr_lang),
+                    ".md": lambda: [
+                        (
+                            read_md_text(path),
+                            {"mime_type": "text/markdown", "page_number": 1},
+                        )
+                    ],
+                    ".txt": lambda: read_txt_text(path),
+                    ".docx": lambda: read_docx_text(path),
+                    ".csv": lambda: read_csv_text(path),
+                    ".xlsx": lambda: read_xlsx_text(path),
+                }
                 suffix = path.suffix.lower()
-                if suffix == ".pdf":
-                    text = read_pdf_text(path, use_ocr=use_ocr, ocr_lang=ocr_lang)
-                    page_count = len(PdfReader(str(path)).pages)
-                elif suffix == ".md":
-                    text = read_md_text(path)
-                    page_count = 1
-                else:
-                    text = ""
-                    page_count = 1
+                segments = registry.get(suffix, lambda: [])()
+
+                def _calc_page_count(items: Sequence[ParsedSegment]) -> int:
+                    page_numbers = [meta.get("page_number") for _, meta in items if meta.get("page_number")]
+                    if page_numbers:
+                        return int(max(page_numbers))
+                    sheet_names = {
+                        str(meta.get("sheet_name"))
+                        for _, meta in items
+                        if meta.get("sheet_name")
+                    }
+                    if sheet_names:
+                        return len(sheet_names)
+                    row_numbers = [meta.get("row_number") for _, meta in items if meta.get("row_number")]
+                    if row_numbers:
+                        return int(max(row_numbers))
+                    return 1
+
+                page_count = _calc_page_count(segments)
 
                 if cancel_event.is_set():
                     storage.update_job_status(
@@ -304,7 +411,27 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                     )
                     return
 
-                chunks = chunk_text(text)
+                chunks: List[Chunk] = []
+                for text_segment, metadata in segments:
+                    mime_type = str(metadata.get("mime_type") or "application/octet-stream")
+                    extra_metadata = {
+                        k: v
+                        for k, v in metadata.items()
+                        if k
+                        not in {"mime_type", "page_number", "sheet_name", "row_number"}
+                    }
+                    chunks.extend(
+                        chunk_text(
+                            text_segment,
+                            source_path=str(path),
+                            mime_type=mime_type,
+                            page_number=metadata.get("page_number"),
+                            sheet_name=metadata.get("sheet_name"),
+                            row_number=metadata.get("row_number"),
+                            extra_metadata=extra_metadata,
+                        )
+                    )
+
                 logger.info("chunks=%d", len(chunks))
                 if cancel_event.is_set():
                     storage.update_job_status(
@@ -321,17 +448,19 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                     embedder = TextEmbedding(
                         model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
                     )
+                texts_for_embedding = [chunk.content for chunk in chunks]
                 embeddings: list[list[float]] = []
-                for emb in embedder.embed(chunks):
-                    if cancel_event.is_set():
-                        storage.update_job_status(
-                            conn,
-                            job_id,
-                            JobStatus.CANCELED,
-                            finished_at=datetime.utcnow(),
-                        )
-                        return
-                    embeddings.append(emb)
+                if texts_for_embedding:
+                    for emb in embedder.embed(texts_for_embedding):
+                        if cancel_event.is_set():
+                            storage.update_job_status(
+                                conn,
+                                job_id,
+                                JobStatus.CANCELED,
+                                finished_at=datetime.utcnow(),
+                            )
+                            return
+                        embeddings.append(emb)
 
                 bytes_len = path.stat().st_size if path.exists() else 0
                 doc_id = upsert_document(conn, path, bytes_len, page_count)
@@ -422,7 +551,12 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
                         )
                         return
 
-                    chunks = chunk_text(text)
+                    chunks = chunk_text(
+                        text,
+                        source_path=url,
+                        mime_type="text/html",
+                        page_number=1,
+                    )
                     logger.info("url=%s chunks=%d", url, len(chunks))
                     if cancel_event.is_set():
                         storage.update_job_status(
@@ -433,17 +567,19 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
                         )
                         return
 
+                    texts_for_embedding = [chunk.content for chunk in chunks]
                     embeddings: list[list[float]] = []
-                    for emb in embedder.embed(chunks):
-                        if cancel_event.is_set():
-                            storage.update_job_status(
-                                conn,
-                                job_id,
-                                JobStatus.CANCELED,
-                                finished_at=datetime.utcnow(),
-                            )
-                            return
-                        embeddings.append(emb)
+                    if texts_for_embedding:
+                        for emb in embedder.embed(texts_for_embedding):
+                            if cancel_event.is_set():
+                                storage.update_job_status(
+                                    conn,
+                                    job_id,
+                                    JobStatus.CANCELED,
+                                    finished_at=datetime.utcnow(),
+                                )
+                                return
+                            embeddings.append(emb)
 
                     bytes_len = len(text.encode("utf-8"))
                     doc_id = upsert_document(conn, url, bytes_len, 1)
