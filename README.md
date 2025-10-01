@@ -490,6 +490,51 @@ curl -X POST http://localhost:8000/api/admin/ingest/urls \
   -H "X-API-Key: $OPERATOR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"urls": ["https://a.com/doc1", "https://b.com/doc2"]}'
+
+# Database connector job
+curl -X POST http://localhost:8000/api/admin/ingest/database \
+  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "label": "crm",
+        "params": {
+          "host": "db.internal",
+          "database": "crm",
+          "queries": [
+            {
+              "name": "customers",
+              "sql": "SELECT id, notes FROM customers",
+              "text_column": "notes",
+              "id_column": "id"
+            }
+          ]
+        },
+        "credentials": {"username": "reader", "password": "s3cret"}
+      }'
+
+# REST connector job
+curl -X POST http://localhost:8000/api/admin/ingest/api \
+  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "label": "status-page",
+        "params": {
+          "base_url": "https://status.example.com",
+          "endpoint": "/incidents",
+          "text_fields": ["summary", "updates.0.body"],
+          "id_field": "id"
+        }
+      }'
+
+# Transcription connector job (set connector_metadata.media_type="video" for video sources)
+curl -X POST http://localhost:8000/api/admin/ingest/transcription \
+  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "label": "all-hands",
+        "connector_metadata": {"media_type": "audio"},
+        "params": {"provider": "mock", "media_uri": "s3://bucket/all-hands.mp3"}
+      }'
 ```
 
 ### Source management
@@ -498,6 +543,25 @@ curl -X POST http://localhost:8000/api/admin/ingest/urls \
 # List known sources
 curl -H "X-API-Key: $VIEWER_API_KEY" \
   http://localhost:8000/api/admin/ingest/sources
+```
+
+Connector definitions follow the same RBAC rules: viewers can list metadata, while only operators can create, update, or delete entries. Secrets must be supplied inline—requests that only provide a `secret_id` without actual credentials are rejected with **400 Bad Request** to prevent storing unresolved references.
+
+```bash
+# List connector definitions (viewer)
+curl -H "X-API-Key: $VIEWER_API_KEY" \
+  http://localhost:8000/api/admin/ingest/connector_definitions
+
+# Create a reusable database connector (operator)
+curl -X POST http://localhost:8000/api/admin/ingest/connector_definitions \
+  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name": "prod-crm",
+        "type": "database",
+        "params": {"host": "db", "database": "crm", "queries": [{"sql": "SELECT id, notes FROM customers", "text_column": "notes", "id_column": "id"}]},
+        "credentials": {"username": "reader", "password": "s3cret"}
+      }'
 ```
 
 ### Admin UI

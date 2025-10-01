@@ -9,6 +9,21 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto; -- for gen_random_uuid
 CREATE EXTENSION IF NOT EXISTS vector;
 
+-- Connector definitions -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS connector_definitions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  description TEXT,
+  params JSONB,
+  credentials BYTEA,
+  metadata JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_connector_definitions_type ON connector_definitions (type);
+
 -- Ingestion sources ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS sources (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -19,6 +34,8 @@ CREATE TABLE IF NOT EXISTS sources (
   url TEXT,
   params JSONB,
   connector_type TEXT,
+  connector_definition_id UUID REFERENCES connector_definitions(id),
+  connector_metadata JSONB,
   credentials BYTEA,
   sync_state JSONB,
   version INTEGER NOT NULL DEFAULT 1,

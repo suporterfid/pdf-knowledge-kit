@@ -15,7 +15,18 @@ import psycopg
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
-from .models import ChunkMetadata, DocumentVersion, Job, JobStatus, Source, SourceType
+_MISSING = object()
+
+
+from .models import (
+    ChunkMetadata,
+    ConnectorDefinition,
+    DocumentVersion,
+    Job,
+    JobStatus,
+    Source,
+    SourceType,
+)
 
 
 def _encode_credentials(
@@ -111,6 +122,8 @@ def get_or_create_source(
     active: bool | None = None,
     params: dict | None = None,
     connector_type: str | None = None,
+    connector_definition_id: UUID | None = None,
+    connector_metadata: dict | None = None,
     credentials: Any | None = None,
     sync_state: dict | None = None,
     version: int | None = None,
@@ -135,6 +148,10 @@ def get_or_create_source(
                 update_kwargs["params"] = params
             if connector_type is not None:
                 update_kwargs["connector_type"] = connector_type
+            if connector_definition_id is not None:
+                update_kwargs["connector_definition_id"] = connector_definition_id
+            if connector_metadata is not None:
+                update_kwargs["connector_metadata"] = connector_metadata
             if credentials is not None:
                 update_kwargs["credentials"] = credentials
             if sync_state is not None:
@@ -189,12 +206,14 @@ def get_or_create_source(
                     active,
                     params,
                     connector_type,
+                    connector_definition_id,
+                    connector_metadata,
                     credentials,
                     sync_state,
                     version,
                     created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                 """,
                 (
                     source_id,
@@ -206,6 +225,8 @@ def get_or_create_source(
                     active if active is not None else True,
                     Jsonb(params) if params is not None else None,
                     connector_type,
+                    connector_definition_id,
+                    Jsonb(connector_metadata) if connector_metadata is not None else None,
                     _encode_credentials(credentials, encrypt=encrypt_credentials),
                     _jsonb_or_none(sync_state),
                     version or 1,
@@ -235,7 +256,7 @@ def list_sources(
         params.append(type.value if isinstance(type, SourceType) else type)
 
     query = (
-        "SELECT id, type, label, location, path, url, active, params, connector_type, credentials, sync_state, version, created_at "
+        "SELECT id, type, label, location, path, url, active, params, connector_type, connector_definition_id, connector_metadata, credentials, sync_state, version, created_at "
         "FROM sources WHERE " + " AND ".join(conditions) + " ORDER BY created_at DESC"
     )
     if limit is not None:
@@ -260,10 +281,12 @@ def list_sources(
             active=row[6],
             params=row[7],
             connector_type=row[8],
-            credentials=_decode_credentials(row[9], decrypt=decrypt_credentials),
-            sync_state=_normalize_sync_state(row[10]),
-            version=row[11] or 1,
-            created_at=row[12],
+            connector_definition_id=row[9],
+            connector_metadata=row[10],
+            credentials=_decode_credentials(row[11], decrypt=decrypt_credentials),
+            sync_state=_normalize_sync_state(row[12]),
+            version=row[13] or 1,
+            created_at=row[14],
         )
 
 
@@ -278,7 +301,7 @@ def get_source(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, type, label, location, path, url, active, params, connector_type, credentials, sync_state, version, created_at
+            SELECT id, type, label, location, path, url, active, params, connector_type, connector_definition_id, connector_metadata, credentials, sync_state, version, created_at
             FROM sources
             WHERE id = %s AND deleted_at IS NULL
             """,
@@ -299,11 +322,198 @@ def get_source(
         active=row[6],
         params=row[7],
         connector_type=row[8],
-        credentials=_decode_credentials(row[9], decrypt=decrypt_credentials),
-        sync_state=_normalize_sync_state(row[10]),
-        version=row[11] or 1,
-        created_at=row[12],
+        connector_definition_id=row[9],
+        connector_metadata=row[10],
+        credentials=_decode_credentials(row[11], decrypt=decrypt_credentials),
+        sync_state=_normalize_sync_state(row[12]),
+        version=row[13] or 1,
+        created_at=row[14],
     )
+
+
+def _build_connector_definition(
+    row: tuple,
+    *,
+    include_credentials: bool,
+    decrypt_credentials: Callable[[bytes], bytes] | None,
+) -> ConnectorDefinition:
+    raw_credentials = _decode_credentials(row[5], decrypt=decrypt_credentials)
+    has_credentials = raw_credentials is not None
+    credentials = raw_credentials if include_credentials else None
+    return ConnectorDefinition(
+        id=row[0],
+        name=row[1],
+        type=SourceType(row[2]),
+        description=row[3],
+        params=row[4],
+        credentials=credentials,
+        metadata=row[6],
+        created_at=row[7],
+        updated_at=row[8],
+        has_credentials=has_credentials,
+    )
+
+
+def create_connector_definition(
+    conn: psycopg.Connection,
+    *,
+    name: str,
+    type: SourceType,
+    description: str | None = None,
+    params: dict | None = None,
+    credentials: Any | None = None,
+    metadata: dict | None = None,
+    encrypt_credentials: Callable[[bytes], bytes] | None = None,
+) -> UUID:
+    definition_id = uuid4()
+    encoded_credentials = _encode_credentials(credentials, encrypt=encrypt_credentials)
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO connector_definitions (
+                    id,
+                    name,
+                    type,
+                    description,
+                    params,
+                    credentials,
+                    metadata,
+                    created_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, now())
+                """,
+                (
+                    definition_id,
+                    name,
+                    type.value if isinstance(type, SourceType) else type,
+                    description,
+                    Jsonb(params) if params is not None else None,
+                    encoded_credentials,
+                    Jsonb(metadata) if metadata is not None else None,
+                ),
+            )
+    return definition_id
+
+
+def update_connector_definition(
+    conn: psycopg.Connection,
+    definition_id: UUID,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+    params: dict | None = None,
+    credentials: Any | None | object = _MISSING,
+    metadata: dict | None = None,
+    encrypt_credentials: Callable[[bytes], bytes] | None = None,
+) -> None:
+    fields: list[sql.SQL] = []
+    values: list[Any] = []
+    if name is not None:
+        fields.append(sql.SQL("name = %s"))
+        values.append(name)
+    if description is not None:
+        fields.append(sql.SQL("description = %s"))
+        values.append(description)
+    if params is not None:
+        fields.append(sql.SQL("params = %s"))
+        values.append(Jsonb(params))
+    if credentials is not _MISSING:
+        fields.append(sql.SQL("credentials = %s"))
+        if credentials is None:
+            values.append(None)
+        else:
+            values.append(_encode_credentials(credentials, encrypt=encrypt_credentials))
+    if metadata is not None:
+        fields.append(sql.SQL("metadata = %s"))
+        values.append(Jsonb(metadata))
+
+    if not fields:
+        return
+
+    fields.append(sql.SQL("updated_at = now()"))
+    query = sql.SQL("UPDATE connector_definitions SET {fields} WHERE id = %s").format(
+        fields=sql.SQL(", ").join(fields)
+    )
+    values.append(definition_id)
+
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute(query, values)
+
+
+def get_connector_definition(
+    conn: psycopg.Connection,
+    definition_id: UUID,
+    *,
+    include_credentials: bool = False,
+    decrypt_credentials: Callable[[bytes], bytes] | None = None,
+) -> ConnectorDefinition | None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, name, type, description, params, credentials, metadata, created_at, updated_at
+            FROM connector_definitions
+            WHERE id = %s
+            """,
+            (definition_id,),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        return None
+
+    return _build_connector_definition(
+        row,
+        include_credentials=include_credentials,
+        decrypt_credentials=decrypt_credentials,
+    )
+
+
+def list_connector_definitions(
+    conn: psycopg.Connection,
+    *,
+    type: SourceType | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+    include_credentials: bool = False,
+    decrypt_credentials: Callable[[bytes], bytes] | None = None,
+) -> Iterable[ConnectorDefinition]:
+    query = "SELECT id, name, type, description, params, credentials, metadata, created_at, updated_at FROM connector_definitions"
+    params_list: list[Any] = []
+    conditions: list[str] = []
+    if type is not None:
+        conditions.append("type = %s")
+        params_list.append(type.value if isinstance(type, SourceType) else type)
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY created_at DESC"
+    if limit is not None:
+        query += " LIMIT %s"
+        params_list.append(limit)
+    if offset:
+        query += " OFFSET %s"
+        params_list.append(offset)
+
+    with conn.cursor() as cur:
+        cur.execute(query, params_list)
+        rows = cur.fetchall()
+
+    for row in rows:
+        yield _build_connector_definition(
+            row,
+            include_credentials=include_credentials,
+            decrypt_credentials=decrypt_credentials,
+        )
+
+
+def delete_connector_definition(conn: psycopg.Connection, definition_id: UUID) -> None:
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM connector_definitions WHERE id = %s",
+                (definition_id,),
+            )
 
 
 def create_job(
@@ -462,6 +672,8 @@ def update_source(
     active: bool | None = None,
     params: dict | None = None,
     connector_type: str | None = None,
+    connector_definition_id: UUID | None = None,
+    connector_metadata: dict | None = None,
     credentials: Any | None = None,
     sync_state: dict | None = None,
     version: int | None = None,
@@ -492,6 +704,12 @@ def update_source(
     if connector_type is not None:
         fields.append(sql.SQL("connector_type = %s"))
         values.append(connector_type)
+    if connector_definition_id is not None:
+        fields.append(sql.SQL("connector_definition_id = %s"))
+        values.append(connector_definition_id)
+    if connector_metadata is not None:
+        fields.append(sql.SQL("connector_metadata = %s"))
+        values.append(Jsonb(connector_metadata))
     if credentials is not None:
         fields.append(sql.SQL("credentials = %s"))
         values.append(_encode_credentials(credentials, encrypt=encrypt_credentials))
