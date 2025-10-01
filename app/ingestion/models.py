@@ -23,6 +23,8 @@ class SourceType(str, Enum):
     URL_LIST = "url_list"
     DATABASE = "database"
     API = "api"
+    AUDIO_TRANSCRIPT = "audio_transcript"
+    VIDEO_TRANSCRIPT = "video_transcript"
 
 
 class DatabaseQueryConfig(TypedDict, total=False):
@@ -83,6 +85,28 @@ class ApiSourceParams(TypedDict, total=False):
     document_path_template: str
 
 
+class TranscriptionSourceParams(TypedDict, total=False):
+    """Configuration payload for transcription sources."""
+
+    provider: str
+    media_uri: str
+    cache_dir: str
+    cache_key: str
+    poll_interval: float
+    language: str
+    diarization: bool
+    whisper_model: str
+    whisper_compute_type: str
+    aws_region: str
+    aws_transcribe_params: Dict[str, Any]
+    output_mime_type: str
+    extra_metadata: Dict[str, Any]
+    segments: List[Dict[str, Any]]
+    transcript_text: str
+    cache_ttl_seconds: int
+    job_name_prefix: str
+
+
 class JobStatus(str, Enum):
     """Lifecycle status values for an ingestion job."""
 
@@ -133,7 +157,13 @@ class SourceCreate(BaseModel):
     label: str | None = None
     location: str | None = None
     active: bool = True
-    params: DatabaseSourceParams | ApiSourceParams | Dict[str, Any] | None = None
+    params: (
+        DatabaseSourceParams
+        | ApiSourceParams
+        | TranscriptionSourceParams
+        | Dict[str, Any]
+        | None
+    ) = None
     connector_type: str | None = None
     credentials: Any | None = None
     sync_state: dict | None = None
@@ -148,7 +178,13 @@ class SourceUpdate(BaseModel):
     label: str | None = None
     location: str | None = None
     active: bool | None = None
-    params: DatabaseSourceParams | ApiSourceParams | Dict[str, Any] | None = None
+    params: (
+        DatabaseSourceParams
+        | ApiSourceParams
+        | TranscriptionSourceParams
+        | Dict[str, Any]
+        | None
+    ) = None
     connector_type: str | None = None
     credentials: Any | None = None
     sync_state: dict | None = None
@@ -174,7 +210,13 @@ class Source(BaseModel):
     path: str | None = None
     url: HttpUrl | None = None
     active: bool = True
-    params: DatabaseSourceParams | ApiSourceParams | Dict[str, Any] | None = None
+    params: (
+        DatabaseSourceParams
+        | ApiSourceParams
+        | TranscriptionSourceParams
+        | Dict[str, Any]
+        | None
+    ) = None
     connector_type: str | None = None
     credentials: Any | None = None
     sync_state: dict | None = None
