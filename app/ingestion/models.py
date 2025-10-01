@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, HttpUrl
@@ -74,6 +74,10 @@ class SourceCreate(BaseModel):
     location: str | None = None
     active: bool = True
     params: dict | None = None
+    connector_type: str | None = None
+    credentials: Any | None = None
+    sync_state: dict | None = None
+    version: int | None = None
 
 
 class SourceUpdate(BaseModel):
@@ -85,6 +89,10 @@ class SourceUpdate(BaseModel):
     location: str | None = None
     active: bool | None = None
     params: dict | None = None
+    connector_type: str | None = None
+    credentials: Any | None = None
+    sync_state: dict | None = None
+    version: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +115,10 @@ class Source(BaseModel):
     url: HttpUrl | None = None
     active: bool = True
     params: dict | None = None
+    connector_type: str | None = None
+    credentials: Any | None = None
+    sync_state: dict | None = None
+    version: int = 1
     created_at: datetime
 
 
@@ -147,4 +159,43 @@ class JobLogSlice(BaseModel):
     content: str
     next_offset: int
     status: JobStatus | None = None
+
+
+class ChunkMetadata(BaseModel):
+    """Structured representation of the metadata stored alongside chunks."""
+
+    source_path: str
+    mime_type: str
+    page_number: int | None = None
+    sheet_name: str | None = None
+    row_number: int | None = None
+    extra: Dict[str, Any] | None = None
+
+    def to_json(self) -> Dict[str, Any]:
+        """Return a JSON-serialisable payload for persistence."""
+
+        payload: Dict[str, Any] = {
+            "source_path": self.source_path,
+            "mime_type": self.mime_type,
+            "page_number": self.page_number,
+            "sheet_name": self.sheet_name,
+            "row_number": self.row_number,
+        }
+        if self.extra:
+            payload.update(self.extra)
+        return {k: v for k, v in payload.items() if v is not None}
+
+
+class DocumentVersion(BaseModel):
+    """Snapshot of a document's metadata for version history APIs."""
+
+    document_id: UUID
+    source_id: UUID | None = None
+    version: int
+    bytes: int | None = None
+    page_count: int | None = None
+    connector_type: str | None = None
+    credentials: Any | None = None
+    sync_state: dict | None = None
+    created_at: datetime
 

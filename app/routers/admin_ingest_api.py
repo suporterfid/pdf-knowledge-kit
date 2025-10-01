@@ -190,6 +190,10 @@ def create_source(
             location=req.location,
             active=req.active,
             params=req.params,
+            connector_type=req.connector_type,
+            credentials=req.credentials,
+            sync_state=req.sync_state,
+            version=req.version,
         )
         return _fetch_source(conn, source_id)
 
@@ -210,6 +214,10 @@ def update_source(
             location=req.location,
             active=req.active,
             params=req.params,
+            connector_type=req.connector_type,
+            credentials=req.credentials,
+            sync_state=req.sync_state,
+            version=req.version,
         )
         return _fetch_source(conn, source_id)
 

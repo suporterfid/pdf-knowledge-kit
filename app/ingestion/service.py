@@ -26,10 +26,9 @@ from pypdf import PdfReader
 import pytesseract
 import psycopg
 from pgvector.psycopg import register_vector
-from psycopg.types.json import Jsonb
 
 from . import storage
-from .models import Job, JobLogSlice, JobStatus, SourceType
+from .models import ChunkMetadata, Job, JobLogSlice, JobStatus, SourceType
 from .runner import IngestionRunner
 from .parsers import (
     Chunk,
@@ -284,25 +283,24 @@ def connect_and_init(db_url: str):
         yield conn
 
 
-def upsert_document(conn: psycopg.Connection, path: str | Path, bytes_len: int, page_count: int) -> uuid.UUID:
-    """Create a new document row if absent and return its UUID.
+def upsert_document(
+    conn: psycopg.Connection,
+    path: str | Path,
+    bytes_len: int,
+    page_count: int,
+    *,
+    source_id: uuid.UUID | None = None,
+) -> uuid.UUID:
+    """Create or update a document and return its identifier."""
 
-    The combination of path (or URL) is treated as a unique identifier for
-    documents; chunks refer to documents via ``doc_id``.
-    """
-    with conn.cursor() as cur:
-        cur.execute("SELECT id FROM documents WHERE path = %s", (str(path),))
-        row = cur.fetchone()
-        if row:
-            return row[0]
-
-        doc_id = uuid.uuid4()
-        cur.execute(
-            "INSERT INTO documents (id, path, bytes, page_count, created_at) VALUES (%s, %s, %s, %s, now())",
-            (doc_id, str(path), bytes_len, page_count),
-        )
-        conn.commit()
-        return doc_id
+    version = storage.upsert_document(
+        conn,
+        path=str(path),
+        bytes_len=bytes_len,
+        page_count=page_count,
+        source_id=source_id,
+    )
+    return version.document_id
 
 
 def insert_chunks(
@@ -313,20 +311,24 @@ def insert_chunks(
 ) -> None:
     """Insert chunk rows with embeddings; ignore duplicates by (doc_id, index)."""
 
-    with conn.cursor() as cur:
-        for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
-            cur.execute(
-                "INSERT INTO chunks (doc_id, chunk_index, content, token_est, metadata, embedding) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (doc_id, chunk_index) DO NOTHING",
-                (
-                    doc_id,
-                    i,
-                    chunk.content,
-                    int(len(chunk.content) / 4),
-                    Jsonb(chunk.to_metadata()),
-                    emb,
-                ),
-            )
-    conn.commit()
+    metadata_payloads = [
+        ChunkMetadata(
+            source_path=chunk.source_path,
+            mime_type=chunk.mime_type,
+            page_number=chunk.page_number,
+            sheet_name=chunk.sheet_name,
+            row_number=chunk.row_number,
+            extra=chunk.extra or None,
+        )
+        for chunk in chunks
+    ]
+    storage.insert_chunks(
+        conn,
+        document_id=doc_id,
+        chunks=[chunk.content for chunk in chunks],
+        embeddings=embeddings,
+        metadatas=metadata_payloads,
+    )
 
 # ---------------------------------------------------------------------------
 # High level service API
@@ -463,7 +465,7 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                         embeddings.append(emb)
 
                 bytes_len = path.stat().st_size if path.exists() else 0
-                doc_id = upsert_document(conn, path, bytes_len, page_count)
+                doc_id = upsert_document(conn, path, bytes_len, page_count, source_id=source_id)
                 insert_chunks(conn, doc_id, chunks, embeddings)
 
                 storage.update_job_status(
@@ -582,7 +584,7 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
                             embeddings.append(emb)
 
                     bytes_len = len(text.encode("utf-8"))
-                    doc_id = upsert_document(conn, url, bytes_len, 1)
+                    doc_id = upsert_document(conn, url, bytes_len, 1, source_id=source_id)
                     insert_chunks(conn, doc_id, chunks, embeddings)
 
                 storage.update_job_status(
