@@ -6,6 +6,7 @@ import IngestUrl from './IngestUrl';
 import IngestUrls from './IngestUrls';
 import JobDetail from './JobDetail';
 import Sources from './Sources';
+import AgentBuilder from './AgentBuilder';
 
 export default function AdminApp() {
   return (
@@ -17,6 +18,7 @@ export default function AdminApp() {
           <li><Link to="/admin/ingest/url">Single URL</Link></li>
           <li><Link to="/admin/ingest/urls">Multiple URLs</Link></li>
           <li><Link to="/admin/sources">Sources</Link></li>
+          <li><Link to="/admin/agents">Agents</Link></li>
         </ul>
       </nav>
       <Routes>
@@ -26,6 +28,7 @@ export default function AdminApp() {
         <Route path="ingest/urls" element={<IngestUrls />} />
         <Route path="jobs/:id" element={<JobDetail />} />
         <Route path="sources" element={<Sources />} />
+        <Route path="agents" element={<AgentBuilder />} />
       </Routes>
     </div>
   );
