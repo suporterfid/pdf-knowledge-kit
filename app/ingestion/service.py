@@ -43,6 +43,7 @@ from .chunking import chunk_text
 from .connectors import ConnectorRecord
 from .connectors.rest import RestConnector
 from .connectors.sql import SqlConnector
+from .connectors.transcription import TranscriptionConnector
 
 # Multilingual embedding model
 EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2-cls"
@@ -364,14 +365,23 @@ def ingest_source(source_id: uuid.UUID) -> uuid.UUID:
         source = storage.get_source(conn, source_id)
         if not source:
             raise ValueError(f"source {source_id} not found")
-        if source.type not in {SourceType.DATABASE, SourceType.API}:
+        if source.type not in {
+            SourceType.DATABASE,
+            SourceType.API,
+            SourceType.AUDIO_TRANSCRIPT,
+            SourceType.VIDEO_TRANSCRIPT,
+        }:
             raise ValueError(
-                f"ingest_source only supports database/api types, got {source.type.value}"
+                "ingest_source only supports database, api, and transcription types, "
+                f"got {source.type.value}"
             )
         job_id = storage.create_job(
             conn,
             source_id,
-            params={"source_type": source.type.value},
+            params={
+                "source_type": source.type.value,
+                "provider": (source.params or {}).get("provider") if source.params else None,
+            },
         )
 
     logger, log_path = _setup_job_logging(job_id)
@@ -424,9 +434,21 @@ def ingest_source(source_id: uuid.UUID) -> uuid.UUID:
                         logger=logger,
                         job_id=job_id,
                     )
+                elif source.type in {SourceType.AUDIO_TRANSCRIPT, SourceType.VIDEO_TRANSCRIPT}:
+                    connector = TranscriptionConnector(source, logger=logger)
+                    documents, chunks_total, canceled = _process_connector_stream(
+                        conn,
+                        source=source,
+                        connector=connector,
+                        embedder=embedder,
+                        cancel_event=cancel_event,
+                        logger=logger,
+                        job_id=job_id,
+                    )
                 else:
                     raise ValueError(
-                        f"ingest_source only supports database/api types, got {source.type.value}"
+                        "ingest_source only supports database, api, and transcription types, "
+                        f"got {source.type.value}"
                     )
 
                 if cancel_event.is_set() or canceled:
@@ -777,7 +799,12 @@ def reindex_source(_source_id: uuid.UUID) -> uuid.UUID | None:
         return ingest_local(Path(path))
     if source_type == SourceType.URL and url:
         return ingest_url(url)
-    if source_type in {SourceType.DATABASE, SourceType.API}:
+    if source_type in {
+        SourceType.DATABASE,
+        SourceType.API,
+        SourceType.AUDIO_TRANSCRIPT,
+        SourceType.VIDEO_TRANSCRIPT,
+    }:
         return ingest_source(source_id)
     return None
 
