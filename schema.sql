@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS chunks (
   chunk_index INT NOT NULL,
   content TEXT NOT NULL,
   token_est INT,
+  metadata JSONB,
   embedding VECTOR(384),
   UNIQUE (doc_id, chunk_index)
 );

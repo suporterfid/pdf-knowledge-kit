@@ -1,4 +1,12 @@
 """Ingestion package exposing high level APIs."""
+from .parsers import (
+    Chunk,
+    extract_html_text,
+    read_csv_text,
+    read_docx_text,
+    read_txt_text,
+    read_xlsx_text,
+)
 from .service import (
     read_md_text,
     read_pdf_text,
@@ -20,6 +28,12 @@ from .service import (
 )
 
 __all__ = [
+    "Chunk",
+    "extract_html_text",
+    "read_csv_text",
+    "read_docx_text",
+    "read_txt_text",
+    "read_xlsx_text",
     "read_md_text",
     "read_pdf_text",
     "read_url_text",

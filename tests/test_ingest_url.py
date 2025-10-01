@@ -32,11 +32,16 @@ def test_read_chunk_embed_url(html, monkeypatch):
     text = ingest.read_url_text("http://example.com")
     assert text.strip() != ""
 
-    chunks = ingest.chunk_text(text)
+    chunks = ingest.chunk_text(
+        text,
+        source_path="http://example.com",
+        mime_type="text/html",
+        page_number=1,
+    )
     assert chunks
 
     monkeypatch.setattr(ingest, "TextEmbedding", lambda model_name: DummyEmbedder())
     embedder = ingest.TextEmbedding(model_name=ingest.EMBEDDING_MODEL)
 
-    vectors = list(embedder.embed(chunks))
+    vectors = list(embedder.embed([chunk.content for chunk in chunks]))
     assert len(vectors) == len(chunks)
