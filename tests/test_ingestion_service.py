@@ -62,7 +62,7 @@ def test_ingest_local_and_url(tmp_path, monkeypatch):
 
     jobs: dict[uuid.UUID, service.Job] = {}
 
-    def create_job(conn, source_id, status=JobStatus.QUEUED):
+    def create_job(conn, source_id, status=JobStatus.QUEUED, params=None):
         jid = uuid4()
         jobs[jid] = service.Job(
             id=jid,
@@ -117,7 +117,7 @@ def test_ingest_local_error(tmp_path, monkeypatch):
 
     jobs: dict[uuid.UUID, service.Job] = {}
 
-    def create_job(conn, source_id, status=JobStatus.QUEUED):
+    def create_job(conn, source_id, status=JobStatus.QUEUED, params=None):
         jid = uuid4()
         jobs[jid] = service.Job(
             id=jid,
@@ -159,7 +159,7 @@ def test_ingest_local_ocr_failure(tmp_path, monkeypatch):
 
     jobs: dict[uuid.UUID, service.Job] = {}
 
-    def create_job(conn, source_id, status=JobStatus.QUEUED):
+    def create_job(conn, source_id, status=JobStatus.QUEUED, params=None):
         jid = uuid4()
         jobs[jid] = service.Job(
             id=jid,

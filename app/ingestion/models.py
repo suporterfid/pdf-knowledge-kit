@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar, TypedDict
 from uuid import UUID
 
 from pydantic import BaseModel, HttpUrl
@@ -21,6 +21,66 @@ class SourceType(str, Enum):
     LOCAL_DIR = "local_dir"
     URL = "url"
     URL_LIST = "url_list"
+    DATABASE = "database"
+    API = "api"
+
+
+class DatabaseQueryConfig(TypedDict, total=False):
+    """Configuration for a single SQL query executed by the database connector."""
+
+    name: str
+    sql: str
+    text_column: str
+    id_column: str
+    cursor_column: str
+    cursor_param: str
+    initial_cursor: str | int | float | None
+    mime_type: str
+    document_path_template: str
+    params: Dict[str, Any]
+    extra_metadata_fields: List[str]
+
+
+class DatabaseSourceParams(TypedDict, total=False):
+    """Expected ``sources.params`` payload for :class:`~SourceType.DATABASE`."""
+
+    dsn: str
+    driver: str
+    host: str
+    port: int
+    database: str
+    user: str
+    queries: List[DatabaseQueryConfig]
+
+
+class ApiPaginationConfig(TypedDict, total=False):
+    """Pagination behaviour for the REST connector."""
+
+    type: str  # "cursor" (default) or "page"
+    cursor_param: str
+    next_cursor_path: str
+    page_param: str
+    page_size_param: str
+    page_size: int
+    start_page: int
+
+
+class ApiSourceParams(TypedDict, total=False):
+    """Expected ``sources.params`` payload for :class:`~SourceType.API`."""
+
+    base_url: str
+    endpoint: str
+    method: str
+    headers: Dict[str, str]
+    query_params: Dict[str, Any]
+    body: Dict[str, Any]
+    pagination: ApiPaginationConfig
+    records_path: str
+    id_field: str
+    text_fields: List[str]
+    timestamp_field: str
+    mime_type: str
+    document_path_template: str
 
 
 class JobStatus(str, Enum):
@@ -73,7 +133,7 @@ class SourceCreate(BaseModel):
     label: str | None = None
     location: str | None = None
     active: bool = True
-    params: dict | None = None
+    params: DatabaseSourceParams | ApiSourceParams | Dict[str, Any] | None = None
     connector_type: str | None = None
     credentials: Any | None = None
     sync_state: dict | None = None
@@ -88,7 +148,7 @@ class SourceUpdate(BaseModel):
     label: str | None = None
     location: str | None = None
     active: bool | None = None
-    params: dict | None = None
+    params: DatabaseSourceParams | ApiSourceParams | Dict[str, Any] | None = None
     connector_type: str | None = None
     credentials: Any | None = None
     sync_state: dict | None = None
@@ -114,7 +174,7 @@ class Source(BaseModel):
     path: str | None = None
     url: HttpUrl | None = None
     active: bool = True
-    params: dict | None = None
+    params: DatabaseSourceParams | ApiSourceParams | Dict[str, Any] | None = None
     connector_type: str | None = None
     credentials: Any | None = None
     sync_state: dict | None = None

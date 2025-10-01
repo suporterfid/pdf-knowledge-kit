@@ -267,18 +267,58 @@ def list_sources(
         )
 
 
+def get_source(
+    conn: psycopg.Connection,
+    source_id: UUID,
+    *,
+    decrypt_credentials: Callable[[bytes], bytes] | None = None,
+) -> Source | None:
+    """Return a single source by identifier."""
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, type, label, location, path, url, active, params, connector_type, credentials, sync_state, version, created_at
+            FROM sources
+            WHERE id = %s AND deleted_at IS NULL
+            """,
+            (source_id,),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        return None
+
+    return Source(
+        id=row[0],
+        type=SourceType(row[1]),
+        label=row[2],
+        location=row[3],
+        path=row[4],
+        url=row[5],
+        active=row[6],
+        params=row[7],
+        connector_type=row[8],
+        credentials=_decode_credentials(row[9], decrypt=decrypt_credentials),
+        sync_state=_normalize_sync_state(row[10]),
+        version=row[11] or 1,
+        created_at=row[12],
+    )
+
+
 def create_job(
     conn: psycopg.Connection,
     source_id: UUID,
     status: JobStatus = JobStatus.QUEUED,
+    params: dict | None = None,
 ) -> UUID:
     """Create a new ingestion job for a given source and return its id."""
     job_id = uuid4()
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO ingestion_jobs (id, source_id, status, created_at) VALUES (%s, %s, %s, now())",
-                (job_id, source_id, status.value),
+                "INSERT INTO ingestion_jobs (id, source_id, status, created_at, params) VALUES (%s, %s, %s, now(), %s)",
+                (job_id, source_id, status.value, Jsonb(params) if params is not None else None),
             )
     return job_id
 
@@ -317,6 +357,21 @@ def update_job_status(
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute(query, values)
+
+
+def update_job_params(
+    conn: psycopg.Connection,
+    job_id: UUID,
+    params: dict | None,
+) -> None:
+    """Persist metadata about a job run in the ``params`` column."""
+
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE ingestion_jobs SET params = %s, updated_at = now() WHERE id = %s",
+                (Jsonb(params) if params is not None else None, job_id),
+            )
 
 
 def get_job(conn: psycopg.Connection, job_id: UUID) -> Optional[Job]:
