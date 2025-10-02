@@ -1,8 +1,11 @@
+import os
 import pathlib
-from threading import Event
-from uuid import UUID, uuid4
+import uuid
 from datetime import datetime
+from threading import Event
+from uuid import uuid4
 
+import psycopg
 import pytest
 
 import app.ingestion.service as service
@@ -313,6 +316,62 @@ def test_rerun_job_calls_reindex(monkeypatch):
     assert any(
         "SELECT source_id FROM ingestion_jobs" in q[0] for q in conn.cur.queries
     )
+
+
+@pytest.mark.integration
+def test_ingest_local_integration_persists_chunks(tmp_path, monkeypatch):
+    testing_postgresql = pytest.importorskip("testing.postgresql")
+    try:
+        pg = testing_postgresql.Postgresql()
+    except RuntimeError as exc:
+        pytest.skip(f"testing.postgresql is unavailable: {exc}")
+    monkeypatch.setenv("DATABASE_URL", pg.url())
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(service, "_runner", ImmediateRunner())
+
+    class DummyEmbedder:
+        def embed(self, texts):
+            for text in texts:
+                yield [float(len(text)), float(len(text)) / 2.0]
+
+    monkeypatch.setattr(service, "TextEmbedding", lambda model_name: DummyEmbedder())
+
+    def ensure_schema_without_vector(conn, schema_sql_path=service.SCHEMA_PATH, migrations_dir=None):
+        sql = pathlib.Path(schema_sql_path).read_text(encoding="utf-8")
+        sql = sql.replace(
+            "CREATE EXTENSION IF NOT EXISTS vector;",
+            "-- vector extension skipped in tests",
+        )
+        sql = sql.replace("VECTOR(384)", "DOUBLE PRECISION[]")
+        with conn.cursor() as cur:
+            cur.execute(sql)
+        conn.commit()
+
+    monkeypatch.setattr(service, "ensure_schema", ensure_schema_without_vector)
+    monkeypatch.setattr(service, "register_vector", lambda conn: None)
+
+    note_path = tmp_path / "integration.md"
+    note_path.write_text("integration test content", encoding="utf-8")
+
+    try:
+        job_id = service.ingest_local(note_path)
+        job = service.get_job(job_id)
+        assert job and job.status == JobStatus.SUCCEEDED
+
+        with psycopg.connect(pg.url()) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT content, metadata, embedding FROM chunks")
+                row = cur.fetchone()
+                assert row is not None
+                content, metadata, embedding = row
+                assert content == "integration test content"
+                assert metadata["mime_type"] == "text/markdown"
+                assert metadata["source_path"] == str(note_path)
+                assert metadata["page_number"] == 1
+                assert isinstance(embedding, list)
+                assert pytest.approx(embedding[0]) == float(len(content))
+    finally:
+        pg.stop()
 
 
 def test_read_job_log_slicing(tmp_path, monkeypatch):
