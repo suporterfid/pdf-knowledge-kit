@@ -45,7 +45,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from .rag import build_context
 from .sse_utils import sse_word_buffer
 from .app_logging import init_logging
-from .routers import admin_ingest_api, auth_api, feedback_api, agents
+from .routers import admin_ingest_api, auth_api, feedback_api, agents, conversations, webhooks
 
 try:
     from openai import OpenAI
@@ -101,6 +101,8 @@ app.include_router(admin_ingest_api.router)
 app.include_router(auth_api.router)
 app.include_router(feedback_api.router)
 app.include_router(agents.router)
+app.include_router(conversations.router)
+app.include_router(webhooks.router)
  
 # Expose Prometheus metrics
 Instrumentator().instrument(app).expose(
