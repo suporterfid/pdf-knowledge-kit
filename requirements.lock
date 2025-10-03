@@ -1,0 +1,31 @@
+# Locked dependencies for reproducible installs
+psycopg[binary]==3.1.19
+pgvector==0.2.5
+pypdf==4.2.0
+python-dotenv==1.0.1
+fastembed==0.7.3
+tqdm==4.66.4
+fastapi==0.110.3
+sse-starlette==1.6.5
+uvicorn==0.29.0
+debugpy==1.8.5
+openai==1.109.1
+python-multipart==0.0.20
+pytest==8.3.2
+slowapi==0.1.9
+langdetect==1.0.9
+pytesseract==0.3.13
+pdf2image==1.17.0
+Pillow==10.4.0
+requests==2.32.5
+beautifulsoup4==4.12.3
+prometheus-fastapi-instrumentator==6.0.0
+testing.postgresql==1.3.0
+rank-bm25==0.2.2
+python-docx==1.2.0
+openpyxl==3.1.5
+
+# Optional transcription providers
+boto3==1.40.43
+faster-whisper==1.0.0
+openai-whisper==20231117

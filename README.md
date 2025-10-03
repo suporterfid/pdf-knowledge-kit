@@ -27,6 +27,21 @@ resultados menos precisos.
 - *(Opcional p/ OCR)* `tesseract-ocr`, pacotes de idioma (`tesseract-ocr-eng`, `tesseract-ocr-por`, `tesseract-ocr-spa`) e `poppler-utils`.
 O `Dockerfile` já instala esses pacotes.
 
+Dependências Python podem ser instaladas de duas formas:
+
+- `pip install -r requirements.txt` – instalação flexível (usa os intervalos `>=`).
+- `pip install -r requirements.lock` – instalação reproduzível com versões travadas.
+
+Os conectores opcionais trazem bibliotecas extras:
+
+| Finalidade | Pacotes | Observações |
+|------------|---------|-------------|
+| Conversão de documentos Office | `python-docx`, `openpyxl` | Já listados no arquivo principal. |
+| Transcrição (AWS) | `boto3` | Requer `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `AWS_REGION`. |
+| Transcrição (Whisper local) | `faster-whisper` (GPU/CPU otimizada) ou `openai-whisper` | Instale apenas um dos pacotes conforme o backend desejado. |
+
+Use `pip install -r requirements.txt --no-deps` para instalar seletivamente apenas os módulos desejados ou utilize `pip install boto3 faster-whisper` de forma avulsa em ambientes enxutos.
+
 ## Ambiente de desenvolvimento
 1. Clone este repositório.
 2. Crie um ambiente virtual e instale as dependências:
@@ -536,6 +551,65 @@ curl -X POST http://localhost:8000/api/admin/ingest/transcription \
         "params": {"provider": "mock", "media_uri": "s3://bucket/all-hands.mp3"}
       }'
 ```
+
+### Catálogo de conectores e payloads
+
+| Conector | Quando usar | Campos obrigatórios | Credenciais | Variáveis de ambiente relevantes |
+|----------|-------------|---------------------|-------------|----------------------------------|
+| **Database** (`/api/admin/ingest/database`) | Extrair textos de tabelas relacionais. | `params.queries[]` com `sql`, `text_column`, `id_column`. Opcionalmente `params.dsn` ou `host`/`database`. | `credentials.values.username` e `credentials.values.password` (ou DSN completo). | `DATABASE_URL` ou `PGHOST`/`PGUSER`/`PGPASSWORD` para uso interno. |
+| **REST/API** (`/api/admin/ingest/api`) | Consumir APIs REST JSON. | `params.endpoint` (ou `base_url`), `params.text_fields`, `params.id_field`. | `credentials.values.headers` ou `token`. | `ADMIN_UI_ORIGINS` para CORS quando a UI admin roda em outra origem. |
+| **Transcription** (`/api/admin/ingest/transcription`) | Transcrever áudio/vídeo por provedor externo ou Whisper local. | `params.provider` (`mock`, `whisper`, `aws_transcribe`), `params.media_uri`. | `credentials.values` pode conter `aws_access_key_id`/`aws_secret_access_key` ou tokens específicos do provedor. | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` para AWS; `WHISPER_MODEL`/`WHISPER_COMPUTE_TYPE` opcionais via payload. |
+
+> **Dica:** a API recusa payloads que contenham apenas `{"secret_id": "..."}`. Resolva o segredo (via Vault/KMS) e envie o valor real para que o backend armazene uma cópia criptografada no banco.
+
+### Automação (registro e monitoramento de conectores)
+
+O script `tools/register_connector.py` demonstra como registrar conectores reutilizáveis e acompanhar o progresso de jobs:
+
+```bash
+python tools/register_connector.py \
+  --host http://localhost:8000 \
+  --operator-key "$OPERATOR_API_KEY" \
+  --name prod-crm \
+  --database-host db.internal \
+  --database-name crm
+```
+
+O script expõe utilitários para:
+
+1. Criar definições de conector (database, REST ou transcrição).
+2. Iniciar um job usando a definição recém-criada.
+3. Fazer *polling* de `/api/admin/ingest/jobs/<JOB_ID>` para coletar `job_metadata`, `sync_state` e históricos de versão.
+4. Listar logs incrementais com `GET /api/admin/ingest/jobs/<JOB_ID>/logs?offset=<n>`.
+
+Veja o código para exemplos adicionais de payloads, incluindo anexar `connector_metadata` e enviar credenciais inline.
+
+> Consulte também [`OPERATOR_GUIDE.md`](OPERATOR_GUIDE.md) para um passo a passo completo de automação e governança dos conectores.
+
+### Práticas de segredos
+
+Credenciais fornecidas às rotas admin são armazenadas em texto claro no banco – por isso recomenda-se:
+
+1. Gerar os segredos dinamicamente (por exemplo, via HashiCorp Vault, AWS Secrets Manager ou Azure Key Vault) e injectá-los somente no momento da chamada.
+2. Caso a organização exija criptografia em repouso, configure camadas externas como KMS na infraestrutura do banco ou insira lógica customizada em `app/routers/admin_ingest_api.py` para criptografar `credentials` antes de persistir.
+3. Nunca envie apenas referências (`secret_id`); resolva o valor real e inclua `credentials.values` ou `credentials.token`.
+
+### Ambiente de testes avançados
+
+Os testes que cobrem conectores exigem alguns recursos adicionais:
+
+- **Banco de dados de exemplo**: `testing.postgresql` sobe um Postgres efêmero. Instale o pacote (já listado em `requirements.txt`) e tenha `libpq` disponível. Nenhuma configuração extra é necessária.
+- **Serviços de transcrição**: os testes utilizam `MockTranscriptionProvider`, portanto não precisam de AWS ou Whisper instalados. Para validar provedores reais, configure as dependências opcionais (`boto3`, `faster-whisper`/`openai-whisper`) e defina variáveis como `AWS_REGION` e `AWS_PROFILE`/`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`.
+- **Fixtures de mídia**: `tests/test_transcription_connector.py` gera arquivos WAV sintéticos automaticamente; não é preciso manter amostras no repositório.
+
+Execute:
+
+```bash
+docker compose up -d db  # banco usado pelos testes de API/admin
+pytest -k "connector or ingest"  # roda apenas as suítes relacionadas
+```
+
+Para rodar a suíte inteira, garanta que `npm install && npm test` também seja executado dentro de `frontend/`.
 
 ### Source management
 
