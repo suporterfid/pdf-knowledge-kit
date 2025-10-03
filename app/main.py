@@ -46,6 +46,7 @@ from .rag import build_context
 from .sse_utils import sse_word_buffer
 from .app_logging import init_logging
 from .routers import admin_ingest_api, auth_api, feedback_api, agents, conversations, webhooks
+from .core.tenant_middleware import TenantContextMiddleware
 
 try:
     from openai import OpenAI
@@ -85,6 +86,7 @@ init_logging(app)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(TenantContextMiddleware)
 # Optional CORS for admin UI
 admin_ui_origins = os.getenv("ADMIN_UI_ORIGINS")
 if admin_ui_origins:
