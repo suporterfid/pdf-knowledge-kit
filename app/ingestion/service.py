@@ -10,13 +10,14 @@ Responsibilities
 """
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Sequence, Tuple
-from contextlib import contextmanager
 
 import requests
 from fastembed import TextEmbedding
@@ -26,6 +27,8 @@ from pypdf import PdfReader
 import pytesseract
 import psycopg
 from pgvector.psycopg import register_vector
+import sqlalchemy as sa
+
 
 from . import storage
 from .models import ChunkMetadata, Job, JobLogSlice, JobStatus, Source, SourceType
@@ -160,10 +163,149 @@ def read_url_text(url: str) -> str:
         return ""
 
 
+class _PsycopgOperations:
+    """Lightweight subset of Alembic's ``op`` helpers for psycopg connections."""
+
+    def __init__(self, conn: psycopg.Connection):
+        self._conn = conn
+        self._dialect = sa.dialects.postgresql.dialect()
+        self._preparer = self._dialect.identifier_preparer
+
+    def create_table(
+        self,
+        name: str,
+        *columns: sa.Column,
+        schema: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        metadata = sa.MetaData()
+        table = sa.Table(name, metadata, *columns, schema=schema, **kwargs)
+        self._execute(sa.schema.CreateTable(table))
+
+    def drop_table(self, name: str, schema: str | None = None) -> None:
+        metadata = sa.MetaData()
+        table = sa.Table(name, metadata, schema=schema)
+        self._execute(sa.schema.DropTable(table, if_exists=True))
+
+    def create_index(
+        self,
+        name: str,
+        table_name: str,
+        columns: Sequence[str],
+        *,
+        unique: bool = False,
+        schema: str | None = None,
+        postgresql_where: Any | None = None,
+        **_: Any,
+    ) -> None:
+        table_identifier = self._format_table_name(table_name, schema)
+        column_sql = ", ".join(self._preparer.quote(col) for col in columns)
+        unique_sql = "UNIQUE " if unique else ""
+        statement = f"CREATE {unique_sql}INDEX IF NOT EXISTS {self._preparer.quote(name)} "
+        statement += f"ON {table_identifier} ({column_sql})"
+        if postgresql_where is not None:
+            compiled = postgresql_where.compile(
+                dialect=self._dialect, compile_kwargs={"literal_binds": True}
+            )
+            statement += f" WHERE {compiled}"
+        with self._conn.cursor() as cur:
+            cur.execute(statement)
+
+    def drop_index(
+        self,
+        name: str,
+        *,
+        schema: str | None = None,
+        table_name: str | None = None,
+        **_: Any,
+    ) -> None:
+        qualified = self._preparer.quote(name)
+        if schema:
+            qualified = f"{self._preparer.quote(schema)}.{qualified}"
+        with self._conn.cursor() as cur:
+            cur.execute(f"DROP INDEX IF EXISTS {qualified}")
+
+    def _execute(self, ddl: sa.schema.DDLElement) -> None:
+        compiled = ddl.compile(dialect=self._dialect)
+        with self._conn.cursor() as cur:
+            cur.execute(str(compiled))
+
+    def _format_table_name(self, table_name: str, schema: str | None) -> str:
+        if schema:
+            return f"{self._preparer.quote(schema)}.{self._preparer.quote(table_name)}"
+        return self._preparer.quote(table_name)
+
+
+def _run_python_migrations(
+    conn: psycopg.Connection,
+    migrations_dir: Path | None = None,
+) -> None:
+    """Execute Alembic-style Python migrations in deterministic order."""
+
+    migrations_dir = migrations_dir or Path(__file__).resolve().parents[1] / "migrations"
+    if not migrations_dir.exists():
+        return
+
+    migration_files = sorted(
+        path for path in migrations_dir.glob("[0-9][0-9][0-9]_*.py") if path.is_file()
+    )
+    if not migration_files:
+        return
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_python_migrations (
+                id TEXT PRIMARY KEY,
+                applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        cur.execute("SELECT id FROM app_python_migrations")
+        applied = {row[0] for row in cur.fetchall()}
+
+    for path in migration_files:
+        migration_id = path.stem
+        if migration_id in applied:
+            continue
+
+        module_name = f"app.migrations.{path.stem}"
+        module = importlib.import_module(module_name)
+        upgrade = getattr(module, "upgrade", None)
+        if upgrade is None:
+            continue
+
+        operations = _PsycopgOperations(conn)
+        original_op = getattr(module, "op", None)
+        module.op = operations
+        try:
+            upgrade()
+        except Exception:
+            conn.rollback()
+            raise
+        else:
+            conn.commit()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO app_python_migrations (id)
+                    VALUES (%s)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    (migration_id,),
+                )
+            conn.commit()
+            applied.add(migration_id)
+        finally:
+            if original_op is not None:
+                module.op = original_op
+
+
 def ensure_schema(
     conn: psycopg.Connection,
     schema_sql_path: Path = SCHEMA_PATH,
     migrations_dir: Path | None = None,
+    python_migrations_dir: Path | None = None,
 ) -> None:
     """Ensure the required tables and migrations exist.
 
@@ -182,6 +324,9 @@ def ensure_schema(
         Directory containing sequential ``.sql`` migration files. If not
         provided, ``schema_sql_path.parent / 'migrations'`` is used. Each
         migration is executed in alphabetical order.
+    python_migrations_dir:
+        Directory containing Alembic-style Python migration modules. Defaults
+        to ``Path(__file__).parents[1] / 'migrations'``.
     """
 
     with conn.cursor() as cur:
@@ -192,6 +337,8 @@ def ensure_schema(
             for mig in sorted(migrations_dir.glob("*.sql")):
                 cur.execute(mig.read_text(encoding="utf-8"))
 
+    conn.commit()
+    _run_python_migrations(conn, python_migrations_dir)
     conn.commit()
 
 
