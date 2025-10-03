@@ -1,6 +1,6 @@
-# PDF/Markdown → Vector DB (pgvector) Starter Kit
+# Multiagent/AI Knowledge Base → Vector DB (pgvector) Starter Kit
 
-Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** e **Markdown** em uma pasta local e habilite **busca semântica** para um agente de IA.
+Crie rapidamente uma base de conhecimento a partir de **arquivos PDF**, **documentos do office**, **links** e **Markdown** em uma pasta local e habilite **busca semântica** para um agente de IA.
 
 Inclui uma interface web inspirada no ChatGPT com histórico de conversas, anexos, destaque de código e alternância de tema claro/escuro.
 
