@@ -4,33 +4,71 @@ Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** e **Markd
 
 Inclui uma interface web inspirada no ChatGPT com histórico de conversas, anexos, destaque de código e alternância de tema claro/escuro.
 
-## Visão geral
+## Visão Geral
+O projeto disponibiliza um agente de IA completo: um backend em Python expõe APIs de ingestão, consulta semântica e chat em streaming, enquanto o frontend em React oferece a experiência conversacional pronta para uso.
+
+### Fluxo principal
 1. **Extrai** textos dos PDFs e arquivos Markdown.
 2. **Divide** em *chunks* (trechos) com sobreposição.
 3. **Gera embeddings** (multilíngue, PT/EN) com `fastembed`.
 4. **Armazena** em **PostgreSQL + pgvector**.
-5. **Consulta** por similaridade (kNN) com `query.py` — pronto para integrar no seu agente.
+5. **Consulta** por similaridade (kNN) com `query.py` ou pelas rotas FastAPI — pronto para integrar no seu agente.
 
 > Dimensão dos vetores: **384** (modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`).
 
+### Experiência de uso
+- Chat com streaming SSE, histórico de conversas, upload temporário de arquivos e resposta opcional com LLM (OpenAI).
+- Interface React com temas claro/escuro, destaques de código e notificações.
+- Scripts CLI (`ingest.py`, `query.py`) para ingestão e validação rápida sem depender do frontend.
+
 ### Suporte a idiomas
-O modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` atende mais de 50 idiomas
-e foi verificado com frases em **inglês**, **português brasileiro** e **espanhol**.
-Línguas fora desse conjunto podem gerar embeddings de qualidade reduzida e
-resultados menos precisos.
+O modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` atende mais de 50 idiomas e foi verificado com frases em **inglês**, **português brasileiro** e **espanhol**. Línguas fora desse conjunto podem gerar embeddings de qualidade reduzida e resultados menos precisos.
 
 ---
 
-## Requisitos
-- **Docker** + **Docker Compose** (para o Postgres com pgvector).
+## Stack Tecnológica
+
+### Backend (Python)
+- **FastAPI** para as rotas públicas, admin e SSE (`sse-starlette`).
+- **Uvicorn** com `--reload` em desenvolvimento e suporte a `debugpy`.
+- **fastembed** para geração de embeddings e `rank-bm25` como fallback lexical.
+- **pypdf**, `pdf2image`, `pytesseract` e utilitários para extração de texto e OCR.
+- **psycopg** + `pgvector` para persistência, além de `python-dotenv`, `pydantic`, `SlowAPI` (rate limiting) e métricas com `prometheus-fastapi-instrumentator`.
+
+### Frontend (React)
+- **React 18** com **Vite** e **TypeScript**.
+- **Tailwind CSS** para estilização, `react-router-dom` para rotas e `react-toastify` para feedback.
+- Renderização segura de Markdown com `markdown-it` + `DOMPurify` e destaque de código via `Prism.js`.
+
+### Banco de dados e armazenamento
+- **PostgreSQL** com a extensão **pgvector** para busca semântica.
+- Migrações em `migrations/` e schema inicial em `schema.sql`.
+- Uploads temporários gravados em `UPLOAD_DIR` (padrão `tmp/uploads`), com limpeza automática via `BackgroundTasks`.
+
+### Ferramentas e observabilidade
+- **Dockerfile** e **docker-compose.yml** para desenvolvimento e deploy.
+- Métricas Prometheus expostas em `/api/metrics` e logs diários com rotação automática.
+- Testes com `pytest` (backend) e `vitest`/`@testing-library/react` (frontend).
+
+## Configuração do Ambiente
+
+### Pré-requisitos
+- **Docker** + **Docker Compose** (necessários para subir o Postgres com pgvector ou rodar tudo em containers).
 - **Python 3.10+** com `pip`.
-- *(Opcional p/ OCR)* `tesseract-ocr`, pacotes de idioma (`tesseract-ocr-eng`, `tesseract-ocr-por`, `tesseract-ocr-spa`) e `poppler-utils`.
-O `Dockerfile` já instala esses pacotes.
+- *(Opcional p/ OCR)* `tesseract-ocr`, pacotes de idioma (`tesseract-ocr-eng`, `tesseract-ocr-por`, `tesseract-ocr-spa`) e `poppler-utils`. O `Dockerfile` já instala esses pacotes.
 
-Dependências Python podem ser instaladas de duas formas:
+### Preparar o backend (Python)
+```bash
+git clone https://github.com/<sua-org>/pdf-knowledge-kit.git
+cd pdf-knowledge-kit
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt  # ou use requirements.lock para versões travadas
+```
 
-- `pip install -r requirements.txt` – instalação flexível (usa os intervalos `>=`).
-- `pip install -r requirements.lock` – instalação reproduzível com versões travadas.
+- Prefira `requirements.lock` para ambientes reproduzíveis; `requirements.txt` mantém flexibilidade com intervalos `>=`.
+- Use `pip install -r requirements.txt --no-deps` se quiser habilitar somente partes específicas do stack (por exemplo, para containers slim).
+
+### Dependências opcionais
 
 Os conectores opcionais trazem bibliotecas extras:
 
@@ -40,30 +78,82 @@ Os conectores opcionais trazem bibliotecas extras:
 | Transcrição (AWS) | `boto3` | Requer `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `AWS_REGION`. |
 | Transcrição (Whisper local) | `faster-whisper` (GPU/CPU otimizada) ou `openai-whisper` | Instale apenas um dos pacotes conforme o backend desejado. |
 
-Use `pip install -r requirements.txt --no-deps` para instalar seletivamente apenas os módulos desejados ou utilize `pip install boto3 faster-whisper` de forma avulsa em ambientes enxutos.
+Você também pode instalar pacotes avulsos como `pip install boto3 faster-whisper` em ambientes enxutos.
 
-## Ambiente de desenvolvimento
-1. Clone este repositório.
-2. Crie um ambiente virtual e instale as dependências:
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-```
-3. Suba o Postgres local com pgvector:
+### Banco de dados local (pgvector)
+Suba o Postgres com pgvector usando Docker Compose:
+
 ```bash
 docker compose up -d db
 ```
-4. Execute os testes para validar o setup:
+
+O serviço já cria o banco `pdfkb` com a extensão `vector`. Caso rode manualmente, aplique `schema.sql` e as migrações de `migrations/`.
+
+### Variáveis de ambiente
+
+```bash
+cp .env.example .env  # personalize conforme necessário
+```
+
+Detalhes completos estão na seção [Variáveis de ambiente](#variáveis-de-ambiente).
+
+### Preparar o frontend (React)
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### Validação rápida
+
 ```bash
 pytest
 ```
-5. Inicie o backend em modo `reload`:
+
+## Como Executar
+
+### Backend (API e agente)
 ```bash
+# garantir que o Postgres está no ar
+docker compose up -d db
+
+# iniciar o backend com recarregamento automático
 uvicorn app.main:app --reload
 ```
-6. (Opcional) Para a interface web estilo ChatGPT (histórico, anexos, temas), entre em `frontend/` e rode `npm install && npm run dev`.
 
-## Passo a passo (rápido)
+- A API ficará disponível em `http://localhost:8000` (documentação interativa em `/docs`).
+- Utilize `uvicorn app.main:app --host 0.0.0.0 --port 8000` para expor em outras máquinas.
+
+### Ferramentas de linha de comando
+- **Ingestão** de PDFs/Markdown:
+
+  ```bash
+  python ingest.py --docs ./docs  # adicione --ocr ou ENABLE_OCR=1 para PDFs escaneados
+  ```
+
+- **Consulta** semântica via CLI:
+
+  ```bash
+  python query.py --q "Como configuro potência de leitura?" --k 5
+  ```
+
+- Parâmetros adicionais permitem apontar para outras pastas (`--docs` ou `DOCS_DIR`) e URLs públicas (`--url`, `--urls-file`).
+
+### Frontend (React/Vite)
+
+```bash
+cd frontend
+npm run dev  # http://localhost:5173
+
+# build de produção opcional
+npm run build  # gera artefatos em app/static
+```
+
+Para desenvolvimento full-stack com Docker/VS Code veja [Depuração com VS Code + Docker Desktop](#depuração-com-vs-code--docker-desktop).
+
+### Passo a passo (rápido)
+
 ```bash
 # 1) Suba o Postgres com pgvector
 docker compose up -d db
@@ -86,7 +176,9 @@ python ingest.py --docs ./docs  # use --ocr (ex.: --ocr-lang eng+por) ou ENABLE_
 python query.py --q "Como configuro potência de leitura?" --k 5
 ```
 
-## Ingestão de PDFs/Markdown com Docker
+## Deploy
+
+### Ingestão de PDFs/Markdown com Docker
 
 1. **Tornar os arquivos acessíveis ao container**
 
@@ -336,9 +428,9 @@ pdf_knowledge_kit/
 └─ docs/                   # Coloque seus PDFs e Markdown aqui
 ```
 
-## Deploy em produção
+### Deploy em produção
 
-### Bare metal
+#### Bare metal
 1. Instale **PostgreSQL** com a extensão **pgvector** e crie o banco:
 ```bash
 psql -c 'CREATE EXTENSION IF NOT EXISTS vector;' "$PGDATABASE"
@@ -384,7 +476,7 @@ curl http://localhost:8000/api/health
   - Shell no container: `docker compose exec app bash`
   - Reset do banco (apaga volume): `docker compose down -v`
 
-### Docker
+#### Docker
 1. Copie `.env.example` para `.env` e ajuste.
 2. Construa e suba os serviços:
 ```bash
@@ -594,6 +686,23 @@ Credenciais fornecidas às rotas admin são armazenadas em texto claro no banco 
 2. Caso a organização exija criptografia em repouso, configure camadas externas como KMS na infraestrutura do banco ou insira lógica customizada em `app/routers/admin_ingest_api.py` para criptografar `credentials` antes de persistir.
 3. Nunca envie apenas referências (`secret_id`); resolva o valor real e inclua `credentials.values` ou `credentials.token`.
 
+## Testes
+
+- **Backend**: garanta que o Postgres esteja disponível (ex.: `docker compose up -d db`) e execute:
+
+  ```bash
+  pytest
+  ```
+
+- **Frontend**: dentro de `frontend/`, instale as dependências e rode os testes com Vitest/Testing Library:
+
+  ```bash
+  cd frontend
+  npm test
+  ```
+
+- **Suítes direcionadas**: use marcadores do Pytest para executar apenas partes críticas, como `pytest -k "connector or ingest"`.
+
 ### Ambiente de testes avançados
 
 Os testes que cobrem conectores exigem alguns recursos adicionais:
@@ -702,3 +811,22 @@ curl -s -X POST http://localhost:8000/api/feedback \
 - Persistência: registros na tabela `feedbacks` (migração `migrations/005_add_feedback_table.sql`).
 - Inicialização: o backend garante schema/migrações antes de inserir (idempotente).
 - Métricas: simples agregar por `helpful=false`, período (`created_at`) e origem (`session_id`/`sources`). Se quiser, expomos endpoints de agregação.
+
+## Contribuição
+
+Como não há um `CONTRIBUTING.md`, siga o fluxo abaixo para propor mudanças:
+
+1. Faça um fork ou crie um branch a partir de `main`.
+2. Instale as dependências, configure o ambiente e rode os testes (`pytest` e `npm test`).
+3. Aplique suas alterações seguindo o estilo descrito neste README e nos arquivos de documentação.
+4. Abra um pull request descrevendo o impacto, testes realizados e quaisquer ajustes de configuração necessários.
+
+## Documentação adicional
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) – visão de alto nível dos componentes e fluxos.
+- [API_REFERENCE.md](API_REFERENCE.md) – contratos das rotas HTTP expostas.
+- [DEPLOYMENT.md](DEPLOYMENT.md) – estratégias de deploy adicionais e práticas recomendadas.
+- [FRONTEND_GUIDE.md](FRONTEND_GUIDE.md) – convenções para o app React/Vite.
+- [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md) – automação e governança dos conectores.
+- [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) – narrativa executiva e funcionalidades.
+
