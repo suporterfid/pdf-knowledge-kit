@@ -9,8 +9,9 @@
 
 ### Technologies
 - **Backend:** Python 3.11+, FastAPI, pgvector, fastembed, OpenAI SDK.
-- **Frontend:** React + TypeScript with Vite and Vitest.
-- **Database:** PostgreSQL 16 with pgvector extension.
+- **Frontend:** React + TypeScript com Vite e Vitest.
+- **Database:** PostgreSQL 16 com extensão pgvector.
+- **Connectors:** drivers SQL (`psycopg`), REST (`requests`), e SDKs de transcrição opcionais (`boto3`, `faster-whisper`, `openai-whisper`).
 
 ### Directory Structure
 | Path | Responsibility |
@@ -51,6 +52,8 @@ Key environment variables (see `.env.example`):
 | `DOCS_DIR`, `ENABLE_OCR`, `OCR_LANG` | Ingestion and OCR behaviour. |
 | `UPLOAD_DIR`, `UPLOAD_MAX_SIZE`, `UPLOAD_MAX_FILES`, `CHAT_MAX_MESSAGE_LENGTH` | Upload and chat limits. |
 | `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_LANG` | Optional LLM integration. |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Needed when the transcription connector targets AWS Transcribe. |
+| `ADMIN_UI_ORIGINS` | Enable CORS for an external admin UI host. |
 
 ### Docker Deployment
 `docker-compose.yml` defines services:
@@ -64,6 +67,7 @@ A sample `Caddyfile` proxies requests from `example.com` to the backend service.
 - Swap pgvector for other vector databases (e.g., Qdrant, Weaviate) by adapting ingestion/storage modules.
 - Deploy multiple backend instances behind a load balancer; stateless API enables horizontal scaling.
 - Frontend is static and can be served by any CDN.
+- Add new connectors by following the patterns in `app/ingestion/connectors/` and extending the catalog documented in `README.md`.
 
 ## 3. CI/CD Guidance
 
@@ -92,7 +96,17 @@ Existing workflow `tests.yml` runs on pushes and pull requests:
 - `POST /api/upload` – temporary file storage for chat attachments.
 - `POST /api/ask` – returns answer and source chunks.
 - `POST /api/chat` & `GET /api/chat` – streaming chat responses with optional file attachments.
-- `Router /api/admin/ingest` – start ingestion jobs (`/local`, `/url`, `/urls`), list or cancel jobs, manage sources.
+- `Router /api/admin/ingest` – start ingestion jobs (`/local`, `/url`, `/urls`, `/database`, `/api`, `/transcription`), manage connector definitions, inspect job metadata and logs.
+
+#### Connector endpoints
+
+| Endpoint | Description | Sample payload highlights |
+| --- | --- | --- |
+| `POST /api/admin/ingest/database` | Run SQL queries and ingest result sets. | `params.queries` with `sql`, `text_column`, `id_column`; optional `credentials.values` for DB login. |
+| `POST /api/admin/ingest/api` | Crawl REST APIs and ingest JSON responses. | `params` accepts pagination hints, `text_fields`, optional headers/token credentials. |
+| `POST /api/admin/ingest/transcription` | Download/transcribe media files. | `params.provider` (`mock`, `whisper`, `aws_transcribe`), optional caching and metadata fields. |
+| `POST /api/admin/ingest/connector_definitions` | Persist reusable connector templates. | Store `type`, `params`, and `credentials` for future jobs. |
+| `GET /api/admin/ingest/jobs/{id}` | Retrieve job status, `job_metadata`, `sync_state`, and version history. | Combine with `/logs?offset=` to stream log tails. |
 
 ### Configuration & Data Flow
 1. Docs and URLs ingested via CLI (`ingest.py`) or admin API.
@@ -103,6 +117,8 @@ Existing workflow `tests.yml` runs on pushes and pull requests:
 ### Testing
 - `tests/` includes unit and integration tests (44 passing, 5 skipped) covering ingestion, chat, admin endpoints, logging and more.
 - Frontend tests use Vitest and Testing Library.
+- Connector suites rely on [`testing.postgresql`](https://pypi.org/project/testing.postgresql/) for ephemeral databases and mock transcription providers; install optional SDKs (`boto3`, `faster-whisper`, `openai-whisper`) to exercise real providers locally.
+- See `README.md` and `tools/register_connector.py` for end-to-end admin flows that mimic CI scenarios.
 
 ### Guidance for Agents
 - Inspect `app/` modules to extend APIs or improve ingestion accuracy.
@@ -112,4 +128,5 @@ Existing workflow `tests.yml` runs on pushes and pull requests:
 ## 5. References
 - CLI utilities: `ingest.py`, `query.py`.
 - Database schema: `schema.sql`, migration scripts in `migrations/`.
+- Operations playbook: `OPERATOR_GUIDE.md`.
 
