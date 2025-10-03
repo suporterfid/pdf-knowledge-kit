@@ -1,5 +1,7 @@
 # Locked dependencies for reproducible installs
 psycopg[binary]==3.1.19
+SQLAlchemy==2.0.32
+alembic==1.13.2
 pgvector==0.2.5
 pypdf==4.2.0
 python-dotenv==1.0.1
