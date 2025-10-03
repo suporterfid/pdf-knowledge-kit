@@ -153,6 +153,30 @@ class AgentDeployResponse(AgentDetail):
     pass
 
 
+
+
+class ChannelConfig(BaseModel):
+    channel: str
+    is_enabled: bool = True
+    webhook_secret: Optional[str] = None
+    credentials: Dict[str, Any] = Field(default_factory=dict)
+    settings: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChannelConfigUpdate(BaseModel):
+    is_enabled: Optional[bool] = None
+    webhook_secret: Optional[str] = None
+    credentials: Optional[Dict[str, Any]] = None
+    settings: Optional[Dict[str, Any]] = None
+
+
+class ChannelConfigList(BaseModel):
+    items: List[ChannelConfig]
+    total: int
+
+
 class Message(BaseModel):
     message: str
 

@@ -35,6 +35,37 @@ class AgentRepository(Protocol):
         self, agent_id: int, *, include_versions: bool = False, include_tests: bool = False
     ) -> Optional[schemas.AgentDetail]: ...
 
+    def get_agent_by_slug(
+        self, slug: str, *, include_versions: bool = False, include_tests: bool = False
+    ) -> Optional[schemas.AgentDetail]: ...
+
+    def get_agent_by_slug(
+        self, slug: str, *, include_versions: bool = False, include_tests: bool = False
+    ) -> Optional[schemas.AgentDetail]:
+        with self.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, slug, name, description, provider, model, persona, prompt_template,
+                       response_params, deployment_metadata, tags, is_active, created_at, updated_at
+                FROM agents
+                WHERE slug = %s
+                """,
+                (slug,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        agent = self._row_to_agent(row)
+        detail = schemas.AgentDetail(**agent.model_dump())
+        if include_versions:
+            detail.versions = self.list_versions(agent.id)
+            detail.latest_version = detail.versions[-1] if detail.versions else None
+        else:
+            detail.latest_version = self.latest_version(agent.id)
+        if include_tests:
+            detail.tests = self.list_tests(agent.id)
+        return detail
+
     def create_agent(self, payload: schemas.AgentCreate) -> schemas.Agent: ...
 
     def update_agent(self, agent_id: int, payload: schemas.AgentUpdate) -> schemas.Agent: ...
@@ -52,6 +83,16 @@ class AgentRepository(Protocol):
     def list_tests(self, agent_id: int, limit: int = 20) -> List[schemas.AgentTestRecord]: ...
 
     def update_deployment_metadata(self, agent_id: int, metadata: Dict[str, Any]) -> schemas.Agent: ...
+
+    def list_channel_configs(self, agent_id: int) -> List[schemas.ChannelConfig]: ...
+
+    def get_channel_config(self, agent_id: int, channel: str) -> Optional[schemas.ChannelConfig]: ...
+
+    def upsert_channel_config(
+        self, agent_id: int, channel: str, payload: schemas.ChannelConfigUpdate
+    ) -> schemas.ChannelConfig: ...
+
+    def delete_channel_config(self, agent_id: int, channel: str) -> None: ...
 
 
 class AgentService:
@@ -80,6 +121,39 @@ class AgentService:
         if not agent:
             raise AgentNotFoundError(f"Agent {agent_id} not found")
         return agent
+
+    def get_agent_by_slug(self, slug: str) -> schemas.AgentDetail:
+        agent = self._repository.get_agent_by_slug(slug, include_versions=True, include_tests=False)
+        if not agent:
+            raise AgentNotFoundError(f"Agent '{slug}' not found")
+        return agent
+
+    def get_agent_by_slug(
+        self, slug: str, *, include_versions: bool = False, include_tests: bool = False
+    ) -> Optional[schemas.AgentDetail]:
+        with self.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, slug, name, description, provider, model, persona, prompt_template,
+                       response_params, deployment_metadata, tags, is_active, created_at, updated_at
+                FROM agents
+                WHERE slug = %s
+                """,
+                (slug,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        agent = self._row_to_agent(row)
+        detail = schemas.AgentDetail(**agent.model_dump())
+        if include_versions:
+            detail.versions = self.list_versions(agent.id)
+            detail.latest_version = detail.versions[-1] if detail.versions else None
+        else:
+            detail.latest_version = self.latest_version(agent.id)
+        if include_tests:
+            detail.tests = self.list_tests(agent.id)
+        return detail
 
     def create_agent(self, payload: schemas.AgentCreate) -> schemas.AgentDetail:
         persona = dict(payload.persona or {})
@@ -214,6 +288,27 @@ class AgentService:
     def list_supported_providers(self) -> Dict[str, Optional[str]]:
         return self._providers.list_supported_providers()
 
+    # ------------------------------------------------------------------
+    # Channels
+
+    def list_channel_configs(self, agent_id: int) -> List[schemas.ChannelConfig]:
+        return self._repository.list_channel_configs(agent_id)
+
+    def get_channel_config(self, agent_id: int, channel: str) -> schemas.ChannelConfig:
+        config = self._repository.get_channel_config(agent_id, channel.lower())
+        if not config:
+            raise AgentNotFoundError(f"Channel {channel} not configured for agent {agent_id}")
+        return config
+
+    def upsert_channel_config(
+        self, agent_id: int, channel: str, payload: schemas.ChannelConfigUpdate
+    ) -> schemas.ChannelConfig:
+        return self._repository.upsert_channel_config(agent_id, channel.lower(), payload)
+
+    def delete_channel_config(self, agent_id: int, channel: str) -> None:
+        self._repository.delete_channel_config(agent_id, channel.lower())
+
+
 
 def _simulate_model_response(name: str, rendered_prompt: str, parameters: Dict[str, Any]) -> str:
     preview = rendered_prompt.splitlines()[-1] if rendered_prompt else ""
@@ -346,6 +441,33 @@ class PostgresAgentRepository:
             detail.latest_version = self.latest_version(agent_id)
         if include_tests:
             detail.tests = self.list_tests(agent_id)
+        return detail
+
+    def get_agent_by_slug(
+        self, slug: str, *, include_versions: bool = False, include_tests: bool = False
+    ) -> Optional[schemas.AgentDetail]:
+        with self.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, slug, name, description, provider, model, persona, prompt_template,
+                       response_params, deployment_metadata, tags, is_active, created_at, updated_at
+                FROM agents
+                WHERE slug = %s
+                """,
+                (slug,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        agent = self._row_to_agent(row)
+        detail = schemas.AgentDetail(**agent.model_dump())
+        if include_versions:
+            detail.versions = self.list_versions(agent.id)
+            detail.latest_version = detail.versions[-1] if detail.versions else None
+        else:
+            detail.latest_version = self.latest_version(agent.id)
+        if include_tests:
+            detail.tests = self.list_tests(agent.id)
         return detail
 
     def create_agent(self, payload: schemas.AgentCreate) -> schemas.Agent:
@@ -544,6 +666,70 @@ class PostgresAgentRepository:
 
     # ------------------------------------------------------------------
     # Row converters
+    def list_channel_configs(self, agent_id: int) -> List[schemas.ChannelConfig]:
+        with self.cursor() as cur:
+            cur.execute(
+                """
+                SELECT channel, is_enabled, webhook_secret, credentials, settings, created_at, updated_at
+                FROM agent_channel_configs
+                WHERE agent_id = %s
+                ORDER BY channel
+                """,
+                (agent_id,),
+            )
+            rows = cur.fetchall()
+        return [self._row_to_channel_config(row) for row in rows]
+
+    def get_channel_config(self, agent_id: int, channel: str) -> Optional[schemas.ChannelConfig]:
+        with self.cursor() as cur:
+            cur.execute(
+                """
+                SELECT channel, is_enabled, webhook_secret, credentials, settings, created_at, updated_at
+                FROM agent_channel_configs
+                WHERE agent_id = %s AND channel = %s
+                """,
+                (agent_id, channel),
+            )
+            row = cur.fetchone()
+        return self._row_to_channel_config(row) if row else None
+
+    def upsert_channel_config(
+        self, agent_id: int, channel: str, payload: schemas.ChannelConfigUpdate
+    ) -> schemas.ChannelConfig:
+        existing = self.get_channel_config(agent_id, channel)
+        is_enabled = payload.is_enabled if payload.is_enabled is not None else (existing.is_enabled if existing else True)
+        webhook_secret = payload.webhook_secret if payload.webhook_secret is not None else (existing.webhook_secret if existing else None)
+        credentials = payload.credentials if payload.credentials is not None else (existing.credentials if existing else {})
+        settings = payload.settings if payload.settings is not None else (existing.settings if existing else {})
+        with self.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO agent_channel_configs (agent_id, channel, is_enabled, webhook_secret, credentials, settings)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (agent_id, channel) DO UPDATE
+                SET is_enabled = EXCLUDED.is_enabled,
+                    webhook_secret = EXCLUDED.webhook_secret,
+                    credentials = EXCLUDED.credentials,
+                    settings = EXCLUDED.settings,
+                    updated_at = now()
+                RETURNING channel, is_enabled, webhook_secret, credentials, settings, created_at, updated_at
+                """,
+                (
+                    agent_id,
+                    channel,
+                    is_enabled,
+                    webhook_secret,
+                    Jsonb(credentials),
+                    Jsonb(settings),
+                ),
+            )
+            row = cur.fetchone()
+        return self._row_to_channel_config(row)
+
+    def delete_channel_config(self, agent_id: int, channel: str) -> None:
+        with self.cursor() as cur:
+            cur.execute("DELETE FROM agent_channel_configs WHERE agent_id = %s AND channel = %s", (agent_id, channel))
+
 
     def _row_to_agent(self, row: Dict[str, Any]) -> schemas.Agent:
         return schemas.Agent(
@@ -598,6 +784,18 @@ class PostgresAgentRepository:
             ran_at=row["ran_at"],
         )
 
+    def _row_to_channel_config(self, row: Dict[str, Any]) -> schemas.ChannelConfig:
+        return schemas.ChannelConfig(
+            channel=row["channel"],
+            is_enabled=row.get("is_enabled", True),
+            webhook_secret=row.get("webhook_secret"),
+            credentials=row.get("credentials") or {},
+            settings=row.get("settings") or {},
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+
 
 # ---------------------------------------------------------------------------
 # In-memory repository (useful for testing and sandbox environments)
@@ -636,6 +834,33 @@ class InMemoryAgentRepository(AgentRepository):
         if include_tests:
             clone.tests = list(self._tests.get(agent_id, []))
         return clone
+
+    def get_agent_by_slug(
+        self, slug: str, *, include_versions: bool = False, include_tests: bool = False
+    ) -> Optional[schemas.AgentDetail]:
+        with self.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, slug, name, description, provider, model, persona, prompt_template,
+                       response_params, deployment_metadata, tags, is_active, created_at, updated_at
+                FROM agents
+                WHERE slug = %s
+                """,
+                (slug,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        agent = self._row_to_agent(row)
+        detail = schemas.AgentDetail(**agent.model_dump())
+        if include_versions:
+            detail.versions = self.list_versions(agent.id)
+            detail.latest_version = detail.versions[-1] if detail.versions else None
+        else:
+            detail.latest_version = self.latest_version(agent.id)
+        if include_tests:
+            detail.tests = self.list_tests(agent.id)
+        return detail
 
     def create_agent(self, payload: schemas.AgentCreate) -> schemas.Agent:
         agent_id = self._agent_id_seq

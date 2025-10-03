@@ -129,6 +129,39 @@ def list_tests(agent_id: int, role: str = Depends(require_role("viewer"))):
         return svc.list_tests(agent_id)
 
 
+
+
+@router.get("/{agent_id}/channels", response_model=schemas.ChannelConfigList)
+def list_channel_configs(agent_id: int, role: str = Depends(require_role("viewer"))) -> schemas.ChannelConfigList:
+    with _service_context() as svc:
+        configs = svc.list_channel_configs(agent_id)
+    return schemas.ChannelConfigList(items=configs, total=len(configs))
+
+
+@router.get("/{agent_id}/channels/{channel}", response_model=schemas.ChannelConfig)
+def get_channel_config(agent_id: int, channel: str, role: str = Depends(require_role("viewer"))) -> schemas.ChannelConfig:
+    with _service_context() as svc:
+        return svc.get_channel_config(agent_id, channel)
+
+
+@router.put("/{agent_id}/channels/{channel}", response_model=schemas.ChannelConfig)
+def upsert_channel_config(
+    agent_id: int,
+    channel: str,
+    payload: schemas.ChannelConfigUpdate,
+    role: str = Depends(require_role("operator")),
+) -> schemas.ChannelConfig:
+    with _service_context() as svc:
+        return svc.upsert_channel_config(agent_id, channel, payload)
+
+
+@router.delete("/{agent_id}/channels/{channel}", response_model=schemas.Message)
+def delete_channel_config(agent_id: int, channel: str, role: str = Depends(require_role("operator"))) -> schemas.Message:
+    with _service_context() as svc:
+        svc.delete_channel_config(agent_id, channel)
+    return schemas.Message(message="deleted")
+
+
 @router.post("/{agent_id}/deploy", response_model=schemas.AgentDeployResponse)
 def deploy_agent(
     agent_id: int,
