@@ -823,10 +823,19 @@ Como não há um `CONTRIBUTING.md`, siga o fluxo abaixo para propor mudanças:
 
 ## Documentação adicional
 
+### Arquitetura e Desenvolvimento
 - [ARCHITECTURE.md](ARCHITECTURE.md) – visão de alto nível dos componentes e fluxos.
 - [API_REFERENCE.md](API_REFERENCE.md) – contratos das rotas HTTP expostas.
-- [DEPLOYMENT.md](DEPLOYMENT.md) – estratégias de deploy adicionais e práticas recomendadas.
 - [FRONTEND_GUIDE.md](FRONTEND_GUIDE.md) – convenções para o app React/Vite.
-- [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md) – automação e governança dos conectores.
 - [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) – narrativa executiva e funcionalidades.
+
+### Operação e Deploy
+- [DEPLOYMENT.md](DEPLOYMENT.md) – estratégias de deploy adicionais e práticas recomendadas.
+- [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md) – automação e governança dos conectores.
+
+### Releases e Produção
+- [PRODUCTION_RELEASE_REQUIREMENTS.md](PRODUCTION_RELEASE_REQUIREMENTS.md) – requisitos completos para preparar releases de produção.
+- [VERSION_STRATEGY.md](VERSION_STRATEGY.md) – estratégia de versionamento semântico.
+- [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) – checklist passo-a-passo para criar releases.
+- [CHANGELOG.md](CHANGELOG.md) – histórico de mudanças e releases.
 

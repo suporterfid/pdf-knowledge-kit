@@ -9,6 +9,8 @@ jobs:
   python-lint:
     name: Python Linting
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       
@@ -50,6 +52,8 @@ jobs:
   python-type-check:
     name: Python Type Checking
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       
@@ -73,6 +77,8 @@ jobs:
   frontend-lint:
     name: Frontend Linting
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: frontend
@@ -103,6 +109,8 @@ jobs:
   dependency-audit:
     name: Dependency Security Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       
@@ -155,6 +163,8 @@ jobs:
   summary:
     name: Quality Summary
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [python-lint, python-type-check, frontend-lint, dependency-audit]
     if: always()
     steps:

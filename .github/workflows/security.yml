@@ -41,6 +41,8 @@ jobs:
   secret-scanning:
     name: Secret Detection
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,6 +59,8 @@ jobs:
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout repository
@@ -71,6 +75,9 @@ jobs:
   container-scanning:
     name: Container Image Scanning
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
       
@@ -101,6 +108,8 @@ jobs:
   security-summary:
     name: Security Summary
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [codeql, secret-scanning, container-scanning]
     if: always()
     steps:
