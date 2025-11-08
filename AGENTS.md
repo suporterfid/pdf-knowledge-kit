@@ -15,3 +15,4 @@
 - Componentes React funcionais com hooks
 - Tratamento de erro consistente
 - A cada alteração revisar e se necessário atualizar os arquivos: ARCHITECTURE.md, CHANGELOG.md, DEPLOYMENT.md, FRONTEND_GUIDE.md, OPERATOR_GUIDE.md, PROJECT_OVERVIEW.md, README.md
+- Para releases, seguir RELEASE_CHECKLIST.md e atualizar VERSION_STRATEGY.md conforme necessário

@@ -124,13 +124,28 @@ The container prepares `/var/log/app` with appropriate permissions, so mounting 
 
 ## 5. Continuous integration & delivery
 
-GitHub Actions provides the default CI workflow located at `.github/workflows/tests.yml`. It runs on each push to `main` and on pull requests, and performs the following steps: checkout, set up Python 3.11, install backend dependencies, run `pytest`, set up Node.js 20, install frontend dependencies, and run `npm test`.【F:.github/workflows/tests.yml†L1-L32】 Extend this pipeline with deployment jobs (e.g., Docker build and registry push) to complete your CD story.
+GitHub Actions provides multiple workflows for CI/CD:
 
-To integrate deployments:
+### Testing and Quality Assurance
+- **`.github/workflows/tests.yml`**: Runs on each push to `main` and pull requests. Executes Python tests with `pytest` and frontend tests with Vitest.
+- **`.github/workflows/lint.yml`**: Code quality checks including Python linting (Ruff, Black), type checking (MyPy), security scanning (Bandit), and dependency audits.
+- **`.github/workflows/security.yml`**: Security scanning with CodeQL, secret detection (TruffleHog), dependency review, and container scanning (Trivy). Runs on push, pull requests, and weekly schedules.
 
-1. Add a job after the tests that builds and pushes the Docker image using the same Dockerfile.
-2. Configure environment secrets for registry credentials, database migrations, and API keys.
-3. Optionally trigger infrastructure updates (e.g., via Terraform or `docker stack deploy`) once the image is available.
+### Release Automation
+- **`.github/workflows/release.yml`**: Automated release workflow triggered by version tags (e.g., `v1.0.0`). Builds multi-platform Docker images, publishes to GitHub Container Registry, and creates GitHub Releases with automated changelog extraction.
+
+### Release Process
+For detailed information on creating releases, see:
+- **[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)**: Step-by-step release process
+- **[VERSION_STRATEGY.md](VERSION_STRATEGY.md)**: Semantic versioning guidelines
+- **[PRODUCTION_RELEASE_REQUIREMENTS.md](PRODUCTION_RELEASE_REQUIREMENTS.md)**: Comprehensive production readiness requirements
+
+To create a release:
+1. Follow the [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
+2. Use `tools/bump_version.py` to update version numbers
+3. Update [CHANGELOG.md](CHANGELOG.md) with release notes
+4. Create and push a Git tag (e.g., `git tag -a v1.0.0 -m "Release v1.0.0" && git push origin v1.0.0`)
+5. The release workflow automatically builds images and creates the GitHub Release
 
 ## 6. Troubleshooting
 

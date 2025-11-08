@@ -1,0 +1,179 @@
+name: Code Quality and Linting
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  python-lint:
+    name: Python Linting
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install linting tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black mypy bandit[toml]
+      
+      - name: Run Ruff (linting)
+        run: |
+          ruff check . --output-format=github
+        continue-on-error: true
+      
+      - name: Run Black (formatting check)
+        run: |
+          black --check --diff .
+        continue-on-error: true
+      
+      - name: Run Bandit (security)
+        run: |
+          bandit -r app/ -f json -o bandit-report.json || true
+          bandit -r app/ -f screen
+        continue-on-error: true
+      
+      - name: Upload Bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-security-report
+          path: bandit-report.json
+          retention-days: 30
+
+  python-type-check:
+    name: Python Type Checking
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mypy types-requests
+          pip install -r requirements.txt || true
+      
+      - name: Run MyPy
+        run: |
+          mypy app/ --ignore-missing-imports --no-error-summary
+        continue-on-error: true
+
+  frontend-lint:
+    name: Frontend Linting
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+        continue-on-error: true
+      
+      # ESLint and Prettier can be added once configured
+      # - name: Run ESLint
+      #   run: npm run lint
+      # 
+      # - name: Check Prettier
+      #   run: npx prettier --check "src/**/*.{ts,tsx}"
+
+  dependency-audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit
+      
+      - name: Audit Python dependencies
+        run: |
+          pip-audit --desc --format json > python-audit.json || true
+          pip-audit --desc
+        continue-on-error: true
+      
+      - name: Upload Python audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dependency-audit
+          path: python-audit.json
+          retention-days: 30
+      
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Audit npm dependencies
+        working-directory: frontend
+        run: |
+          npm audit --json > ../npm-audit.json || true
+          npm audit
+        continue-on-error: true
+      
+      - name: Upload npm audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-dependency-audit
+          path: npm-audit.json
+          retention-days: 30
+
+  summary:
+    name: Quality Summary
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: [python-lint, python-type-check, frontend-lint, dependency-audit]
+    if: always()
+    steps:
+      - name: Check job results
+        run: |
+          echo "Python Lint: ${{ needs.python-lint.result }}"
+          echo "Python Type Check: ${{ needs.python-type-check.result }}"
+          echo "Frontend Lint: ${{ needs.frontend-lint.result }}"
+          echo "Dependency Audit: ${{ needs.dependency-audit.result }}"
+          echo ""
+          echo "Note: Some jobs may report 'success' even with warnings."
+          echo "Review the individual job logs for details."
