@@ -47,6 +47,7 @@ from .sse_utils import sse_word_buffer
 from .app_logging import init_logging
 from .routers import admin_ingest_api, auth_api, feedback_api, agents, conversations, webhooks
 from .core.tenant_middleware import TenantContextMiddleware
+from .__version__ import __version__, __build_date__, __commit_sha__
 
 try:
     from openai import OpenAI
@@ -181,6 +182,16 @@ def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
 async def health():
     """Liveness/readiness probe with a minimal JSON body."""
     return {"status": "ok"}
+
+
+@app.get("/api/version")
+async def version():
+    """Return version information for the application."""
+    return {
+        "version": __version__,
+        "build_date": __build_date__,
+        "commit_sha": __commit_sha__,
+    }
 
 
 @app.get("/api/config")
