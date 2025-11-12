@@ -5,11 +5,13 @@ Crie rapidamente uma base de conhecimento a partir de **arquivos PDF**, **docume
 Inclui uma interface web inspirada no ChatGPT com histórico de conversas, anexos, destaque de código e alternância de tema claro/escuro.
 
 ## Visão Geral
+
 O projeto disponibiliza um agente de IA completo: um backend em Python expõe APIs de ingestão, consulta semântica e chat em streaming, enquanto o frontend em React oferece a experiência conversacional pronta para uso.
 
 ### Fluxo principal
+
 1. **Extrai** textos dos PDFs e arquivos Markdown.
-2. **Divide** em *chunks* (trechos) com sobreposição.
+2. **Divide** em _chunks_ (trechos) com sobreposição.
 3. **Gera embeddings** (multilíngue, PT/EN) com `fastembed`.
 4. **Armazena** em **PostgreSQL + pgvector**.
 5. **Consulta** por similaridade (kNN) com `query.py` ou pelas rotas FastAPI — pronto para integrar no seu agente.
@@ -17,11 +19,13 @@ O projeto disponibiliza um agente de IA completo: um backend em Python expõe AP
 > Dimensão dos vetores: **384** (modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`).
 
 ### Experiência de uso
+
 - Chat com streaming SSE, histórico de conversas, upload temporário de arquivos e resposta opcional com LLM (OpenAI).
 - Interface React com temas claro/escuro, destaques de código e notificações.
 - Scripts CLI (`ingest.py`, `query.py`) para ingestão e validação rápida sem depender do frontend.
 
 ### Suporte a idiomas
+
 O modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` atende mais de 50 idiomas e foi verificado com frases em **inglês**, **português brasileiro** e **espanhol**. Línguas fora desse conjunto podem gerar embeddings de qualidade reduzida e resultados menos precisos.
 
 ---
@@ -29,6 +33,7 @@ O modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` atende ma
 ## Stack Tecnológica
 
 ### Backend (Python)
+
 - **FastAPI** para as rotas públicas, admin e SSE (`sse-starlette`).
 - **Uvicorn** com `--reload` em desenvolvimento e suporte a `debugpy`.
 - **fastembed** para geração de embeddings e `rank-bm25` como fallback lexical.
@@ -36,16 +41,19 @@ O modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` atende ma
 - **psycopg** + `pgvector` para persistência, além de `python-dotenv`, `pydantic`, `SlowAPI` (rate limiting) e métricas com `prometheus-fastapi-instrumentator`.
 
 ### Frontend (React)
+
 - **React 18** com **Vite** e **TypeScript**.
 - **Tailwind CSS** para estilização, `react-router-dom` para rotas e `react-toastify` para feedback.
 - Renderização segura de Markdown com `markdown-it` + `DOMPurify` e destaque de código via `Prism.js`.
 
 ### Banco de dados e armazenamento
+
 - **PostgreSQL** com a extensão **pgvector** para busca semântica.
 - Migrações em `migrations/` e schema inicial em `schema.sql`.
 - Uploads temporários gravados em `UPLOAD_DIR` (padrão `tmp/uploads`), com limpeza automática via `BackgroundTasks`.
 
 ### Ferramentas e observabilidade
+
 - **Dockerfile** e **docker-compose.yml** para desenvolvimento e deploy.
 - Métricas Prometheus expostas em `/api/metrics` e logs diários com rotação automática.
 - Testes com `pytest` (backend) e `vitest`/`@testing-library/react` (frontend).
@@ -53,11 +61,13 @@ O modelo `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` atende ma
 ## Configuração do Ambiente
 
 ### Pré-requisitos
+
 - **Docker** + **Docker Compose** (necessários para subir o Postgres com pgvector ou rodar tudo em containers).
 - **Python 3.10+** com `pip`.
-- *(Opcional p/ OCR)* `tesseract-ocr`, pacotes de idioma (`tesseract-ocr-eng`, `tesseract-ocr-por`, `tesseract-ocr-spa`) e `poppler-utils`. O `Dockerfile` já instala esses pacotes.
+- _(Opcional p/ OCR)_ `tesseract-ocr`, pacotes de idioma (`tesseract-ocr-eng`, `tesseract-ocr-por`, `tesseract-ocr-spa`) e `poppler-utils`. O `Dockerfile` já instala esses pacotes.
 
 ### Preparar o backend (Python)
+
 ```bash
 git clone https://github.com/<sua-org>/pdf-knowledge-kit.git
 cd pdf-knowledge-kit
@@ -72,15 +82,16 @@ pip install -r requirements.txt  # ou use requirements.lock para versões travad
 
 Os conectores opcionais trazem bibliotecas extras:
 
-| Finalidade | Pacotes | Observações |
-|------------|---------|-------------|
-| Conversão de documentos Office | `python-docx`, `openpyxl` | Já listados no arquivo principal. |
-| Transcrição (AWS) | `boto3` | Requer `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `AWS_REGION`. |
-| Transcrição (Whisper local) | `faster-whisper` (GPU/CPU otimizada) ou `openai-whisper` | Instale apenas um dos pacotes conforme o backend desejado. |
+| Finalidade                     | Pacotes                                                  | Observações                                                         |
+| ------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------- |
+| Conversão de documentos Office | `python-docx`, `openpyxl`                                | Já listados no arquivo principal.                                   |
+| Transcrição (AWS)              | `boto3`                                                  | Requer `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `AWS_REGION`. |
+| Transcrição (Whisper local)    | `faster-whisper` (GPU/CPU otimizada) ou `openai-whisper` | Instale apenas um dos pacotes conforme o backend desejado.          |
 
 Você também pode instalar pacotes avulsos como `pip install boto3 faster-whisper` em ambientes enxutos.
 
 ### Banco de dados local (pgvector)
+
 Suba o Postgres com pgvector usando Docker Compose:
 
 ```bash
@@ -114,6 +125,7 @@ pytest
 ## Como Executar
 
 ### Backend (API e agente)
+
 ```bash
 # garantir que o Postgres está no ar
 docker compose up -d db
@@ -126,6 +138,7 @@ uvicorn app.main:app --reload
 - Utilize `uvicorn app.main:app --host 0.0.0.0 --port 8000` para expor em outras máquinas.
 
 ### Ferramentas de linha de comando
+
 - **Ingestão** de PDFs/Markdown:
 
   ```bash
@@ -230,7 +243,6 @@ python query.py --q "Como configuro potência de leitura?" --k 5
     app python ingest.py --docs /app/docs  # adicione --ocr ou ENABLE_OCR=1 se preciso
    ```
 
-
 ## Ingestão de páginas web públicas
 
 Além de arquivos locais, o `ingest.py` também pode buscar e indexar páginas da web acessíveis publicamente.
@@ -258,14 +270,14 @@ Defina `LOG_ROTATE_UTC=true` para rotacionar em UTC.
 
 Principais variáveis de ambiente:
 
-| Variável              | Padrão    | Descrição |
-|----------------------|-----------|-----------|
-| `LOG_DIR`            | `logs/`   | Diretório dos arquivos de log (no Docker: `/var/log/app`). |
-| `LOG_LEVEL`          | `INFO`    | Nível mínimo de log. |
-| `LOG_JSON`           | `false`   | Saída em formato JSON. |
-| `LOG_REQUEST_BODIES` | `false`   | Inclui corpo da requisição no access log. |
-| `LOG_RETENTION_DAYS` | `7`       | Quantidade de dias mantidos após rotação. |
-| `LOG_ROTATE_UTC`     | `false`   | Rotaciona usando UTC. |
+| Variável             | Padrão  | Descrição                                                  |
+| -------------------- | ------- | ---------------------------------------------------------- |
+| `LOG_DIR`            | `logs/` | Diretório dos arquivos de log (no Docker: `/var/log/app`). |
+| `LOG_LEVEL`          | `INFO`  | Nível mínimo de log.                                       |
+| `LOG_JSON`           | `false` | Saída em formato JSON.                                     |
+| `LOG_REQUEST_BODIES` | `false` | Inclui corpo da requisição no access log.                  |
+| `LOG_RETENTION_DAYS` | `7`     | Quantidade de dias mantidos após rotação.                  |
+| `LOG_ROTATE_UTC`     | `false` | Rotaciona usando UTC.                                      |
 
 Para verificar rapidamente os valores efetivos dessas configurações, execute:
 
@@ -305,7 +317,6 @@ Esses dados podem ser coletados por Prometheus ou outras ferramentas de monitora
 
 ## Build do chat e frontend
 
-
 ## Depuração com VS Code + Docker Desktop
 
 Use as configurações já incluídas em `.vscode/launch.json` para depurar o stack completo:
@@ -342,6 +353,7 @@ npm run build  # gera os arquivos em app/static
 ```
 
 ## Variáveis de ambiente
+
 Copie `.env.example` para `.env` e ajuste conforme necessário. Exemplo mínimo:
 
 ```env
@@ -403,12 +415,14 @@ tesseract --list-langs
 - `Error opening data file` ou `Failed loading language` → o pacote de idioma não está instalado. Rode `tesseract --list-langs` e instale, por exemplo, `sudo apt install tesseract-ocr-spa`.
 
 ## Uso do chat
+
 1. Garanta que o backend esteja rodando (com `uvicorn` ou Docker).
 2. Acesse `http://localhost:8000` no navegador.
 3. Envie mensagens pelo campo de texto. Opcionalmente, anexe um PDF pequeno para enriquecer o contexto.
 4. Durante a geração da resposta, use **Cancelar** para interromper o streaming e **Enviar** novamente para retomar.
 
 Recursos da interface:
+
 - Barra lateral com histórico de conversas (criar, renomear, excluir).
 - Avatares e bolhas com realce de código via Prism.
 - Botões para copiar, regenerar e avaliar cada resposta.
@@ -416,6 +430,7 @@ Recursos da interface:
 - Alternância entre tema claro e escuro.
 
 ## Estrutura
+
 ```
 pdf_knowledge_kit/
 ├─ docker-compose.yml      # Postgres + pgvector
@@ -431,23 +446,31 @@ pdf_knowledge_kit/
 ### Deploy em produção
 
 #### Bare metal
+
 1. Instale **PostgreSQL** com a extensão **pgvector** e crie o banco:
+
 ```bash
 psql -c 'CREATE EXTENSION IF NOT EXISTS vector;' "$PGDATABASE"
 psql -f schema.sql "$PGDATABASE"
 psql -f migrations/002_add_admin_ingestion.sql "$PGDATABASE"
 psql -f migrations/003_extend_ingestion_tables.sql "$PGDATABASE"  # novas colunas de metadados
 ```
+
 2. Configure as variáveis de ambiente (veja `.env.example`).
 3. Ingestione os documentos:
+
 ```bash
 python ingest.py --docs ./docs
 ```
+
 4. Inicie a API com um servidor como **gunicorn** ou **uvicorn**:
+
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
 5. Teste:
+
 ```bash
 curl http://localhost:8000/api/health
 ```
@@ -477,25 +500,31 @@ curl http://localhost:8000/api/health
   - Reset do banco (apaga volume): `docker compose down -v`
 
 #### Docker
+
 1. Copie `.env.example` para `.env` e ajuste.
 2. Construa e suba os serviços:
+
 ```bash
 docker compose up --build -d
 ```
-> Nota (Docker/Dev Containers): dentro dos containers use o host `db` (não `localhost`) para acessar o Postgres. A `.env` já define `PGHOST=db` e `DATABASE_URL=postgresql://pdfkb:pdfkb@db:5432/pdfkb`.
-3. Ingerir documentos dentro do container:
+
+> Nota (Docker/Dev Containers): dentro dos containers use o host `db` (não `localhost`) para acessar o Postgres. A `.env` já define `PGHOST=db` e `DATABASE_URL=postgresql://pdfkb:pdfkb@db:5432/pdfkb`. 3. Ingerir documentos dentro do container:
+
 ```bash
 docker compose run --rm app python ingest.py --docs /app/docs
 ```
+
 4. Verifique a API:
+
 ```bash
 curl http://localhost:8000/api/health
 ```
 
 ## Integração no seu agente de IA (resumo)
+
 - Use `query.py` como referência: gere embedding da pergunta e rode SQL:
   `SELECT ... ORDER BY embedding <-> :vec LIMIT :k`.
-  - Traga os trechos + metadados e alimente o *prompt* do agente (*RAG*).
+  - Traga os trechos + metadados e alimente o _prompt_ do agente (_RAG_).
   - Para respostas fiéis, **mostre as fontes** (caminho do arquivo e página, quando houver).
 
 ## Respostas humanizadas com OpenAI
@@ -530,7 +559,7 @@ curl -s -X POST http://localhost:8000/api/ask \
 Resposta:
 
 ```json
-{"answer": "A capital da Alemanha é Berlim.", "from_llm": true}
+{ "answer": "A capital da Alemanha é Berlim.", "from_llm": true }
 ```
 
 ## Admin Ingestion
@@ -646,11 +675,11 @@ curl -X POST http://localhost:8000/api/admin/ingest/transcription \
 
 ### Catálogo de conectores e payloads
 
-| Conector | Quando usar | Campos obrigatórios | Credenciais | Variáveis de ambiente relevantes |
-|----------|-------------|---------------------|-------------|----------------------------------|
-| **Database** (`/api/admin/ingest/database`) | Extrair textos de tabelas relacionais. | `params.queries[]` com `sql`, `text_column`, `id_column`. Opcionalmente `params.dsn` ou `host`/`database`. | `credentials.values.username` e `credentials.values.password` (ou DSN completo). | `DATABASE_URL` ou `PGHOST`/`PGUSER`/`PGPASSWORD` para uso interno. |
-| **REST/API** (`/api/admin/ingest/api`) | Consumir APIs REST JSON. | `params.endpoint` (ou `base_url`), `params.text_fields`, `params.id_field`. | `credentials.values.headers` ou `token`. | `ADMIN_UI_ORIGINS` para CORS quando a UI admin roda em outra origem. |
-| **Transcription** (`/api/admin/ingest/transcription`) | Transcrever áudio/vídeo por provedor externo ou Whisper local. | `params.provider` (`mock`, `whisper`, `aws_transcribe`), `params.media_uri`. | `credentials.values` pode conter `aws_access_key_id`/`aws_secret_access_key` ou tokens específicos do provedor. | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` para AWS; `WHISPER_MODEL`/`WHISPER_COMPUTE_TYPE` opcionais via payload. |
+| Conector                                              | Quando usar                                                    | Campos obrigatórios                                                                                        | Credenciais                                                                                                     | Variáveis de ambiente relevantes                                                                                                   |
+| ----------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Database** (`/api/admin/ingest/database`)           | Extrair textos de tabelas relacionais.                         | `params.queries[]` com `sql`, `text_column`, `id_column`. Opcionalmente `params.dsn` ou `host`/`database`. | `credentials.values.username` e `credentials.values.password` (ou DSN completo).                                | `DATABASE_URL` ou `PGHOST`/`PGUSER`/`PGPASSWORD` para uso interno.                                                                 |
+| **REST/API** (`/api/admin/ingest/api`)                | Consumir APIs REST JSON.                                       | `params.endpoint` (ou `base_url`), `params.text_fields`, `params.id_field`.                                | `credentials.values.headers` ou `token`.                                                                        | `ADMIN_UI_ORIGINS` para CORS quando a UI admin roda em outra origem.                                                               |
+| **Transcription** (`/api/admin/ingest/transcription`) | Transcrever áudio/vídeo por provedor externo ou Whisper local. | `params.provider` (`mock`, `whisper`, `aws_transcribe`), `params.media_uri`.                               | `credentials.values` pode conter `aws_access_key_id`/`aws_secret_access_key` ou tokens específicos do provedor. | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` para AWS; `WHISPER_MODEL`/`WHISPER_COMPUTE_TYPE` opcionais via payload. |
 
 > **Dica:** a API recusa payloads que contenham apenas `{"secret_id": "..."}`. Resolva o segredo (via Vault/KMS) e envie o valor real para que o backend armazene uma cópia criptografada no banco.
 
@@ -671,7 +700,7 @@ O script expõe utilitários para:
 
 1. Criar definições de conector (database, REST ou transcrição).
 2. Iniciar um job usando a definição recém-criada.
-3. Fazer *polling* de `/api/admin/ingest/jobs/<JOB_ID>` para coletar `job_metadata`, `sync_state` e históricos de versão.
+3. Fazer _polling_ de `/api/admin/ingest/jobs/<JOB_ID>` para coletar `job_metadata`, `sync_state` e históricos de versão.
 4. Listar logs incrementais com `GET /api/admin/ingest/jobs/<JOB_ID>/logs?offset=<n>`.
 
 Veja o código para exemplos adicionais de payloads, incluindo anexar `connector_metadata` e enviar credenciais inline.
@@ -760,6 +789,7 @@ npm run dev
 If you need to serve the UI from another origin, set `ADMIN_UI_ORIGINS` before starting the backend so CORS allows the requests.
 
 ## Dicas francas
+
 - PDFs escaneados (sem texto) exigem **OCR** (ex.: Tesseract). Habilite com `--ocr` (opcionalmente `--ocr-lang`) ou `ENABLE_OCR=1`/`OCR_LANG`.
 - A busca agora ocorre em duas etapas: (1) recuperação vetorial via pgvector, (2) reranqueamento léxico com BM25 nos candidatos.
 - Benefícios: melhora a precisão do top-K final em consultas curtas/termos específicos, com custo baixo.
@@ -768,10 +798,12 @@ If you need to serve the UI from another origin, set `ADMIN_UI_ORIGINS` before s
   - Código: `app/rag.py` (`_bm25_rerank` e `build_context`).
 - Ajustes: valores são fixos no código; podemos expor variáveis se quiser calibrar `k`/`pré-K`.
 - Endpoint para registrar feedback de respostas e apoiar melhoria contínua.
+
   - `question` (string, opcional): pergunta do usuário.
   - `sessionId` (string, opcional): sessão/conversa.
 
     "question": "Como configuro potência de leitura?",
+
 - Persistência: registros na tabela `feedbacks` (migração `migrations/005_add_feedback_table.sql`).
 - Inicialização: o backend garante schema/migrações antes de inserir (idempotente).
 - Métricas: simples agregar por `helpful=false`, período (`created_at`) e origem (`session_id`/`sources`). Se quiser, expomos endpoints de agregação.
@@ -824,18 +856,20 @@ Como não há um `CONTRIBUTING.md`, siga o fluxo abaixo para propor mudanças:
 ## Documentação adicional
 
 ### Arquitetura e Desenvolvimento
+
 - [ARCHITECTURE.md](ARCHITECTURE.md) – visão de alto nível dos componentes e fluxos.
 - [API_REFERENCE.md](API_REFERENCE.md) – contratos das rotas HTTP expostas.
 - [FRONTEND_GUIDE.md](FRONTEND_GUIDE.md) – convenções para o app React/Vite.
 - [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) – narrativa executiva e funcionalidades.
 
 ### Operação e Deploy
+
 - [DEPLOYMENT.md](DEPLOYMENT.md) – estratégias de deploy adicionais e práticas recomendadas.
 - [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md) – automação e governança dos conectores.
 
 ### Releases e Produção
+
 - [PRODUCTION_RELEASE_REQUIREMENTS.md](PRODUCTION_RELEASE_REQUIREMENTS.md) – requisitos completos para preparar releases de produção.
 - [VERSION_STRATEGY.md](VERSION_STRATEGY.md) – estratégia de versionamento semântico.
 - [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) – checklist passo-a-passo para criar releases.
 - [CHANGELOG.md](CHANGELOG.md) – histórico de mudanças e releases.
-

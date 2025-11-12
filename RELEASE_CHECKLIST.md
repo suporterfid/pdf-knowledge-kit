@@ -56,25 +56,29 @@ This checklist ensures that all necessary steps are completed before releasing a
 ### 1.3 Code Quality Checks
 
 - [ ] Run linters and formatters
+
   ```bash
   # Python (when implemented)
   ruff check .
   black --check .
   mypy app/
-  
+
   # Frontend (when implemented)
   cd frontend && npm run lint
   ```
+
 - [ ] Fix any linting issues
 - [ ] Run security scanners
+
   ```bash
   # Python security (when implemented)
   bandit -r app/
   pip-audit
-  
+
   # Frontend security
   cd frontend && npm audit
   ```
+
 - [ ] Address any security vulnerabilities
 - [ ] Commit fixes
   ```bash
@@ -164,14 +168,16 @@ This checklist ensures that all necessary steps are completed before releasing a
 ### 3.1 Build Verification
 
 - [ ] Clean build environment
+
   ```bash
   # Clean Python cache
   find . -type d -name __pycache__ -exec rm -r {} +
   find . -type f -name "*.pyc" -delete
-  
+
   # Clean frontend build
   cd frontend && rm -rf dist node_modules
   ```
+
 - [ ] Install dependencies from lock files
   ```bash
   pip install -r requirements.txt
@@ -194,19 +200,21 @@ This checklist ensures that all necessary steps are completed before releasing a
   ```
 - [ ] Verify image builds successfully
 - [ ] Test Docker image locally
+
   ```bash
   docker run -d --name test-release \
     -p 8000:8000 \
     --env-file .env.example \
     pdf-knowledge-kit:X.Y.Z
-  
+
   # Verify container starts
   docker logs test-release
   curl http://localhost:8000/api/health
-  
+
   # Clean up
   docker stop test-release && docker rm test-release
   ```
+
 - [ ] Check image size is reasonable
 - [ ] Verify image labels and metadata
 
@@ -298,13 +306,15 @@ This checklist ensures that all necessary steps are completed before releasing a
 
 - [ ] Deploy to staging environment (if available)
 - [ ] Run smoke tests on staging
+
   ```bash
   # Health check
   curl https://staging.example.com/api/health
-  
+
   # Version check
   curl https://staging.example.com/api/version
   ```
+
 - [ ] Verify version is correct
 - [ ] Test critical paths
   - [ ] Can ingest a document
@@ -373,13 +383,15 @@ If the release needs to be rolled back:
 - [ ] Identify the issue
 - [ ] Notify stakeholders
 - [ ] Revert to previous version
+
   ```bash
   # For Docker deployments
   docker pull suporterfid/pdf-knowledge-kit:X.Y.Z-1
-  
+
   # Rollback database migrations if needed
   alembic downgrade -1
   ```
+
 - [ ] Verify rollback successful
 - [ ] Update GitHub Release as "yanked" or delete
 - [ ] Remove broken Docker image tags (if necessary)
@@ -400,9 +412,9 @@ Use this section to document any issues, deviations, or lessons learned during t
 
 ## Sign-off
 
-- [ ] Release Manager: ________________________ Date: __________
-- [ ] Tech Lead: ________________________ Date: __________
-- [ ] Security Review (MAJOR only): ________________________ Date: __________
+- [ ] Release Manager: **********\_\_\_\_********** Date: ****\_\_****
+- [ ] Tech Lead: **********\_\_\_\_********** Date: ****\_\_****
+- [ ] Security Review (MAJOR only): **********\_\_\_\_********** Date: ****\_\_****
 
 ---
 

@@ -19,11 +19,11 @@ Agents Service Layer
 └── Schemas Module (app/agents/schemas.py, not shown) – shared Pydantic models consumed across the layer
 ```
 
-* **AgentService** coordinates CRUD, versioning, test execution, deployment metadata, and channel configuration by combining repository persistence with provider/prompt/response helpers.【F:app/agents/service.py†L101-L310】
-* **PostgresAgentRepository** satisfies the `AgentRepository` protocol via SQL statements using a psycopg connection wrapper, translating rows into schema objects and vice versa.【F:app/agents/service.py†L394-L796】
-* **ProviderRegistry** supplies API credentials for LLM providers, either from injected overrides or environment variables, while `ProviderCredentials` materialises the header payloads expected by downstream calls.【F:app/agents/providers.py†L9-L74】
-* **PromptTemplateStore** merges built-in persona templates with optional overrides and resolves/render prompts based on persona/provider combinations.【F:app/agents/prompts.py†L7-L60】
-* **ResponseParameterStore** keeps provider defaults and merges arbitrary overrides so AgentService can persist coherent response parameter payloads.【F:app/agents/responses.py†L7-L39】
+- **AgentService** coordinates CRUD, versioning, test execution, deployment metadata, and channel configuration by combining repository persistence with provider/prompt/response helpers.【F:app/agents/service.py†L101-L310】
+- **PostgresAgentRepository** satisfies the `AgentRepository` protocol via SQL statements using a psycopg connection wrapper, translating rows into schema objects and vice versa.【F:app/agents/service.py†L394-L796】
+- **ProviderRegistry** supplies API credentials for LLM providers, either from injected overrides or environment variables, while `ProviderCredentials` materialises the header payloads expected by downstream calls.【F:app/agents/providers.py†L9-L74】
+- **PromptTemplateStore** merges built-in persona templates with optional overrides and resolves/render prompts based on persona/provider combinations.【F:app/agents/prompts.py†L7-L60】
+- **ResponseParameterStore** keeps provider defaults and merges arbitrary overrides so AgentService can persist coherent response parameter payloads.【F:app/agents/responses.py†L7-L39】
 
 ## Frontend – React Context Graph (`frontend/src`)
 
@@ -42,11 +42,11 @@ Context Providers
     └── Manages CSS variables/localStorage for light vs. dark themes
 ```
 
-* **ApiKeyProvider** centralises API key persistence, exposes typed hooks, and wraps `fetch` to decorate requests and surface auth errors via toasts.【F:frontend/src/apiKey.tsx†L1-L65】
-* **ConfigProvider** layers server-provided branding/upload settings over defaults after retrieving them with `useApiFetch`, making them available app-wide via context.【F:frontend/src/config.tsx†L1-L43】
-* **ChatProvider** orchestrates conversational state, file uploads, and streaming SSE responses, depending on both the configuration and API key contexts to enforce limits and authenticate network requests.【F:frontend/src/chat.tsx†L1-L270】
-* **ThemeProvider** toggles between light/dark palettes by mutating document-level CSS variables and persisting the choice in `localStorage`.【F:frontend/src/theme.tsx†L1-L64】
+- **ApiKeyProvider** centralises API key persistence, exposes typed hooks, and wraps `fetch` to decorate requests and surface auth errors via toasts.【F:frontend/src/apiKey.tsx†L1-L65】
+- **ConfigProvider** layers server-provided branding/upload settings over defaults after retrieving them with `useApiFetch`, making them available app-wide via context.【F:frontend/src/config.tsx†L1-L43】
+- **ChatProvider** orchestrates conversational state, file uploads, and streaming SSE responses, depending on both the configuration and API key contexts to enforce limits and authenticate network requests.【F:frontend/src/chat.tsx†L1-L270】
+- **ThemeProvider** toggles between light/dark palettes by mutating document-level CSS variables and persisting the choice in `localStorage`.【F:frontend/src/theme.tsx†L1-L64】
 
 ## New Modules Since Last Update
 
-* None – this is the initial version of `ARCHITECTURE.md`, so no new modules require highlighting.
+- None – this is the initial version of `ARCHITECTURE.md`, so no new modules require highlighting.

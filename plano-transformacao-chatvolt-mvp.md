@@ -7,9 +7,11 @@ Este documento apresenta um plano detalhado para transformar seu projeto **pdf-k
 ## 🎯 Objetivos do Projeto
 
 ### Objetivo Principal
+
 Criar uma plataforma no-code que permita a usuários criarem, configurarem e implementarem agentes de IA personalizados em múltiplos canais de comunicação.
 
 ### Objetivos Específicos
+
 - Implementar arquitetura multi-tenant
 - Desenvolver interface de criação de agentes (Agent Builder)
 - Integrar com canais de comunicação (WhatsApp, Telegram, Web)
@@ -19,6 +21,7 @@ Criar uma plataforma no-code que permita a usuários criarem, configurarem e imp
 ## 📊 Análise da Base Atual
 
 ### Pontos Fortes do pdf-knowledge-kit
+
 - ✅ Backend FastAPI sólido com sistema RAG implementado
 - ✅ Frontend React com interface de chat funcional
 - ✅ Integração robusta com PostgreSQL + pgvector
@@ -31,6 +34,7 @@ Criar uma plataforma no-code que permita a usuários criarem, configurarem e imp
 - ✅ Suporte multilíngue nativo
 
 ### Funcionalidades do ChatVolt a Implementar
+
 - 🎯 Criação no-code de agentes IA
 - 🎯 Suporte a múltiplos canais (WhatsApp, Telegram, Instagram, Web)
 - 🎯 Dashboard de gerenciamento de agentes
@@ -45,20 +49,25 @@ Criar uma plataforma no-code que permita a usuários criarem, configurarem e imp
 ## 🚀 Roadmap de Desenvolvimento (8 meses)
 
 ### FASE 1: MVP Multi-tenant (0-2 meses)
+
 **Objetivo:** Estabelecer base multi-tenant e interface básica
 
 **Desenvolvimentos Principais:**
+
 1. **Sistema de Usuários e Organizações**
+
    - Tabelas: users, organizations, user_organization_roles
    - Autenticação JWT com tenant context
    - Middleware de isolamento de dados por tenant
 
 2. **Dashboard Básico de Agentes**
+
    - Lista de agentes por organização
    - Métricas básicas (mensagens, usuários ativos)
    - Interface para criar/editar agentes simples
 
 3. **Interface de Criação de Agentes Simples**
+
    - Formulário de configuração básica
    - Definição de prompt do sistema
    - Upload de base de conhecimento por agente
@@ -70,26 +79,32 @@ Criar uma plataforma no-code que permita a usuários criarem, configurarem e imp
    - APIs com contexto de tenant
 
 **Entregáveis:**
+
 - Sistema de cadastro e login multi-tenant
 - Dashboard básico funcional
 - Criação de agentes simples
 - Chat widget embeddable por agente
 
 ### FASE 2: Agent Builder Avançado (2-4 meses)
+
 **Objetivo:** Desenvolver interface no-code avançada
 
 **Desenvolvimentos Principais:**
+
 1. **Interface No-code Drag-and-Drop**
+
    - Editor visual de fluxos de conversação
    - Componentes pré-definidos (pergunta, condição, ação)
    - Preview em tempo real do agente
 
 2. **Templates de Agentes**
+
    - Biblioteca de templates (Atendimento, Vendas, Suporte)
    - Sistema de importação/exportação de configurações
    - Customização de templates existentes
 
 3. **Sistema de Permissões Granular**
+
    - Roles: Owner, Admin, Editor, Viewer
    - Permissões por agente e por funcionalidade
    - Auditoria de ações dos usuários
@@ -100,27 +115,33 @@ Criar uma plataforma no-code que permita a usuários criarem, configurarem e imp
    - Relatórios exportáveis
 
 **Entregáveis:**
+
 - Agent Builder visual completo
 - Sistema de templates funcionando
 - Controle de acesso implementado
 - Dashboard de analytics básico
 
 ### FASE 3: Integrações e Canais (4-6 meses)
+
 **Objetivo:** Conectar agentes a canais externos
 
 **Desenvolvimentos Principais:**
+
 1. **Integração WhatsApp Business API**
+
    - Configuração de webhooks
    - Envio e recebimento de mensagens
    - Suporte a mídias (imagens, documentos, áudio)
    - Templates de mensagens do WhatsApp
 
 2. **Integração Telegram Bot API**
+
    - Criação automática de bots
    - Comandos personalizados
    - Suporte a grupos e canais
 
 3. **Sistema de Webhooks**
+
    - Configuração de endpoints personalizados
    - Integração com sistemas externos (CRMs, ERPs)
    - Logs de integrações e erros
@@ -132,28 +153,34 @@ Criar uma plataforma no-code que permita a usuários criarem, configurarem e imp
    - Pipeline de vendas simples
 
 **Entregáveis:**
+
 - Agentes funcionando no WhatsApp
-- Agentes funcionando no Telegram  
+- Agentes funcionando no Telegram
 - Sistema de webhooks operacional
 - CRM básico integrado
 
 ### FASE 4: Marketplace e Monetização (6-8 meses)
+
 **Objetivo:** Criar ecossistema e modelo de negócio
 
 **Desenvolvimentos Principais:**
+
 1. **Marketplace de Agentes**
+
    - Catálogo público de agentes
    - Sistema de avaliações e comentários
    - Categorização e busca avançada
    - Monetização de templates premium
 
 2. **Sistema de Cobrança**
+
    - Integração com Stripe/PagarMe
    - Planos de assinatura flexíveis
    - Cobrança por uso (mensagens, integrações)
    - Faturamento automático
 
 3. **Analytics Avançados**
+
    - BI integrado com drill-down
    - Comparações entre agentes
    - Análise de sentimentos
@@ -166,6 +193,7 @@ Criar uma plataforma no-code que permita a usuários criarem, configurarem e imp
    - Monitoramento APM completo
 
 **Entregáveis:**
+
 - Marketplace público funcionando
 - Sistema de pagamentos operacional
 - Analytics avançados disponíveis
@@ -176,6 +204,7 @@ Criar uma plataforma no-code que permita a usuários criarem, configurarem e imp
 ### Backend (FastAPI + PostgreSQL)
 
 **Estrutura de Pastas Proposta:**
+
 ```
 app/
 ├── core/
@@ -202,6 +231,7 @@ app/
 ```
 
 **Modelo de Dados Multi-tenant:**
+
 ```sql
 -- Organizações (Tenants)
 CREATE TABLE organizations (
@@ -241,7 +271,7 @@ CREATE TABLE agents (
     knowledge_base_id UUID, -- Link to existing KB system
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT NOW(),
-    
+
     -- Row Level Security
     CONSTRAINT agents_tenant_isolation CHECK (organization_id IS NOT NULL)
 );
@@ -252,8 +282,8 @@ ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
 -- Policy: usuários só veem agentes de sua organização
 CREATE POLICY agents_tenant_policy ON agents
     USING (organization_id IN (
-        SELECT organization_id 
-        FROM user_organization_roles 
+        SELECT organization_id
+        FROM user_organization_roles
         WHERE user_id = current_setting('app.current_user_id')::uuid
     ));
 ```
@@ -261,6 +291,7 @@ CREATE POLICY agents_tenant_policy ON agents
 ### Frontend (React + TypeScript)
 
 **Estrutura Proposta:**
+
 ```
 frontend/src/
 ├── components/
@@ -285,6 +316,7 @@ frontend/src/
 ```
 
 **Tecnologias Adicionais Sugeridas:**
+
 - **React Flow**: Para interface drag-and-drop do Agent Builder
 - **Recharts**: Para dashboards e analytics
 - **React Query**: Para cache e sincronização de dados
@@ -294,6 +326,7 @@ frontend/src/
 ### Integrações de Canal
 
 **WhatsApp Business API:**
+
 ```python
 # app/services/whatsapp_service.py
 import requests
@@ -304,50 +337,50 @@ class WhatsAppService:
         self.access_token = access_token
         self.phone_number_id = phone_number_id
         self.base_url = "https://graph.facebook.com/v18.0"
-    
+
     async def send_message(self, to: str, message: str, agent_id: str):
         """Envia mensagem via WhatsApp Business API"""
         url = f"{self.base_url}/{self.phone_number_id}/messages"
-        
+
         payload = {
             "messaging_product": "whatsapp",
             "to": to,
             "type": "text",
             "text": {"body": message}
         }
-        
+
         headers = {
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json"
         }
-        
+
         # Log da mensagem para analytics
         await self.log_message(agent_id, to, message, "outbound")
-        
+
         response = requests.post(url, json=payload, headers=headers)
         return response.json()
-    
+
     async def handle_webhook(self, payload: Dict[str, Any]):
         """Processa mensagens recebidas do WhatsApp"""
         for entry in payload.get("entry", []):
             for change in entry.get("changes", []):
                 if change.get("field") == "messages":
                     await self.process_message(change["value"])
-    
+
     async def process_message(self, message_data: Dict[str, Any]):
         """Processa mensagem recebida e gera resposta do agente"""
         messages = message_data.get("messages", [])
-        
+
         for message in messages:
             phone_number = message["from"]
             text = message.get("text", {}).get("body", "")
-            
+
             # Identificar agente baseado no número/webhook
             agent = await self.get_agent_by_phone(phone_number)
-            
+
             # Gerar resposta usando RAG
             response = await self.generate_agent_response(agent, text, phone_number)
-            
+
             # Enviar resposta
             await self.send_message(phone_number, response, agent.id)
 ```
@@ -355,6 +388,7 @@ class WhatsAppService:
 ## 🛠️ Stack Tecnológica Recomendada
 
 ### Backend
+
 - **FastAPI**: Framework principal (já implementado)
 - **PostgreSQL 15+**: Database com Row Level Security
 - **pgvector**: Vector database para RAG (já implementado)
@@ -363,7 +397,8 @@ class WhatsAppService:
 - **Pydantic**: Validação e serialização
 - **SQLAlchemy**: ORM com suporte a multi-tenancy
 
-### Frontend  
+### Frontend
+
 - **React 18**: Framework principal (já implementado)
 - **TypeScript**: Type safety
 - **Vite**: Build tool (já implementado)
@@ -374,6 +409,7 @@ class WhatsAppService:
 - **Zustand**: State management
 
 ### Infraestrutura
+
 - **Docker**: Containerização (já implementado)
 - **PostgreSQL**: Primary database
 - **Redis**: Cache e filas
@@ -381,6 +417,7 @@ class WhatsAppService:
 - **Let's Encrypt**: SSL certificates
 
 ### Integrações
+
 - **WhatsApp Business API**: Mensagens WhatsApp
 - **Telegram Bot API**: Bots do Telegram
 - **Stripe/PagarMe**: Processamento de pagamentos
@@ -392,12 +429,14 @@ class WhatsAppService:
 ### Planos de Assinatura Sugeridos
 
 **Plano Gratuito (Free)**
+
 - 1 agente ativo
 - 100 mensagens/mês
 - Integração web apenas
 - Suporte via email
 
 **Plano Starter (R$ 97/mês)**
+
 - 3 agentes ativos
 - 1.000 mensagens/mês
 - WhatsApp + Web
@@ -405,6 +444,7 @@ class WhatsAppService:
 - Suporte via chat
 
 **Plano Business (R$ 297/mês)**
+
 - 10 agentes ativos
 - 10.000 mensagens/mês
 - Todos os canais
@@ -414,6 +454,7 @@ class WhatsAppService:
 - Suporte prioritário
 
 **Plano Enterprise (R$ 997/mês)**
+
 - Agentes ilimitados
 - 100.000 mensagens/mês
 - White-label
@@ -422,6 +463,7 @@ class WhatsAppService:
 - Success manager
 
 ### Monetização Adicional
+
 - **Marketplace**: 30% de comissão em templates premium
 - **Mensagens extras**: R$ 0,05 por mensagem adicional
 - **Integrações premium**: R$ 50/mês por integração
@@ -430,18 +472,21 @@ class WhatsAppService:
 ## 📈 Métricas de Sucesso
 
 ### KPIs Técnicos
+
 - **Uptime**: >99.9%
 - **Response time**: <2s para APIs
 - **Message latency**: <5s para canais externos
 - **Concurrent users**: Suporte a 1000+ usuários simultâneos
 
 ### KPIs de Produto
+
 - **Ativação**: % de usuários que criam primeiro agente em 7 dias
 - **Retenção**: % de usuários ativos após 30 dias
 - **Engagement**: Mensagens por agente por mês
 - **Conversão**: % de free para paid users
 
 ### KPIs de Negócio
+
 - **MRR**: Monthly Recurring Revenue
 - **CAC**: Customer Acquisition Cost
 - **LTV**: Lifetime Value
@@ -450,18 +495,21 @@ class WhatsAppService:
 ## 🎯 Próximos Passos Imediatos
 
 ### Semana 1-2: Planejamento Detalhado
+
 1. Revisar e validar arquitetura proposta
 2. Definir prioridades da FASE 1
 3. Setup do ambiente de desenvolvimento multi-tenant
 4. Criar wireframes da nova interface
 
 ### Semana 3-4: Implementação Base Multi-tenant
+
 1. Implementar tabelas de organizações e usuários
-2. Configurar Row Level Security no PostgreSQL  
+2. Configurar Row Level Security no PostgreSQL
 3. Adaptar APIs existentes para contexto multi-tenant
 4. Criar middleware de autenticação com tenant
 
 ### Mês 2: MVP Dashboard e Agent Builder
+
 1. Desenvolver interface de listagem de agentes
 2. Criar formulário básico de configuração de agentes
 3. Implementar chat widget embeddable
@@ -470,12 +518,14 @@ class WhatsAppService:
 ## 🤝 Recomendações Específicas para o seu contexto
 
 ### Aproveitamento da Base Existente
+
 1. **Manter o sistema RAG atual**: É uma base sólida que já funciona
 2. **Evoluir gradualmente**: Não reescrever tudo, adaptar incrementalmente
 3. **Usar a expertise em RFID**: Criar templates específicos para IoT/RFID
 4. **Focar no mercado brasileiro**: Integração prioritária com WhatsApp
 
 ### Diferenciação no Mercado
+
 1. **Templates verticais**: Agentes pré-configurados para setores específicos
 2. **Integração IoT**: Conectores para dispositivos RFID/sensores
 3. **Suporte técnico especializado**: Sua experiência em consulting
