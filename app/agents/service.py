@@ -39,33 +39,6 @@ class AgentRepository(Protocol):
         self, slug: str, *, include_versions: bool = False, include_tests: bool = False
     ) -> Optional[schemas.AgentDetail]: ...
 
-    def get_agent_by_slug(
-        self, slug: str, *, include_versions: bool = False, include_tests: bool = False
-    ) -> Optional[schemas.AgentDetail]:
-        with self.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, slug, name, description, provider, model, persona, prompt_template,
-                       response_params, deployment_metadata, tags, is_active, created_at, updated_at
-                FROM agents
-                WHERE slug = %s
-                """,
-                (slug,),
-            )
-            row = cur.fetchone()
-        if not row:
-            return None
-        agent = self._row_to_agent(row)
-        detail = schemas.AgentDetail(**agent.model_dump())
-        if include_versions:
-            detail.versions = self.list_versions(agent.id)
-            detail.latest_version = detail.versions[-1] if detail.versions else None
-        else:
-            detail.latest_version = self.latest_version(agent.id)
-        if include_tests:
-            detail.tests = self.list_tests(agent.id)
-        return detail
-
     def create_agent(self, payload: schemas.AgentCreate) -> schemas.Agent: ...
 
     def update_agent(self, agent_id: int, payload: schemas.AgentUpdate) -> schemas.Agent: ...
@@ -116,44 +89,37 @@ class AgentService:
     def list_agents(self) -> List[schemas.Agent]:
         return self._repository.list_agents()
 
-    def get_agent(self, agent_id: int) -> schemas.AgentDetail:
-        agent = self._repository.get_agent(agent_id, include_versions=True, include_tests=True)
+    def get_agent(
+        self,
+        agent_id: int,
+        *,
+        include_versions: bool = True,
+        include_tests: bool = True,
+    ) -> schemas.AgentDetail:
+        agent = self._repository.get_agent(
+            agent_id,
+            include_versions=include_versions,
+            include_tests=include_tests,
+        )
         if not agent:
             raise AgentNotFoundError(f"Agent {agent_id} not found")
         return agent
 
-    def get_agent_by_slug(self, slug: str) -> schemas.AgentDetail:
-        agent = self._repository.get_agent_by_slug(slug, include_versions=True, include_tests=False)
+    def get_agent_by_slug(
+        self,
+        slug: str,
+        *,
+        include_versions: bool = True,
+        include_tests: bool = False,
+    ) -> schemas.AgentDetail:
+        agent = self._repository.get_agent_by_slug(
+            slug,
+            include_versions=include_versions,
+            include_tests=include_tests,
+        )
         if not agent:
             raise AgentNotFoundError(f"Agent '{slug}' not found")
         return agent
-
-    def get_agent_by_slug(
-        self, slug: str, *, include_versions: bool = False, include_tests: bool = False
-    ) -> Optional[schemas.AgentDetail]:
-        with self.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, slug, name, description, provider, model, persona, prompt_template,
-                       response_params, deployment_metadata, tags, is_active, created_at, updated_at
-                FROM agents
-                WHERE slug = %s
-                """,
-                (slug,),
-            )
-            row = cur.fetchone()
-        if not row:
-            return None
-        agent = self._row_to_agent(row)
-        detail = schemas.AgentDetail(**agent.model_dump())
-        if include_versions:
-            detail.versions = self.list_versions(agent.id)
-            detail.latest_version = detail.versions[-1] if detail.versions else None
-        else:
-            detail.latest_version = self.latest_version(agent.id)
-        if include_tests:
-            detail.tests = self.list_tests(agent.id)
-        return detail
 
     def create_agent(self, payload: schemas.AgentCreate) -> schemas.AgentDetail:
         persona = dict(payload.persona or {})
@@ -838,29 +804,22 @@ class InMemoryAgentRepository(AgentRepository):
     def get_agent_by_slug(
         self, slug: str, *, include_versions: bool = False, include_tests: bool = False
     ) -> Optional[schemas.AgentDetail]:
-        with self.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, slug, name, description, provider, model, persona, prompt_template,
-                       response_params, deployment_metadata, tags, is_active, created_at, updated_at
-                FROM agents
-                WHERE slug = %s
-                """,
-                (slug,),
-            )
-            row = cur.fetchone()
-        if not row:
-            return None
-        agent = self._row_to_agent(row)
-        detail = schemas.AgentDetail(**agent.model_dump())
-        if include_versions:
-            detail.versions = self.list_versions(agent.id)
-            detail.latest_version = detail.versions[-1] if detail.versions else None
+        for agent in self._agents.values():
+            if agent.slug == slug:
+                source = agent
+                break
         else:
-            detail.latest_version = self.latest_version(agent.id)
+            return None
+        clone = schemas.AgentDetail(**source.model_dump())
+        if include_versions:
+            clone.versions = list(self._versions.get(source.id, []))
+            clone.latest_version = clone.versions[-1] if clone.versions else None
+        else:
+            versions = self._versions.get(source.id, [])
+            clone.latest_version = versions[-1] if versions else None
         if include_tests:
-            detail.tests = self.list_tests(agent.id)
-        return detail
+            clone.tests = list(self._tests.get(source.id, []))
+        return clone
 
     def create_agent(self, payload: schemas.AgentCreate) -> schemas.Agent:
         agent_id = self._agent_id_seq
