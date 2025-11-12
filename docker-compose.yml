@@ -5,9 +5,9 @@ services:
       - .env
     environment:
       # Initialize database and user on first run, matching values from .env
-      POSTGRES_USER: ${PGUSER:-pdfkb}
-      POSTGRES_PASSWORD: ${PGPASSWORD:-pdfkb}
-      POSTGRES_DB: ${PGDATABASE:-pdfkb}
+      POSTGRES_USER: ${PGUSER}
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+      POSTGRES_DB: ${PGDATABASE}
     ports:
       - "5432:5432"
     expose:
