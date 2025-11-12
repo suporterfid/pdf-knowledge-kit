@@ -82,7 +82,7 @@ def client_factory(monkeypatch: pytest.MonkeyPatch) -> Callable[[], tuple[TestCl
     def _factory() -> tuple[TestClient, DummyConnection]:
         connection = DummyConnection(statements=[])
         app = _create_app(monkeypatch, connection)
-        client = TestClient(app)
+        client = TestClient(app, raise_server_exceptions=False)
         return client, connection
 
     return _factory
@@ -104,6 +104,8 @@ def tenant_token_factory() -> Callable[..., str]:
             "aud": "chatvolt",
             "iss": "auth.chatvolt",
             "exp": int(time.time()) + expires_in,
+            "type": "access",
+            "scope": "tenant",
         }
         token = jwt.encode(payload, "secret-key", algorithm="HS256")
         return str(token)

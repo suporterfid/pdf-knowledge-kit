@@ -562,24 +562,55 @@ Resposta:
 { "answer": "A capital da Alemanha é Berlim.", "from_llm": true }
 ```
 
+## Tenant accounts e autenticação
+
+Use o conjunto de endpoints em `/api/tenant/accounts` para criar organizações, emitir tokens JWT e administrar convites de usuários. O fluxo básico envolve:
+
+1. Registrar uma organização + usuário administrador (`POST /api/tenant/accounts/register`).
+2. Fazer login (`POST /api/tenant/accounts/login`) para receber um par `access_token`/`refresh_token`.
+3. Enviar o `access_token` no cabeçalho `Authorization: Bearer <token>` para proteger os demais endpoints.
+4. Renovar credenciais com `/refresh`, revogar com `/logout` e rotacionar todos os tokens ativos via `/rotate-credentials`.
+5. Administradores podem convidar novos membros (`/invite`) e os convidados finalizam o cadastro em `/accept-invite`.
+
+Exemplo de registro e login:
+
+```bash
+curl -s -X POST http://localhost:8000/api/tenant/accounts/register \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "organization_name": "Acme Inc",
+        "subdomain": "acme",
+        "admin_name": "Alice",
+        "admin_email": "alice@acme.dev",
+        "password": "Str0ngPass!"
+      }'
+
+curl -s -X POST http://localhost:8000/api/tenant/accounts/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email": "alice@acme.dev", "password": "Str0ngPass!"}'
+```
+
+O corpo de resposta inclui `roles` (`viewer` < `operator` < `admin`) e metadados da organização. Tokens de atualização expiram por padrão em 14 dias, mas podem ser invalidados a qualquer momento pelos endpoints acima.
+
 ## Admin Ingestion
 
 The `/api/admin/ingest/*` endpoints let operators trigger ingestion jobs remotely. Jobs run in the background and immediately return a `job_id`. Each job writes its own log file that can be polled while the work proceeds.
 
 ### Roles and environment variables
 
-Requests must send an API key in the `X-API-Key` header. Keys map to roles in a strict hierarchy:
+Requests must send um token JWT no cabeçalho `Authorization: Bearer <token>`. O `access_token` embute a hierarquia de papéis:
 
-- **viewer** – read-only access to jobs and sources.
-- **operator** – all viewer permissions plus start and cancel jobs.
-- **admin** – reserved for advanced operations.
+- **viewer** – acesso somente leitura a jobs e fontes.
+- **operator** – viewer + iniciar/cancelar jobs.
+- **admin** – operações avançadas de manutenção.
 
-Configure the keys with single-value environment variables:
+Configure os parâmetros de assinatura JWT no ambiente:
 
 ```bash
-ADMIN_API_KEY=admin    # full access
-OP_API_KEY=oper        # start/cancel jobs
-VIEW_API_KEY=view      # read-only
+TENANT_TOKEN_SECRET=super-secret-key
+TENANT_TOKEN_ISSUER=https://auth.example.com
+TENANT_TOKEN_AUDIENCE=chatvolt
+# (opcional) ACCESS_TOKEN_TTL_SECONDS e REFRESH_TOKEN_TTL_SECONDS para customizar expirações
 ```
 
 ### Job lifecycle, logs, and monitoring
@@ -588,23 +619,23 @@ Jobs move from `pending` → `running` → `completed`/`failed`/`canceled`. Logs
 
 ```bash
 # List jobs
-curl -H "X-API-Key: $VIEWER_API_KEY" \
+curl -H "Authorization: Bearer $ACCESS_TOKEN" \
   http://localhost:8000/api/admin/ingest/jobs
 
 # Inspect a single job
-curl -H "X-API-Key: $VIEWER_API_KEY" \
+curl -H "Authorization: Bearer $ACCESS_TOKEN" \
   http://localhost:8000/api/admin/ingest/jobs/<JOB_ID>
 
 # Read logs from the beginning
-curl -H "X-API-Key: $VIEWER_API_KEY" \
+curl -H "Authorization: Bearer $ACCESS_TOKEN" \
   "http://localhost:8000/api/admin/ingest/jobs/<JOB_ID>/logs?offset=0"
 
 # Cancel a running job
-curl -X POST -H "X-API-Key: $OPERATOR_API_KEY" \
+curl -X POST -H "Authorization: Bearer $OPERATOR_TOKEN" \
   http://localhost:8000/api/admin/ingest/jobs/<JOB_ID>/cancel
 
 # Re-run a job using the same source
-curl -X POST -H "X-API-Key: $OPERATOR_API_KEY" \
+curl -X POST -H "Authorization: Bearer $OPERATOR_TOKEN" \
   http://localhost:8000/api/admin/ingest/jobs/<JOB_ID>/rerun
 ```
 
@@ -613,23 +644,23 @@ curl -X POST -H "X-API-Key: $OPERATOR_API_KEY" \
 ```bash
 # Local file
 curl -X POST http://localhost:8000/api/admin/ingest/local \
-  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
   -d "path=/app/docs/example.pdf"
 
 # Single URL
 curl -X POST http://localhost:8000/api/admin/ingest/url \
-  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
   -d "url=https://example.com/doc"
 
 # List of URLs
 curl -X POST http://localhost:8000/api/admin/ingest/urls \
-  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"urls": ["https://a.com/doc1", "https://b.com/doc2"]}'
 
 # Database connector job
 curl -X POST http://localhost:8000/api/admin/ingest/database \
-  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
         "label": "crm",
@@ -650,7 +681,7 @@ curl -X POST http://localhost:8000/api/admin/ingest/database \
 
 # REST connector job
 curl -X POST http://localhost:8000/api/admin/ingest/api \
-  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
         "label": "status-page",
@@ -664,7 +695,7 @@ curl -X POST http://localhost:8000/api/admin/ingest/api \
 
 # Transcription connector job (set connector_metadata.media_type="video" for video sources)
 curl -X POST http://localhost:8000/api/admin/ingest/transcription \
-  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
         "label": "all-hands",
@@ -753,7 +784,7 @@ Para rodar a suíte inteira, garanta que `npm install && npm test` também seja 
 
 ```bash
 # List known sources
-curl -H "X-API-Key: $VIEWER_API_KEY" \
+curl -H "Authorization: Bearer $ACCESS_TOKEN" \
   http://localhost:8000/api/admin/ingest/sources
 ```
 
@@ -761,12 +792,12 @@ Connector definitions follow the same RBAC rules: viewers can list metadata, whi
 
 ```bash
 # List connector definitions (viewer)
-curl -H "X-API-Key: $VIEWER_API_KEY" \
+curl -H "Authorization: Bearer $ACCESS_TOKEN" \
   http://localhost:8000/api/admin/ingest/connector_definitions
 
 # Create a reusable database connector (operator)
 curl -X POST http://localhost:8000/api/admin/ingest/connector_definitions \
-  -H "X-API-Key: $OPERATOR_API_KEY" \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
         "name": "prod-crm",

@@ -53,7 +53,8 @@ Key environment variables (see `.env.example`):
 
 | Variable                                                                       | Description                                                     |
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| `ADMIN_API_KEY`, `OP_API_KEY`, `VIEW_API_KEY`                                  | API keys for role‑based ingestion endpoints.                    |
+| `TENANT_TOKEN_SECRET`, `TENANT_TOKEN_ISSUER`, `TENANT_TOKEN_AUDIENCE`          | Parâmetros para assinar e validar JWTs de acesso multi-tenant.  |
+| `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_SECONDS`                        | (Opcional) ajustar tempo de expiração dos tokens emitidos.      |
 | `DATABASE_URL` / `PG*`                                                         | PostgreSQL connection details.                                  |
 | `LOG_DIR`, `LOG_LEVEL`, `LOG_JSON`                                             | Logging configuration.                                          |
 | `DOCS_DIR`, `ENABLE_OCR`, `OCR_LANG`                                           | Ingestion and OCR behaviour.                                    |
@@ -112,6 +113,7 @@ Existing workflow `tests.yml` runs on pushes and pull requests:
 - `POST /api/upload` – temporary file storage for chat attachments.
 - `POST /api/ask` – returns answer and source chunks.
 - `POST /api/chat` & `GET /api/chat` – streaming chat responses with optional file attachments.
+- `Router /api/tenant/accounts` – gerencia organizações, login/logout, convites e rotação de tokens de acesso.
 - `Router /api/admin/ingest` – start ingestion jobs (`/local`, `/url`, `/urls`, `/database`, `/api`, `/transcription`), manage connector definitions, inspect job metadata and logs.
 
 #### Connector endpoints

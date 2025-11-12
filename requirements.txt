@@ -16,6 +16,7 @@ pytest>=8.0
 slowapi>=0.1.8
 langdetect>=1.0.9
 PyJWT>=2.8.0
+passlib[argon2]>=1.7.4
 pytesseract
 pdf2image
 Pillow

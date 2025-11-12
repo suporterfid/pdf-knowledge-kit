@@ -2,7 +2,7 @@
 
 This router exposes endpoints for operators to start ingestion jobs, inspect
 their progress, (re)index sources and read job logs. Access is controlled via
-simple role-based API keys (see security/auth.py).
+JWT bearer tokens emitidos pelo módulo de segurança (`app.security`).
 """
 from __future__ import annotations
 

@@ -17,11 +17,13 @@ class Base(DeclarativeBase):
 
 # Re-export core tenant models for convenience so callers can import them via
 # ``from app.models import Organization`` instead of touching private modules.
-from .tenant import Organization, User
+from .tenant import Organization, RefreshToken, User, UserInvite
 
 
 __all__ = [
     "Base",
     "Organization",
     "User",
+    "UserInvite",
+    "RefreshToken",
 ]

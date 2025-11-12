@@ -4,12 +4,8 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 
-def create_client(monkeypatch):
-    monkeypatch.setenv("VIEW_API_KEY", "view")
-    monkeypatch.setenv("OP_API_KEY", "oper")
-    monkeypatch.setenv("ADMIN_API_KEY", "admin")
-
-    # Reload modules to pick up env vars
+def create_client(monkeypatch, tenant_auth):
+    # Reload modules to pick up env vars and database configuration
     import app.security.auth as auth
     importlib.reload(auth)
     import app.routers.admin_ingest_api as admin_api
@@ -18,17 +14,17 @@ def create_client(monkeypatch):
     importlib.reload(main)
 
     client = TestClient(main.app)
-    return client, admin_api
+    return client, admin_api, tenant_auth
 
 
-def test_role_enforcement(monkeypatch):
-    client, admin_api = create_client(monkeypatch)
+def test_role_enforcement(monkeypatch, tenant_auth):
+    client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     dummy_job_id = uuid4()
     monkeypatch.setattr(admin_api.service, "ingest_url", lambda url: dummy_job_id)
     monkeypatch.setattr(admin_api.service, "list_jobs", lambda: [])
 
     # viewer can list jobs
-    res = client.get("/api/admin/ingest/jobs", headers={"X-API-Key": "view"})
+    res = client.get("/api/admin/ingest/jobs", headers=auth_ctx.header("viewer"))
     assert res.status_code == 200
     assert res.json() == {"items": [], "total": 0}
 
@@ -36,7 +32,7 @@ def test_role_enforcement(monkeypatch):
     res = client.post(
         "/api/admin/ingest/url",
         json={"url": "http://example.com"},
-        headers={"X-API-Key": "view"},
+        headers=auth_ctx.header("viewer"),
     )
     assert res.status_code == 403
 
@@ -44,7 +40,7 @@ def test_role_enforcement(monkeypatch):
     res = client.post(
         "/api/admin/ingest/url",
         json={"url": "http://example.com"},
-        headers={"X-API-Key": "oper"},
+        headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
     assert res.json()["job_id"] == str(dummy_job_id)

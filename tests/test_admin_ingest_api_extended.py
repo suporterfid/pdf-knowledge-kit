@@ -14,21 +14,18 @@ from app.ingestion.models import (
 )
 
 
-def create_client(monkeypatch):
-    monkeypatch.setenv("VIEW_API_KEY", "view")
-    monkeypatch.setenv("OP_API_KEY", "oper")
-    monkeypatch.setenv("ADMIN_API_KEY", "admin")
+def create_client(monkeypatch, tenant_auth):
     import app.security.auth as auth
     importlib.reload(auth)
     import app.routers.admin_ingest_api as admin_api
     importlib.reload(admin_api)
     import app.main as main
     importlib.reload(main)
-    return TestClient(main.app), admin_api
+    return TestClient(main.app), admin_api, tenant_auth
 
 
-def test_start_local_job_auth_validation(monkeypatch):
-    client, admin_api = create_client(monkeypatch)
+def test_start_local_job_auth_validation(monkeypatch, tenant_auth):
+    client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     dummy_id = uuid4()
     monkeypatch.setattr(admin_api.service, "ingest_local", lambda *a, **k: dummy_id)
 
@@ -42,44 +39,44 @@ def test_start_local_job_auth_validation(monkeypatch):
     res = client.post(
         "/api/admin/ingest/local",
         json={"path": "/tmp/a"},
-        headers={"X-API-Key": "view"},
+        headers=auth_ctx.header("viewer"),
     )
     assert res.status_code == 403
 
     # validation error missing path
-    res = client.post("/api/admin/ingest/local", headers={"X-API-Key": "oper"})
+    res = client.post("/api/admin/ingest/local", headers=auth_ctx.header("operator"))
     assert res.status_code == 422
 
     # operator success
     res = client.post(
         "/api/admin/ingest/local",
         json={"path": "/tmp/a"},
-        headers={"X-API-Key": "oper"},
+        headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
     assert res.json()["job_id"] == str(dummy_id)
 
 
-def test_start_urls_job_validation(monkeypatch):
-    client, admin_api = create_client(monkeypatch)
+def test_start_urls_job_validation(monkeypatch, tenant_auth):
+    client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     dummy_id = uuid4()
     monkeypatch.setattr(admin_api.service, "ingest_urls", lambda urls: dummy_id)
 
     # validation error for body
-    res = client.post("/api/admin/ingest/urls", headers={"X-API-Key": "oper"})
+    res = client.post("/api/admin/ingest/urls", headers=auth_ctx.header("operator"))
     assert res.status_code == 422
 
     res = client.post(
         "/api/admin/ingest/urls",
         json={"urls": ["http://a"]},
-        headers={"X-API-Key": "oper"},
+        headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
     assert res.json()["job_id"] == str(dummy_id)
 
 
-def test_sources_crud_and_reindex(monkeypatch):
-    client, admin_api = create_client(monkeypatch)
+def test_sources_crud_and_reindex(monkeypatch, tenant_auth):
+    client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     sources: dict[UUID, Source] = {}
 
     class DummyConn:
@@ -129,13 +126,13 @@ def test_sources_crud_and_reindex(monkeypatch):
     res = client.post(
         "/api/admin/ingest/sources",
         json={"type": "local_dir", "path": "/a"},
-        headers={"X-API-Key": "oper"},
+        headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
     sid = UUID(res.json()["id"])
 
     # list
-    res = client.get("/api/admin/ingest/sources", headers={"X-API-Key": "view"})
+    res = client.get("/api/admin/ingest/sources", headers=auth_ctx.header("viewer"))
     assert res.status_code == 200
     assert len(res.json()["items"]) == 1
 
@@ -143,14 +140,14 @@ def test_sources_crud_and_reindex(monkeypatch):
     res = client.put(
         f"/api/admin/ingest/sources/{sid}",
         json={"path": "/b"},
-        headers={"X-API-Key": "oper"},
+        headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
 
     # reindex
     res = client.post(
         f"/api/admin/ingest/sources/{sid}/reindex",
-        headers={"X-API-Key": "oper"},
+        headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
     assert called["rid"] == sid
@@ -158,17 +155,17 @@ def test_sources_crud_and_reindex(monkeypatch):
     # delete
     res = client.delete(
         f"/api/admin/ingest/sources/{sid}",
-        headers={"X-API-Key": "oper"},
+        headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
 
-    res = client.get("/api/admin/ingest/sources", headers={"X-API-Key": "view"})
+    res = client.get("/api/admin/ingest/sources", headers=auth_ctx.header("viewer"))
     assert res.status_code == 200
     assert res.json()["items"] == []
 
 
-def test_job_lifecycle_and_logs(monkeypatch):
-    client, admin_api = create_client(monkeypatch)
+def test_job_lifecycle_and_logs(monkeypatch, tenant_auth):
+    client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     jobs: dict[UUID, Job] = {}
     slices = [
         JobLogSlice(content="line1\n", next_offset=6, status=None),
@@ -206,23 +203,23 @@ def test_job_lifecycle_and_logs(monkeypatch):
     res = client.post(
         "/api/admin/ingest/url",
         json={"url": "http://example.com"},
-        headers={"X-API-Key": "oper"},
+        headers=auth_ctx.header("operator"),
     )
     job_id = UUID(res.json()["job_id"])
 
-    res = client.get("/api/admin/ingest/jobs", headers={"X-API-Key": "view"})
+    res = client.get("/api/admin/ingest/jobs", headers=auth_ctx.header("viewer"))
     assert res.status_code == 200
     assert len(res.json()["items"]) == 1
 
     res = client.post(
         f"/api/admin/ingest/jobs/{job_id}/cancel",
-        headers={"X-API-Key": "oper"},
+        headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
     assert jobs[job_id].status == JobStatus.CANCELED
 
     res = client.get(
-        f"/api/admin/ingest/jobs/{job_id}/logs", headers={"X-API-Key": "view"}
+        f"/api/admin/ingest/jobs/{job_id}/logs", headers=auth_ctx.header("viewer")
     )
     assert res.status_code == 200
     data = res.json()
@@ -232,28 +229,28 @@ def test_job_lifecycle_and_logs(monkeypatch):
     res = client.get(
         f"/api/admin/ingest/jobs/{job_id}/logs",
         params={"offset": data["next_offset"]},
-        headers={"X-API-Key": "view"},
+        headers=auth_ctx.header("viewer"),
     )
     data = res.json()
     assert "line2" in data["content"]
     assert data["status"] == JobStatus.SUCCEEDED
 
 
-def test_rerun_job_endpoint(monkeypatch):
-    client, admin_api = create_client(monkeypatch)
+def test_rerun_job_endpoint(monkeypatch, tenant_auth):
+    client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     orig = uuid4()
     new_id = uuid4()
     monkeypatch.setattr(admin_api.service, "rerun_job", lambda jid: new_id)
 
     res = client.post(
-        f"/api/admin/ingest/jobs/{orig}/rerun", headers={"X-API-Key": "oper"}
+        f"/api/admin/ingest/jobs/{orig}/rerun", headers=auth_ctx.header("operator")
     )
     assert res.status_code == 200
     assert res.json()["job_id"] == str(new_id)
 
 
-def test_jobs_pagination_filters(monkeypatch):
-    client, admin_api = create_client(monkeypatch)
+def test_jobs_pagination_filters(monkeypatch, tenant_auth):
+    client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     jobs = [
         Job(id=uuid4(), source_id=uuid4(), status=JobStatus.QUEUED, created_at=datetime.utcnow()),
         Job(id=uuid4(), source_id=uuid4(), status=JobStatus.SUCCEEDED, created_at=datetime.utcnow()),
@@ -265,7 +262,7 @@ def test_jobs_pagination_filters(monkeypatch):
     res = client.get(
         "/api/admin/ingest/jobs",
         params={"status": "queued", "limit": 1, "offset": 1},
-        headers={"X-API-Key": "view"},
+        headers=auth_ctx.header("viewer"),
     )
     assert res.status_code == 200
     data = res.json()
@@ -273,8 +270,8 @@ def test_jobs_pagination_filters(monkeypatch):
     assert len(data["items"]) == 1
 
 
-def test_sources_pagination_filters(monkeypatch):
-    client, admin_api = create_client(monkeypatch)
+def test_sources_pagination_filters(monkeypatch, tenant_auth):
+    client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     sources = [
         Source(id=uuid4(), type=SourceType.URL, url="http://a", path=None, created_at=datetime.utcnow(), active=True),
         Source(id=uuid4(), type=SourceType.URL, url="http://b", path=None, created_at=datetime.utcnow(), active=True),
@@ -301,7 +298,7 @@ def test_sources_pagination_filters(monkeypatch):
     res = client.get(
         "/api/admin/ingest/sources",
         params={"type": "url", "limit": 1, "offset": 0},
-        headers={"X-API-Key": "view"},
+        headers=auth_ctx.header("viewer"),
     )
     assert res.status_code == 200
     data = res.json()
