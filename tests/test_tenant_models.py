@@ -50,6 +50,7 @@ def test_can_persist_organization_and_user(session: Session) -> None:
     assert user.organization_id == organization.id
     assert user.organization is organization
     assert organization.users == [user]
+    assert user.role == "viewer"
 
 
 def test_unique_subdomain_constraint(session: Session) -> None:

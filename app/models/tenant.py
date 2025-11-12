@@ -8,14 +8,21 @@ consistency between ORM usage and raw SQL migrations.
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
 from typing import List
 
-from sqlalchemy import ForeignKey, Index, String, text
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from . import Base
+
+
+def _utcnow() -> dt.datetime:
+    """Return the current UTC timestamp with timezone awareness."""
+
+    return dt.datetime.now(dt.timezone.utc)
 
 
 class Organization(Base):
@@ -37,6 +44,7 @@ class Organization(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
+        default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
     name: Mapped[str] = mapped_column(String(length=255), nullable=False)
@@ -49,6 +57,11 @@ class Organization(Base):
     )
 
     users: Mapped[List["User"]] = relationship(
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    invites: Mapped[List["UserInvite"]] = relationship(
         back_populates="organization",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -76,6 +89,7 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
+        default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
     organization_id: Mapped[uuid.UUID] = mapped_column(
@@ -86,11 +100,109 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(length=320), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(length=255), nullable=False)
     name: Mapped[str] = mapped_column(String(length=255), nullable=False)
+    role: Mapped[str] = mapped_column(
+        String(length=32),
+        nullable=False,
+        default="viewer",
+        server_default=text("'viewer'"),
+    )
+    is_active: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        onupdate=_utcnow,
+    )
 
     organization: Mapped[Organization] = relationship(
         back_populates="users",
         lazy="joined",
     )
+    refresh_tokens: Mapped[List["RefreshToken"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
-__all__ = ["Organization", "User"]
+class UserInvite(Base):
+    """Invitation issued to onboard a user into an organization."""
+
+    __tablename__ = "user_invites"
+    __table_args__ = (
+        Index("ix_user_invites_token_unique", "token", unique=True),
+        Index("ix_user_invites_org", "organization_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    email: Mapped[str] = mapped_column(String(length=320), nullable=False)
+    role: Mapped[str] = mapped_column(String(length=32), nullable=False)
+    token: Mapped[str] = mapped_column(String(length=255), nullable=False)
+    message: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    accepted_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+    )
+
+    organization: Mapped[Organization] = relationship(back_populates="invites")
+
+
+class RefreshToken(Base):
+    """Refresh tokens issued during interactive authentication flows."""
+
+    __tablename__ = "refresh_tokens"
+    __table_args__ = (
+        Index("ix_refresh_tokens_user_id", "user_id"),
+        Index("ix_refresh_tokens_token_hash", "token_hash", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    token_hash: Mapped[str] = mapped_column(String(length=255), nullable=False)
+    issued_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+    )
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    user_agent: Mapped[str | None] = mapped_column(String(length=255))
+
+    user: Mapped[User] = relationship(back_populates="refresh_tokens")
+
+
+__all__ = ["Organization", "User", "UserInvite", "RefreshToken"]

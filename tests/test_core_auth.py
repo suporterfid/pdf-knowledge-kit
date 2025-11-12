@@ -73,6 +73,15 @@ def test_decode_tenant_token_missing_required_claims(token_env: None) -> None:
         decode_tenant_token(token)
 
 
+def test_decode_tenant_token_requires_access_type(token_env: None) -> None:
+    """Tokens that are not access tokens are rejected."""
+
+    token = _issue_token(type="refresh")
+
+    with pytest.raises(TenantTokenValidationError):
+        decode_tenant_token(token)
+
+
 def test_decode_tenant_token_configuration_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """Missing configuration raises a configuration error."""
 

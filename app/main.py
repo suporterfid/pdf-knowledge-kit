@@ -45,7 +45,15 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from .rag import build_context
 from .sse_utils import sse_word_buffer
 from .app_logging import init_logging
-from .routers import admin_ingest_api, auth_api, feedback_api, agents, conversations, webhooks
+from .routers import (
+    admin_ingest_api,
+    agents,
+    auth_api,
+    conversations,
+    feedback_api,
+    tenant_accounts,
+    webhooks,
+)
 from .core.tenant_middleware import TenantContextMiddleware
 from .__version__ import __version__, __build_date__, __commit_sha__
 
@@ -105,6 +113,7 @@ app.include_router(auth_api.router)
 app.include_router(feedback_api.router)
 app.include_router(agents.router)
 app.include_router(conversations.router)
+app.include_router(tenant_accounts.router)
 app.include_router(webhooks.router)
  
 # Expose Prometheus metrics

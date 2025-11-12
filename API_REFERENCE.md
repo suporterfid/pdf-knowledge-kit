@@ -86,12 +86,12 @@ Most administrative routers protect endpoints with the `require_role` dependency
 
 #### GET `/api/auth/roles`
 
-- **Auth:** `X-API-Key` with `viewer` role or higher.【F:app/routers/auth_api.py†L1-L10】【F:app/security/auth.py†L50-L90】
-- **Responses:** 200 with `{ "roles": ["<caller-role>"] }`.
+- **Auth:** Cabeçalho `Authorization: Bearer <access_token>` com ao menos papel `viewer`.
+- **Responses:** 200 com `{ "roles": ["<roles resolvidos>"] }`.
 
 ## Admin Ingestion Router (`/api/admin/ingest`)
 
-All endpoints require an API key; list views require `viewer`, mutating actions require `operator` unless noted.【F:app/routers/admin_ingest_api.py†L184-L624】 Models referenced below come from `app.ingestion.models`.【F:app/ingestion/models.py†L1-L674】
+Todos os endpoints exigem um token JWT emitido pelo router de contas; listagens aceitam `viewer`, ações mutáveis exigem `operator` salvo indicação contrária.【F:app/routers/admin_ingest_api.py†L184-L624】 Models referenced below come from `app.ingestion.models`.【F:app/ingestion/models.py†L1-L674】
 
 ### Endpoint overview
 
@@ -184,7 +184,7 @@ All endpoints require an API key; list views require `viewer`, mutating actions 
 
 ## Agent Management Router (`/api/agents`)
 
-All endpoints require API keys; viewer role for reads, operator for writes.【F:app/routers/agents.py†L54-L172】 Pydantic schemas reside in `app.agents.schemas`.【F:app/agents/schemas.py†L1-L188】
+Todos os endpoints requerem tokens bearer emitidos pelo router de contas; `viewer` realiza leituras, operações de escrita exigem `operator` ou `admin`.【F:app/routers/agents.py†L54-L172】 Pydantic schemas residem em `app.agents.schemas`.【F:app/agents/schemas.py†L1-L188】
 
 ### Endpoint overview
 
@@ -225,7 +225,7 @@ All endpoints require API keys; viewer role for reads, operator for writes.【F:
 
 ## Conversation Router
 
-Endpoints live under both `/api/agents/{agent_id}/...` and `/api/conversations/...` and require API keys (`viewer` for reads, `operator` for updates).【F:app/routers/conversations.py†L54-L113】 Schemas reside in `app.conversations.schemas`.【F:app/conversations/schemas.py†L10-L94】
+Endpoints vivem sob `/api/agents/{agent_id}/...` e `/api/conversations/...` e usam o mesmo token bearer (`viewer` para leitura, `operator` para atualização).【F:app/routers/conversations.py†L54-L113】 Schemas residem em `app.conversations.schemas`.【F:app/conversations/schemas.py†L10-L94】
 
 | Method | Path                                             | Role     | Description                                                    |
 | ------ | ------------------------------------------------ | -------- | -------------------------------------------------------------- |

@@ -1,11 +1,31 @@
 import pathlib
 import sys
+import uuid
+from dataclasses import dataclass
 
 import pytest
 from fastapi import FastAPI, Request
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session, sessionmaker
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 from app.app_logging import init_logging
+from app.models import Base, Organization, User
+from app.security import create_access_token, hash_password, reset_jwt_settings_cache
+
+
+@dataclass
+class AuthContext:
+    engine: object
+    session_factory: sessionmaker[Session]
+    organization_id: uuid.UUID
+    users: dict[str, uuid.UUID]
+    tokens: dict[str, str]
+    password: str = "Secret123!"
+
+    def header(self, role: str) -> dict[str, str]:
+        token = self.tokens[role]
+        return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
@@ -25,3 +45,61 @@ def app_factory(monkeypatch):
         return app
 
     return _create_app
+
+
+@pytest.fixture
+def tenant_auth(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> AuthContext:
+    db_path = tmp_path_factory.mktemp("tenant-auth") / "auth.db"
+    db_url = f"sqlite+pysqlite:///{db_path}"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+    monkeypatch.setenv("TENANT_TOKEN_SECRET", "super-secret-key")
+    monkeypatch.setenv("TENANT_TOKEN_AUDIENCE", "chatvolt")
+    monkeypatch.setenv("TENANT_TOKEN_ISSUER", "auth.chatvolt")
+    monkeypatch.setenv("TENANT_TOKEN_ALGORITHM", "HS256")
+    reset_jwt_settings_cache()
+
+    engine = create_engine(db_url, future=True)
+
+    @event.listens_for(engine, "connect")
+    def _register_uuid(conn, _record) -> None:  # pragma: no cover - SQLite test helper
+        conn.create_function("gen_random_uuid", 0, lambda: str(uuid.uuid4()))
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False, future=True)
+
+    users: dict[str, uuid.UUID] = {}
+    user_objs: dict[str, User] = {}
+    with session_factory.begin() as session:
+        organization = Organization(name="Tenant", subdomain="tenant")
+        session.add(organization)
+        session.flush()
+        for role in ("viewer", "operator", "admin"):
+            user = User(
+                organization_id=organization.id,
+                email=f"{role}@tenant.example",
+                name=role.title(),
+                password_hash=hash_password("Secret123!"),
+                role=role,
+            )
+            session.add(user)
+            session.flush()
+            users[role] = user.id
+            user_objs[role] = user
+        organization_id = organization.id
+
+    tokens: dict[str, str] = {}
+    for role, user in user_objs.items():
+        token, _ = create_access_token(user)
+        tokens[role] = token
+
+    context = AuthContext(
+        engine=engine,
+        session_factory=session_factory,
+        organization_id=organization_id,
+        users=users,
+        tokens=tokens,
+    )
+
+    yield context
+
+    Base.metadata.drop_all(engine)
+    engine.dispose()

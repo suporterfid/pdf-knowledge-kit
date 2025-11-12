@@ -1,4 +1,5 @@
 import importlib
+import importlib
 from contextlib import contextmanager
 
 from fastapi.testclient import TestClient
@@ -6,11 +7,7 @@ from fastapi.testclient import TestClient
 from app.agents import service as agent_service_module
 
 
-def create_client(monkeypatch):
-    monkeypatch.setenv("VIEW_API_KEY", "view")
-    monkeypatch.setenv("OP_API_KEY", "oper")
-    monkeypatch.setenv("ADMIN_API_KEY", "admin")
-
+def create_client(monkeypatch, tenant_auth):
     import app.routers.agents as agents_router
     importlib.reload(agents_router)
 
@@ -33,11 +30,11 @@ def create_client(monkeypatch):
     import app.main as main
     importlib.reload(main)
 
-    return TestClient(main.app), svc
+    return TestClient(main.app), svc, tenant_auth
 
 
-def test_agent_crud_and_deploy_flow(monkeypatch):
-    client, svc = create_client(monkeypatch)
+def test_agent_crud_and_deploy_flow(monkeypatch, tenant_auth):
+    client, svc, auth_ctx = create_client(monkeypatch, tenant_auth)
 
     create_payload = {
         "name": "Support Bot",
@@ -51,19 +48,19 @@ def test_agent_crud_and_deploy_flow(monkeypatch):
         "tags": ["support"],
     }
 
-    res = client.post("/api/agents", json=create_payload, headers={"X-API-Key": "oper"})
+    res = client.post("/api/agents", json=create_payload, headers=auth_ctx.header("operator"))
     assert res.status_code == 201
     agent_detail = res.json()
     agent_id = agent_detail["id"]
     assert agent_detail["deployment_metadata"]["provider_credentials"]["configured"]
 
-    res = client.get("/api/agents", headers={"X-API-Key": "view"})
+    res = client.get("/api/agents", headers=auth_ctx.header("viewer"))
     assert res.status_code == 200
     data = res.json()
     assert data["total"] == 1
     assert data["items"][0]["name"] == "Support Bot"
 
-    res = client.get("/api/agents/providers", headers={"X-API-Key": "view"})
+    res = client.get("/api/agents/providers", headers=auth_ctx.header("viewer"))
     assert res.status_code == 200
     providers = res.json()
     assert "openai" in providers
@@ -76,14 +73,14 @@ def test_agent_crud_and_deploy_flow(monkeypatch):
     res = client.put(
         f"/api/agents/{agent_id}",
         json=update_payload,
-        headers={"X-API-Key": "oper"},
+        headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
     updated = res.json()
     assert updated["description"] == "Updated description"
     assert updated["response_parameters"]["temperature"] == 0.2
 
-    res = client.get(f"/api/agents/{agent_id}/versions", headers={"X-API-Key": "view"})
+    res = client.get(f"/api/agents/{agent_id}/versions", headers=auth_ctx.header("viewer"))
     assert res.status_code == 200
     versions = res.json()
     assert versions["total"] == 1
@@ -91,7 +88,7 @@ def test_agent_crud_and_deploy_flow(monkeypatch):
     res = client.post(
         f"/api/agents/{agent_id}/test",
         json={"input": "How do I reset my password?"},
-        headers={"X-API-Key": "oper"},
+        headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
     test_result = res.json()
@@ -100,22 +97,22 @@ def test_agent_crud_and_deploy_flow(monkeypatch):
     res = client.post(
         f"/api/agents/{agent_id}/deploy",
         json={"environment": "staging", "metadata": {"requested_by": "qa"}},
-        headers={"X-API-Key": "oper"},
+        headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
     deployed = res.json()
     assert deployed["deployment_metadata"]["environments"]["staging"]["metadata"]["requested_by"] == "qa"
 
-    res = client.get(f"/api/agents/{agent_id}/tests", headers={"X-API-Key": "view"})
+    res = client.get(f"/api/agents/{agent_id}/tests", headers=auth_ctx.header("viewer"))
     assert res.status_code == 200
     tests = res.json()
     assert len(tests) == 1
 
-    res = client.delete(f"/api/agents/{agent_id}", headers={"X-API-Key": "oper"})
+    res = client.delete(f"/api/agents/{agent_id}", headers=auth_ctx.header("operator"))
     assert res.status_code == 200
     assert res.json()["message"] == "deleted"
 
-    res = client.get("/api/agents", headers={"X-API-Key": "view"})
+    res = client.get("/api/agents", headers=auth_ctx.header("viewer"))
     assert res.json()["total"] == 0
 
     # ensure underlying service reflects deletion

@@ -6,7 +6,9 @@ import os
 from contextlib import contextmanager
 from typing import Iterator
 
-from sqlalchemy import Engine, create_engine
+import uuid
+
+from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from . import Base
@@ -28,7 +30,17 @@ def get_engine(database_url: str | None = None, **kwargs: object) -> Engine:
     url = database_url or os.getenv("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL is not configured.")
-    return create_engine(url, **kwargs)
+
+    engine = create_engine(url, **kwargs)
+
+    if engine.dialect.name == "sqlite":
+
+        @event.listens_for(engine, "connect")
+        def _configure_sqlite(dbapi_connection, _connection_record):  # pragma: no cover - dialect hook
+            dbapi_connection.create_function("gen_random_uuid", 0, lambda: str(uuid.uuid4()))
+            dbapi_connection.execute("PRAGMA foreign_keys=ON")
+
+    return engine
 
 
 def get_sessionmaker(database_url: str | None = None, **kwargs: object) -> sessionmaker[Session]:

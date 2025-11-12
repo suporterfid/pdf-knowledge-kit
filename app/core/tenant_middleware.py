@@ -7,6 +7,7 @@ import os
 from typing import Callable, Awaitable
 
 from fastapi import HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import Engine, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
@@ -34,10 +35,37 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:  # type: ignore[override]
-        if not self._is_configured():
+        if not self._is_configured() or self._should_bypass(request):
             return await call_next(request)
 
-        payload = await get_tenant_context(request)
+        authorization = request.headers.get("Authorization")
+        if not authorization:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"detail": "Missing Authorization header."},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        scheme, _, credentials = authorization.partition(" ")
+        if not credentials or scheme.lower() != "bearer":
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={"detail": "Authorization header must use Bearer scheme."},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        try:
+            payload = await get_tenant_context(request)
+        except HTTPException as exc:
+            headers = dict(exc.headers or {})
+            if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+                headers.setdefault("WWW-Authenticate", "Bearer")
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail},
+                headers=headers or None,
+            )
+
         request.state.tenant_id = payload["tenant_id"]
         request.state.user_id = payload["user_id"]
 
@@ -72,6 +100,11 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             return None
 
         connection = engine.connect()
+        dialect = getattr(engine, "dialect", None)
+        dialect_name = getattr(dialect, "name", "postgresql")
+        if dialect_name != "postgresql":
+            connection.close()
+            return None
         try:
             connection.execute(
                 text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
@@ -101,4 +134,17 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             os.getenv("TENANT_TOKEN_ISSUER"),
         )
         return all(required)
+
+    @staticmethod
+    def _should_bypass(request: Request) -> bool:
+        if request.method.upper() == "OPTIONS":
+            return True
+
+        path = request.url.path
+        if not path.startswith("/api/tenant/accounts"):
+            return False
+
+        suffix = path.removeprefix("/api/tenant/accounts").lstrip("/")
+        action = suffix.split("/", 1)[0]
+        return action in {"register", "login", "refresh", "accept-invite"}
 
