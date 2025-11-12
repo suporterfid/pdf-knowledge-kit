@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - Production release requirements documentation (PRODUCTION_RELEASE_REQUIREMENTS.md)
 - Versioning strategy documentation (VERSION_STRATEGY.md)
 - Release checklist for structured release process (RELEASE_CHECKLIST.md)
@@ -28,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - TBD
 
 ### Added
+
 - Complete FastAPI backend with semantic search capabilities
 - React/TypeScript frontend with ChatGPT-inspired interface
 - PostgreSQL + pgvector integration for vector similarity search
@@ -62,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependabot for devcontainer updates
 
 ### Security
+
 - Environment-based secrets management
 - Row-level security (RLS) preparation for multi-tenancy
 - Input validation and sanitization
@@ -103,19 +106,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.2.0] - 2025-03-15
 
 ### Added
+
 - New SharePoint connector for document ingestion (#123)
 - Support for XLSX file format (#124)
 - Configurable chunk size for document splitting (#125)
 
 ### Changed
+
 - Improved query performance by 40% through index optimization (#126)
 - Updated OpenAI SDK to v2.0 (#127)
 
 ### Fixed
+
 - Fixed memory leak in long-running chat sessions (#128)
 - Corrected PDF parsing for documents with special characters (#129)
 
 ### Security
+
 - Updated dependencies to address CVE-2025-1234 (#130)
 - Added CSRF protection to admin endpoints (#131)
 ```

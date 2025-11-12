@@ -4,11 +4,11 @@ This guide documents day-2 operations for ingestion connectors and admin automat
 
 ## Connector matrix
 
-| Connector | Endpoint | What it ingests | Required params | Credentials | Notes |
-| --- | --- | --- | --- | --- | --- |
-| Database | `POST /api/admin/ingest/database` | Rows from PostgreSQL or any DSN accepted by `psycopg`. | `params.queries[]` (`sql`, `text_column`, `id_column`), optional `params.dsn` or `host`/`database` pair. | `credentials.values` may include `username`, `password`, or a full DSN. | Use `connector_metadata` to label datasets (e.g., `{"team": "support"}`). |
-| REST/API | `POST /api/admin/ingest/api` | JSON payloads from HTTP APIs. | `params.endpoint` (or `base_url`), `params.text_fields`, `params.id_field`. | Store API keys/bearer tokens in `credentials.token` or header map. | Supports cursor/page pagination via `params.pagination`. |
-| Transcription | `POST /api/admin/ingest/transcription` | Audio/video transcripts via `mock`, `whisper_local`, or `aws_transcribe`. | `params.provider`, `params.media_uri`; optional `params.cache_dir`, `params.language`. | Provide AWS credentials or Whisper configuration if not relying on local defaults. | Cache metadata stored under `tmp/transcriptions`. |
+| Connector     | Endpoint                               | What it ingests                                                           | Required params                                                                                          | Credentials                                                                        | Notes                                                                     |
+| ------------- | -------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Database      | `POST /api/admin/ingest/database`      | Rows from PostgreSQL or any DSN accepted by `psycopg`.                    | `params.queries[]` (`sql`, `text_column`, `id_column`), optional `params.dsn` or `host`/`database` pair. | `credentials.values` may include `username`, `password`, or a full DSN.            | Use `connector_metadata` to label datasets (e.g., `{"team": "support"}`). |
+| REST/API      | `POST /api/admin/ingest/api`           | JSON payloads from HTTP APIs.                                             | `params.endpoint` (or `base_url`), `params.text_fields`, `params.id_field`.                              | Store API keys/bearer tokens in `credentials.token` or header map.                 | Supports cursor/page pagination via `params.pagination`.                  |
+| Transcription | `POST /api/admin/ingest/transcription` | Audio/video transcripts via `mock`, `whisper_local`, or `aws_transcribe`. | `params.provider`, `params.media_uri`; optional `params.cache_dir`, `params.language`.                   | Provide AWS credentials or Whisper configuration if not relying on local defaults. | Cache metadata stored under `tmp/transcriptions`.                         |
 
 ## Environment variables
 

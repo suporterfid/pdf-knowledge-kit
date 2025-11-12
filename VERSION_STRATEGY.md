@@ -21,6 +21,7 @@ MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]
 ## Current Version
 
 As of this document's creation:
+
 - **Backend**: Not explicitly versioned (to be set to `1.0.0`)
 - **Frontend**: `0.0.0` (to be synchronized with backend)
 - **Root package.json**: `1.0.0` (legacy, will be synchronized)
@@ -41,6 +42,7 @@ Increment when making incompatible changes:
 - Changes to configuration format that require manual intervention
 
 **Examples:**
+
 - Removing `/api/ask` endpoint
 - Changing API response structure without backward compatibility
 - Requiring PostgreSQL 17+ instead of 16+
@@ -58,6 +60,7 @@ Increment when adding backwards-compatible functionality:
 - Database schema additions (non-breaking)
 
 **Examples:**
+
 - Adding `/api/admin/ingest/sharepoint` connector
 - Adding support for new document formats
 - Adding optional `MAX_RETRIES` configuration
@@ -75,6 +78,7 @@ Increment for backwards-compatible bug fixes:
 - Log message improvements
 
 **Examples:**
+
 - Fixing PDF parsing errors
 - Patching security vulnerability in dependency
 - Correcting API documentation
@@ -85,6 +89,7 @@ Increment for backwards-compatible bug fixes:
 ### Alpha (x.y.z-alpha.N)
 
 Early development versions, potentially unstable:
+
 - Used for internal testing
 - Breaking changes may occur between alpha versions
 - Not recommended for production
@@ -94,6 +99,7 @@ Early development versions, potentially unstable:
 ### Beta (x.y.z-beta.N)
 
 Feature-complete but may have bugs:
+
 - API is mostly stable
 - Used for broader testing
 - Bug fixes only, no new features
@@ -104,6 +110,7 @@ Feature-complete but may have bugs:
 ### Release Candidate (x.y.z-rc.N)
 
 Final testing before release:
+
 - Stable and tested
 - Only critical bug fixes
 - Production-like testing
@@ -116,22 +123,26 @@ Final testing before release:
 ### Development Process
 
 1. **Feature Branch Development**
+
    - Work on features in separate branches
    - No version changes during development
 
 2. **Release Preparation**
+
    - Create release branch `release/vX.Y.Z`
    - Update version numbers in all locations
    - Update CHANGELOG.md
    - Run full test suite
 
 3. **Pre-release Testing** (optional)
+
    - Tag with pre-release version (alpha/beta/rc)
    - Deploy to staging environment
    - Conduct testing
    - Fix issues and increment pre-release number
 
 4. **Release**
+
    - Final version update
    - Create Git tag `vX.Y.Z`
    - Merge to main branch
@@ -152,12 +163,14 @@ To maintain consistency, version information must be updated in these locations:
 ### Backend (Python)
 
 **File:** `app/__version__.py`
+
 ```python
 __version__ = "1.0.0"
 __version_info__ = (1, 0, 0)
 ```
 
 **Expose via API:** `GET /api/version`
+
 ```json
 {
   "version": "1.0.0",
@@ -169,6 +182,7 @@ __version_info__ = (1, 0, 0)
 ### Frontend (React/TypeScript)
 
 **File:** `frontend/package.json`
+
 ```json
 {
   "version": "1.0.0"
@@ -180,6 +194,7 @@ __version_info__ = (1, 0, 0)
 ### Root Project
 
 **File:** `package.json` (if used for project metadata)
+
 ```json
 {
   "version": "1.0.0"
@@ -189,6 +204,7 @@ __version_info__ = (1, 0, 0)
 ### Docker Images
 
 **Tags:**
+
 - `suporterfid/pdf-knowledge-kit:1.0.0` (specific version)
 - `suporterfid/pdf-knowledge-kit:1.0` (minor version)
 - `suporterfid/pdf-knowledge-kit:1` (major version)
@@ -197,10 +213,12 @@ __version_info__ = (1, 0, 0)
 ### Git Tags
 
 **Format:** `vX.Y.Z`
+
 - `v1.0.0` - Release tags
 - `v1.0.0-rc.1` - Pre-release tags
 
 **Annotated tags with message:**
+
 ```bash
 git tag -a v1.0.0 -m "Release version 1.0.0"
 ```
@@ -212,6 +230,7 @@ git tag -a v1.0.0 -m "Release version 1.0.0"
 Create scripts to automate version updates:
 
 **Script:** `tools/bump_version.py`
+
 ```bash
 # Bump patch version (1.0.0 -> 1.0.1)
 python tools/bump_version.py patch
@@ -232,6 +251,7 @@ python tools/bump_version.py minor --pre alpha
 ### CI/CD Integration
 
 **GitHub Actions workflow:**
+
 - Extract version from `app/__version__.py`
 - Use as image tag for Docker builds
 - Include in release artifacts
@@ -241,6 +261,7 @@ python tools/bump_version.py minor --pre alpha
 ### Version Validation
 
 Pre-commit checks:
+
 - Ensure version format is valid
 - Verify version increments correctly
 - Check all version locations match
@@ -275,6 +296,7 @@ Pre-commit checks:
 Each release should include:
 
 1. **Release Notes** (in GitHub Releases)
+
    - New features
    - Bug fixes
    - Breaking changes
@@ -282,6 +304,7 @@ Each release should include:
    - Known issues
 
 2. **CHANGELOG.md Update**
+
    - Following Keep a Changelog format
    - Dated entries
    - Categorized changes
@@ -311,20 +334,22 @@ Each release should include:
 ### Long-Term Support (LTS)
 
 Designated MAJOR versions may receive extended support:
+
 - **LTS Duration**: 12 months after next MAJOR release
 - **Support Level**: Security patches and critical bug fixes
 - **Notification**: Marked as LTS in release notes
 
 **Example:**
+
 - `1.0.0` released on 2025-01-01 (LTS)
 - `2.0.0` released on 2025-07-01
 - `1.x.x` supported until 2026-07-01
 
 ## Version History
 
-| Version | Release Date | Type | Notes |
-|---------|--------------|------|-------|
-| 1.0.0 | TBD | MAJOR | Initial production release |
+| Version | Release Date | Type  | Notes                      |
+| ------- | ------------ | ----- | -------------------------- |
+| 1.0.0   | TBD          | MAJOR | Initial production release |
 
 ## References
 

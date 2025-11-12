@@ -23,15 +23,15 @@ Update the `.env` file with values appropriate for your environment (see [Enviro
 
 The application reads configuration exclusively from environment variables. The `.env.example` file captures the supported options and defaults. Update sensitive values (e.g., `OPENAI_API_KEY`) before shipping to production.【F:.env.example†L1-L57】 A quick reference is provided below.
 
-| Category | Variable | Description |
-| --- | --- | --- |
-| API keys | `ADMIN_API_KEY`, `OP_API_KEY`, `VIEW_API_KEY` | Keys for privileged ingestion and operator features. Defaults are development-only and must be rotated in production. |
-| Database | `DATABASE_URL`, `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | Connection string and individual parameters used by the backend and the Postgres container. |
-| Logging | `LOG_DIR`, `LOG_LEVEL`, `LOG_JSON`, `LOG_REQUEST_BODIES`, `LOG_RETENTION_DAYS`, `LOG_ROTATE_UTC` | Controls destination, format, and retention of application logs. |
-| Ingestion | `DOCS_DIR`, `URLS_FILE`, `ENABLE_OCR`, `OCR_LANG` | Configure local document ingestion, URL lists, and OCR behaviour. |
-| Uploads & chat | `UPLOAD_DIR`, `UPLOAD_TTL`, `UPLOAD_MAX_SIZE`, `UPLOAD_MAX_FILES`, `UPLOAD_ALLOWED_MIME_TYPES`, `CHAT_MAX_MESSAGE_LENGTH`, `SESSION_ID_MAX_LENGTH`, `ADMIN_UI_ORIGINS` | Manage upload limits and chat constraints. |
-| OpenAI | `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_LANG`, `SYSTEM_PROMPT` | Parameters for calling OpenAI models. |
-| Branding | `BRAND_NAME`, `LOGO_URL`, `POWERED_BY_LABEL` | Customizes UI branding. |
+| Category       | Variable                                                                                                                                                               | Description                                                                                                           |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| API keys       | `ADMIN_API_KEY`, `OP_API_KEY`, `VIEW_API_KEY`                                                                                                                          | Keys for privileged ingestion and operator features. Defaults are development-only and must be rotated in production. |
+| Database       | `DATABASE_URL`, `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`                                                                                               | Connection string and individual parameters used by the backend and the Postgres container.                           |
+| Logging        | `LOG_DIR`, `LOG_LEVEL`, `LOG_JSON`, `LOG_REQUEST_BODIES`, `LOG_RETENTION_DAYS`, `LOG_ROTATE_UTC`                                                                       | Controls destination, format, and retention of application logs.                                                      |
+| Ingestion      | `DOCS_DIR`, `URLS_FILE`, `ENABLE_OCR`, `OCR_LANG`                                                                                                                      | Configure local document ingestion, URL lists, and OCR behaviour.                                                     |
+| Uploads & chat | `UPLOAD_DIR`, `UPLOAD_TTL`, `UPLOAD_MAX_SIZE`, `UPLOAD_MAX_FILES`, `UPLOAD_ALLOWED_MIME_TYPES`, `CHAT_MAX_MESSAGE_LENGTH`, `SESSION_ID_MAX_LENGTH`, `ADMIN_UI_ORIGINS` | Manage upload limits and chat constraints.                                                                            |
+| OpenAI         | `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_LANG`, `SYSTEM_PROMPT`                                                                                                       | Parameters for calling OpenAI models.                                                                                 |
+| Branding       | `BRAND_NAME`, `LOGO_URL`, `POWERED_BY_LABEL`                                                                                                                           | Customizes UI branding.                                                                                               |
 
 Refer back to `.env.example` for default values and comments when in doubt.
 
@@ -127,20 +127,25 @@ The container prepares `/var/log/app` with appropriate permissions, so mounting 
 GitHub Actions provides multiple workflows for CI/CD:
 
 ### Testing and Quality Assurance
+
 - **`.github/workflows/tests.yml`**: Runs on each push to `main` and pull requests. Executes Python tests with `pytest` and frontend tests with Vitest.
 - **`.github/workflows/lint.yml`**: Code quality checks including Python linting (Ruff, Black), type checking (MyPy), security scanning (Bandit), and dependency audits.
 - **`.github/workflows/security.yml`**: Security scanning with CodeQL, secret detection (TruffleHog), dependency review, and container scanning (Trivy). Runs on push, pull requests, and weekly schedules.
 
 ### Release Automation
+
 - **`.github/workflows/release.yml`**: Automated release workflow triggered by version tags (e.g., `v1.0.0`). Builds multi-platform Docker images, publishes to GitHub Container Registry, and creates GitHub Releases with automated changelog extraction.
 
 ### Release Process
+
 For detailed information on creating releases, see:
+
 - **[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)**: Step-by-step release process
 - **[VERSION_STRATEGY.md](VERSION_STRATEGY.md)**: Semantic versioning guidelines
 - **[PRODUCTION_RELEASE_REQUIREMENTS.md](PRODUCTION_RELEASE_REQUIREMENTS.md)**: Comprehensive production readiness requirements
 
 To create a release:
+
 1. Follow the [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
 2. Use `tools/bump_version.py` to update version numbers
 3. Update [CHANGELOG.md](CHANGELOG.md) with release notes
