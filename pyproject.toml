@@ -1,21 +1,31 @@
+# Configuração centralizada das ferramentas de qualidade para garantir consistência entre lint, formatação e análise estática.
+# Referências: Black (https://black.readthedocs.io/en/stable/), Ruff (https://docs.astral.sh/ruff/), Mypy (https://mypy.readthedocs.io/en/stable/), Bandit (https://bandit.readthedocs.io/en/latest/).
+
 [tool.black]
 line-length = 88
 target-version = ["py310"]
 include = "\\.pyi?$"
 extend-exclude = [
-  "migrations",
-  "node_modules",
-  "tmp",
+  "migrations/",
+  "node_modules/",
+  "tmp/",
+  "build/",
+  "dist/",
+  ".venv/",
 ]
 
 [tool.ruff]
 line-length = 88
 target-version = "py310"
 exclude = [
-  "migrations",
-  "node_modules",
-  "tmp",
+  "migrations/",
+  "node_modules/",
+  "tmp/",
+  "build/",
+  "dist/",
+  ".venv/",
 ]
+src = ["app", "tests", "tools"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "C4", "T20"]
@@ -31,11 +41,7 @@ warn_unused_configs = true
 ignore_missing_imports = true
 show_error_codes = true
 pretty = true
-exclude = [
-  "migrations",
-  "node_modules",
-  "tmp",
-]
+exclude = "(migrations/|node_modules/|tmp/|build/|dist/|\\.venv/)"
 files = [
   "app",
   "tools",
@@ -46,6 +52,6 @@ files = [
 ]
 
 [tool.bandit]
-targets = ["app"]
-exclude_dirs = ["tests", "migrations", "node_modules", "tmp"]
+targets = ["app", "tests", "tools"]
+exclude_dirs = ["migrations", "node_modules", "tmp", "build", "dist", ".venv"]
 skips = ["B101"]
