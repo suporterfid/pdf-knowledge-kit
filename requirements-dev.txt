@@ -1,3 +1,4 @@
+# Ferramentas de lint, formatação e análise estática
 black>=24.3
 ruff>=0.4.3
 mypy>=1.10

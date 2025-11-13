@@ -125,15 +125,20 @@ pytest
 
 ### Qualidade de código (lint e segurança)
 
-Para garantir o estilo e segurança antes do commit/push:
+1. Ative o ambiente virtual e instale as ferramentas auxiliares:
 
-```bash
-pip install -r requirements-dev.txt  # instale uma vez no ambiente virtual
-ruff check .
-black --check .
-mypy --config-file pyproject.toml
-bandit -c pyproject.toml -r app/
-```
+   ```bash
+   pip install -r requirements-dev.txt
+   ```
+
+2. Rode as checagens antes de abrir um PR:
+
+   | Ferramenta | Comando | Objetivo |
+   | ---------- | ------- | -------- |
+   | **Ruff**   | `ruff check .` | Lint e diagnósticos rápidos para Python. |
+   | **Black**  | `black --check .` | Confirma que o código segue o formato padrão. |
+   | **MyPy**   | `mypy --config-file pyproject.toml` | Valida os tipos estáticos do backend. |
+   | **Bandit** | `bandit -c pyproject.toml -r app/` | Aponta problemas de segurança em tempo de desenvolvimento. |
 
 Use `ruff format` ou `black` sem a flag `--check` para aplicar correções automáticas quando necessário.
 
@@ -893,12 +898,7 @@ curl -s -X POST http://localhost:8000/api/feedback \
 
 ## Contribuição
 
-Como não há um `CONTRIBUTING.md`, siga o fluxo abaixo para propor mudanças:
-
-1. Faça um fork ou crie um branch a partir de `main`.
-2. Instale as dependências, configure o ambiente e rode os testes (`pytest` e `npm test`).
-3. Aplique suas alterações seguindo o estilo descrito neste README e nos arquivos de documentação.
-4. Abra um pull request descrevendo o impacto, testes realizados e quaisquer ajustes de configuração necessários.
+Consulte o [CONTRIBUTING.md](CONTRIBUTING.md) para obter o checklist completo de ambiente, ferramentas de qualidade e documentação necessária antes de abrir um PR.
 
 ## Documentação adicional
 
