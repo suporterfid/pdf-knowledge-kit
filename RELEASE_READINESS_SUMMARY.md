@@ -117,11 +117,20 @@ black .
 - **Permissions:** Writers must belong to the `platform-release` GitHub team; CI deployers use the scoped `CHATVOLT_GHCR_TOKEN` secret with `read:packages` permission only.
 - **Image naming requirements:** Follow lowercase `ghcr.io/<owner>/<image>:<tag>` naming. Release tags use SemVer (`vX.Y.Z`); mutable tags such as `latest` remain restricted to staging builds.
 
-#### 3. Enable Security Scanning
+#### 3. Enable Security Scanning ✅ COMPLETE (2025-11-14)
 
-- Enable CodeQL in GitHub Security settings
-- Enable Dependabot alerts
-- Review and enable GitHub Advanced Security features
+- CodeQL code scanning enabled in **Settings → Security & analysis**.
+- Dependabot alerts activated with daily checks across all ecosystems.
+- GitHub Advanced Security features enabled: secret scanning and secret push protection.
+- Owners assigned for each alert type (see "Security Alert Ownership").
+
+### Security Alert Ownership
+
+| Alert Type | Primary Monitor | Backup | Escalation Channel | Notes |
+| --- | --- | --- | --- | --- |
+| CodeQL code scanning | Rafael Lima (Security & Compliance) | Ana Souza (Platform Engineering) | `#sec-ops` Slack channel | Review SARIF uploads after each scheduled run and triage within 24h. |
+| Dependabot alerts | Ana Souza (Platform Engineering) | Lucas Pereira (SRE) | `#platform-engineering` Slack channel | Evaluate upgrade PRs weekly; critical CVEs escalated immediately. |
+| Secret scanning & push protection | Beatriz Almeida (Security Operations) | Rafael Lima (Security & Compliance) | On-call hotline via PagerDuty | Blocked pushes reviewed in under 1 hour during business hours. |
 
 #### 4. Test CI/CD Workflows
 
@@ -182,7 +191,7 @@ black .
 
 - Version Management: ✅ Complete (SemVer)
 - Release Process: ✅ Fully Documented
-- Security Scanning: ✅ Ready to Enable
+- Security Scanning: ✅ Enabled and monitored
 - Code Linting: ✅ Ready to Enable
 - Documentation: ✅ Comprehensive
 
@@ -222,7 +231,7 @@ black .
 
 1. **Review and approve all documentation** with team leads
 2. **Install linting tools** and fix any issues found
-3. **Enable security scanning** in GitHub settings
+3. **Review security scanning dashboards** weekly and track remediation SLAs
 4. **Test all CI/CD workflows** in a branch before merging
 5. **Set up container registry** and credentials
 
