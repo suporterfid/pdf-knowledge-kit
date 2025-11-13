@@ -19,24 +19,27 @@ jobs:
         with:
           python-version: '3.12'
           cache: 'pip'
-      
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
       - name: Install linting tools
         run: |
           python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pip install -r requirements-dev.txt
-      
+
       - name: Run Ruff (linting)
-        run: ruff check .
+        run: ruff check --config pyproject.toml .
 
       - name: Run Black (formatting check)
-        run: black --check .
+        run: black --check --config pyproject.toml .
 
       - name: Run Bandit (security)
         run: |
-          set -o pipefail
+          set -euo pipefail
           bandit -c pyproject.toml -r app/ -f json -o bandit-report.json
-          bandit -c pyproject.toml -r app/ || EXIT_CODE=$?
-          exit ${EXIT_CODE:-0}
+          bandit -c pyproject.toml -r app/
       
       - name: Upload Bandit report
         if: always()
@@ -59,6 +62,9 @@ jobs:
         with:
           python-version: '3.12'
           cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
       
       - name: Install dependencies
         run: |
