@@ -28,6 +28,13 @@ from .models import (
     SourceType,
 )
 
+try:
+    from app.core.tenant_context import get_current_tenant_id
+except ImportError:
+    # Fallback for environments where tenant context is not available
+    def get_current_tenant_id() -> str | None:
+        return None
+
 
 def _encode_credentials(
     credentials: Any | None,
@@ -757,7 +764,14 @@ def upsert_document(
     encrypt_credentials: Callable[[bytes], bytes] | None = None,
     decrypt_credentials: Callable[[bytes], bytes] | None = None,
 ) -> DocumentVersion:
-    """Insert or update a document row and persist a version snapshot."""
+    """Insert or update a document row and persist a version snapshot.
+    
+    If a tenant context is available, the organization_id will be set on the document.
+    This enables Row Level Security (RLS) policies to enforce tenant isolation.
+    """
+    # Get current tenant context if available
+    tenant_id = get_current_tenant_id()
+    organization_id_uuid = UUID(tenant_id) if tenant_id else None
 
     encoded_credentials = _encode_credentials(credentials, encrypt=encrypt_credentials)
     with conn.transaction():
@@ -814,7 +828,8 @@ def upsert_document(
                         connector_type = %s,
                         credentials = %s,
                         sync_state = %s,
-                        version = %s
+                        version = %s,
+                        organization_id = COALESCE(%s, organization_id)
                     WHERE id = %s
                     """,
                     (
@@ -825,6 +840,7 @@ def upsert_document(
                         next_credentials,
                         _jsonb_or_none(next_sync_state),
                         new_version,
+                        organization_id_uuid,
                         doc_id,
                     ),
                 )
@@ -859,9 +875,10 @@ def upsert_document(
                         credentials,
                         sync_state,
                         version,
+                        organization_id,
                         created_at
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                     """,
                     (
                         doc_id,
@@ -873,6 +890,7 @@ def upsert_document(
                         next_credentials,
                         _jsonb_or_none(next_sync_state),
                         new_version,
+                        organization_id_uuid,
                     ),
                 )
 
@@ -931,7 +949,14 @@ def insert_chunks(
     embeddings: Sequence[Sequence[float]],
     metadatas: Sequence[ChunkMetadata],
 ) -> None:
-    """Insert chunk rows ensuring metadata is persisted as JSONB."""
+    """Insert chunk rows ensuring metadata is persisted as JSONB.
+    
+    If a tenant context is available, the organization_id will be set on each chunk.
+    This enables Row Level Security (RLS) policies to enforce tenant isolation.
+    """
+    # Get current tenant context if available
+    tenant_id = get_current_tenant_id()
+    organization_id_uuid = UUID(tenant_id) if tenant_id else None
 
     with conn.transaction():
         with conn.cursor() as cur:
@@ -940,13 +965,14 @@ def insert_chunks(
             ):
                 cur.execute(
                     """
-                    INSERT INTO chunks (doc_id, chunk_index, content, token_est, metadata, embedding)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO chunks (doc_id, chunk_index, content, token_est, metadata, embedding, organization_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (doc_id, chunk_index) DO UPDATE
                     SET content = EXCLUDED.content,
                         token_est = EXCLUDED.token_est,
                         metadata = EXCLUDED.metadata,
-                        embedding = EXCLUDED.embedding
+                        embedding = EXCLUDED.embedding,
+                        organization_id = EXCLUDED.organization_id
                     """,
                     (
                         document_id,
@@ -955,6 +981,7 @@ def insert_chunks(
                         int(len(content) / 4) if content else 0,
                         _jsonb_or_none(metadata.to_json()),
                         embedding,
+                        organization_id_uuid,
                     ),
                 )
 
