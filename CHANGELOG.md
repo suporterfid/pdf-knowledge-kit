@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changelog template for tracking changes
 - Row Level Security (RLS) implementation for multi-tenancy (migration 011)
 - Test suite for RLS tenant isolation (`test_rls_tenant_isolation.py`)
+- Frontend status documentation (FRONTEND_STATUS.md) confirming production readiness
 
 ### Changed
 
