@@ -8,6 +8,18 @@
 
 This document summarizes the evaluation of requirements needed to produce a production-ready release of the PDF Knowledge Kit. The assessment identified key gaps, provided comprehensive documentation, and implemented foundational tooling to enable production releases.
 
+## 2025-11-13 – Staging Release Dry Run Status
+
+- ✅ Branch `staging-release-test` created locally to prepare a staging-tag validation path.
+- ⚠️ Triggering `.github/workflows/release.yml` with a staging tag such as `test-v1.0.0` was not possible inside the current container because it has no network access to push tags or invoke GitHub Actions. The workflow therefore remains unexecuted in this environment.
+- 🔄 Next operator steps:
+  1. Push the branch and a temporary tag (e.g., `test-v1.0.0`) to the remote repository to start the release workflow.
+  2. Open the workflow run logs in GitHub Actions and confirm that the `docker/build-push-action@v5` step reports publishing for both `linux/amd64` and `linux/arm64` as defined in the workflow.
+  3. Verify in the container registry (e.g., GHCR) that image manifests appear for all architectures, noting digest URLs in the run summary.
+  4. Remove the temporary tag after validation to avoid confusing stakeholders.
+
+No changes to the automation were necessary at this stage; the outstanding work is operational and depends on access to GitHub-hosted infrastructure.
+
 ## Current State: Development-Ready ✅
 
 The project has excellent foundations:
