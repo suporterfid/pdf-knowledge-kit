@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
   packages: write
+  # Required for docker/login-action to push images with the GITHUB_TOKEN
+  # Ensure that the default workflow token has "Read and write" permissions for packages
+  # when publishing to GitHub Container Registry (Settings > Actions > General)
 
 jobs:
   validate:
@@ -67,27 +70,38 @@ jobs:
         uses: docker/setup-buildx-action@v3
       
       - name: Log in to GitHub Container Registry
+        if: ${{ !cancelled() }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
-      # Optional: Docker Hub login (uncomment if publishing to Docker Hub)
-      # - name: Log in to Docker Hub
-      #   uses: docker/login-action@v3
-      #   with:
-      #     username: ${{ secrets.DOCKER_USERNAME }}
-      #     password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Log in to Docker Hub
+        if: ${{ secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        # Configure the DOCKER_USERNAME/DOCKER_PASSWORD secrets in the repository
+        # settings when publishing to Docker Hub. Leave them empty to skip this login.
+
+      - name: Prepare image registry targets
+        id: images
+        run: |
+          echo "primary=ghcr.io/${{ github.repository }}" >> $GITHUB_OUTPUT
+          if [[ -n "${{ secrets.DOCKER_USERNAME }}" ]]; then
+            echo "dockerhub=docker.io/${{ secrets.DOCKER_USERNAME }}/pdf-knowledge-kit" >> $GITHUB_OUTPUT
+          fi
       
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/${{ github.repository }}
-          # Add Docker Hub image if publishing there
-          # suporterfid/pdf-knowledge-kit
+            ${{ steps.images.outputs.primary }}
+            ${{ steps.images.outputs.dockerhub }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
