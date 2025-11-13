@@ -6,12 +6,15 @@ import {
   render,
   screen,
   fireEvent,
+  cleanup,
 } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ChatProvider, useChat } from './chat';
 import ChatPage from './ChatPage';
 import { ConfigProvider } from './config';
-import { ApiKeyProvider } from './apiKey';
+import { AuthProvider } from './auth/AuthProvider';
+import RequireAuth from './auth/RequireAuth';
+import LoginPage from './auth/LoginPage';
 import { ThemeProvider } from './theme';
 import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
@@ -31,17 +34,52 @@ beforeAll(() => server.listen());
 afterEach(() => {
   server.resetHandlers();
   localStorage.clear();
+  cleanup();
 });
 afterAll(() => server.close());
+
+function toBase64Url(value: string) {
+  return Buffer.from(value)
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function createJwt(payload: Record<string, unknown>) {
+  const header = toBase64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = toBase64Url(JSON.stringify(payload));
+  return `${header}.${body}.signature`;
+}
+
+const baseAccessToken = createJwt({
+  exp: Math.floor(Date.now() / 1000) + 60 * 60,
+  tenant_id: 'tenant-1',
+  roles: ['admin'],
+  email: 'tester@example.com',
+});
+const baseRefreshToken = 'refresh-token';
 
 function renderChat() {
   return renderHook(() => useChat(), {
     wrapper: ({ children }) => (
-      <ApiKeyProvider>
+      <AuthProvider
+        initialSession={{
+          accessToken: baseAccessToken,
+          refreshToken: baseRefreshToken,
+          user: {
+            email: 'tester@example.com',
+            tenantId: 'tenant-1',
+            roles: ['admin'],
+          },
+          tenants: [{ id: 'tenant-1', name: 'Tenant 1' }],
+          activeTenantId: 'tenant-1',
+        }}
+      >
         <ConfigProvider>
           <ChatProvider>{children}</ChatProvider>
         </ConfigProvider>
-      </ApiKeyProvider>
+      </AuthProvider>
     ),
   });
 }
@@ -252,7 +290,19 @@ test('Novo Chat button creates a new conversation ID', async () => {
   };
 
   render(
-    <ApiKeyProvider>
+    <AuthProvider
+      initialSession={{
+        accessToken: baseAccessToken,
+        refreshToken: baseRefreshToken,
+        user: {
+          email: 'tester@example.com',
+          tenantId: 'tenant-1',
+          roles: ['admin'],
+        },
+        tenants: [{ id: 'tenant-1', name: 'Tenant 1' }],
+        activeTenantId: 'tenant-1',
+      }}
+    >
       <ConfigProvider>
         <ThemeProvider>
           <MemoryRouter initialEntries={['/chat/first']}>
@@ -263,7 +313,7 @@ test('Novo Chat button creates a new conversation ID', async () => {
           </MemoryRouter>
         </ThemeProvider>
       </ConfigProvider>
-    </ApiKeyProvider>
+    </AuthProvider>
   );
 
   await waitFor(() => {
@@ -286,4 +336,73 @@ test('Novo Chat button creates a new conversation ID', async () => {
   expect(convs[0].id).toBe('first');
   expect(newId).not.toBe('first');
   expect(screen.getByTestId('location').textContent).toBe(`/chat/${newId}`);
+});
+
+test('RequireAuth redirects to login when no session is present', async () => {
+  render(
+    <AuthProvider>
+      <MemoryRouter initialEntries={['/protected']}>
+        <Routes>
+          <Route
+            path="/protected"
+            element={
+              <RequireAuth>
+                <div>Área protegida</div>
+              </RequireAuth>
+            }
+          />
+          <Route path="/auth/login" element={<LoginPage />} />
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>
+  );
+
+  const heading = await screen.findByRole('heading', {
+    name: /entrar/i,
+  });
+  expect(heading).toBeTruthy();
+});
+
+test('LoginPage autentica e redireciona para o chat', async () => {
+  const loginAccessToken = createJwt({
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    tenant_id: 'tenant-1',
+    roles: ['admin'],
+    email: 'tester@example.com',
+  });
+  server.use(
+    http.post('/api/auth/login', async () =>
+      HttpResponse.json({
+        accessToken: loginAccessToken,
+        refreshToken: 'refresh-123',
+        user: { email: 'tester@example.com', tenant_id: 'tenant-1', roles: ['admin'] },
+        tenants: [{ id: 'tenant-1', name: 'Tenant 1' }],
+      })
+    )
+  );
+
+  render(
+    <AuthProvider>
+      <MemoryRouter initialEntries={['/auth/login']}>
+        <Routes>
+          <Route path="/auth/login" element={<LoginPage />} />
+          <Route path="/chat/new" element={<div>Chat carregado</div>} />
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>
+  );
+
+  const [emailInput] = screen.getAllByLabelText(/e-mail/i);
+  const [passwordInput] = screen.getAllByLabelText(/senha/i);
+  fireEvent.change(emailInput, {
+    target: { value: 'tester@example.com' },
+  });
+  fireEvent.change(passwordInput, {
+    target: { value: 'super-secret' },
+  });
+  const [submitButton] = screen.getAllByRole('button', { name: /entrar/i });
+  fireEvent.click(submitButton);
+
+  const chatScreen = await screen.findByText('Chat carregado');
+  expect(chatScreen).toBeTruthy();
 });

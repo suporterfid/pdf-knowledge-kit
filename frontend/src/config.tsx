@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useApiFetch } from './apiKey';
+import { useAuthenticatedFetch } from './auth/AuthProvider';
 
 export interface AppConfig {
   BRAND_NAME: string;
@@ -24,7 +24,7 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
     const injected = (window as any).__CONFIG__ || {};
     return { ...defaultConfig, ...injected } as AppConfig;
   });
-  const apiFetch = useApiFetch();
+  const apiFetch = useAuthenticatedFetch();
 
   useEffect(() => {
     apiFetch('/api/config')

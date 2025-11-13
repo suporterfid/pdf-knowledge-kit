@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useApiFetch } from '../apiKey';
+import { useAuthenticatedFetch } from '../auth/AuthProvider';
 import LogViewer from './LogViewer';
 import useAuth from '../hooks/useAuth';
 
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
-  const apiFetch = useApiFetch();
-  const { roles } = useAuth();
+  const apiFetch = useAuthenticatedFetch();
+  const { roles, tenantId } = useAuth();
   const canOperate = roles.includes('operator') || roles.includes('admin');
   const [status, setStatus] = useState('');
 
   const cancelJob = () => {
     if (window.confirm('Cancel job?')) {
-      apiFetch(`/api/admin/ingest/jobs/${id}/cancel`, { method: 'POST' })
+      const tenantSuffix = tenantId ? `?tenantId=${tenantId}` : '';
+      apiFetch(`/api/admin/ingest/jobs/${id}/cancel${tenantSuffix}`, { method: 'POST' })
         .then(() => setStatus('canceled'))
         .catch(() => {});
     }
@@ -33,9 +34,12 @@ export default function JobDetail() {
         </button>
         <button
           aria-label="Re-run job"
-          onClick={() =>
-            apiFetch(`/api/admin/ingest/jobs/${id}/rerun`, { method: 'POST' }).then(() => {})
-          }
+          onClick={() => {
+            const tenantSuffix = tenantId ? `?tenantId=${tenantId}` : '';
+            apiFetch(`/api/admin/ingest/jobs/${id}/rerun${tenantSuffix}`, { method: 'POST' }).then(
+              () => {}
+            );
+          }}
           disabled={!canOperate}
         >
           Re-run

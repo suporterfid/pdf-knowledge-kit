@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { useApiFetch } from '../apiKey';
+import { useAuthenticatedFetch } from '../auth/AuthProvider';
 import useAuth from '../hooks/useAuth';
 
 export default function IngestLocal() {
-  const apiFetch = useApiFetch();
-  const { roles } = useAuth();
+  const apiFetch = useAuthenticatedFetch();
+  const { roles, tenantId } = useAuth();
   const canOperate = roles.includes('operator') || roles.includes('admin');
   const [path, setPath] = useState('');
   const [useOcr, setUseOcr] = useState(false);
@@ -15,7 +15,8 @@ export default function IngestLocal() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    apiFetch('/api/admin/ingest/local', {
+    const tenantSuffix = tenantId ? `?tenantId=${tenantId}` : '';
+    apiFetch(`/api/admin/ingest/local${tenantSuffix}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path, use_ocr: useOcr, ocr_lang: lang || undefined }),

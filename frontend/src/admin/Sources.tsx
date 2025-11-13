@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useApiFetch } from '../apiKey';
+import { useAuthenticatedFetch } from '../auth/AuthProvider';
 import useAuth from '../hooks/useAuth';
 
 interface Source {
@@ -14,8 +14,8 @@ interface Source {
 }
 
 export default function Sources() {
-  const apiFetch = useApiFetch();
-  const { roles } = useAuth();
+  const apiFetch = useAuthenticatedFetch();
+  const { roles, tenantId } = useAuth();
   const canOperate = roles.includes('operator') || roles.includes('admin');
   const [sources, setSources] = useState<Source[]>([]);
   const [type, setType] = useState('local_dir');
@@ -34,6 +34,9 @@ export default function Sources() {
 
   const load = () => {
     const query = new URLSearchParams();
+    if (tenantId) {
+      query.append('tenantId', tenantId);
+    }
     if (filterActive !== 'all') {
       query.append('active', filterActive);
     }
@@ -48,7 +51,7 @@ export default function Sources() {
 
   useEffect(() => {
     load();
-  }, [apiFetch, filterActive, filterType]);
+  }, [apiFetch, filterActive, filterType, tenantId]);
 
   const create = (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +83,8 @@ export default function Sources() {
       }
     }
 
-    apiFetch('/api/admin/ingest/sources', {
+    const tenantSuffix = tenantId ? `?tenantId=${tenantId}` : '';
+    apiFetch(`/api/admin/ingest/sources${tenantSuffix}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -117,7 +121,8 @@ export default function Sources() {
         body.params = s.params;
       }
     }
-    apiFetch(`/api/admin/ingest/sources/${s.id}`, {
+    const tenantSuffix = tenantId ? `?tenantId=${tenantId}` : '';
+    apiFetch(`/api/admin/ingest/sources/${s.id}${tenantSuffix}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -126,12 +131,14 @@ export default function Sources() {
 
   const del = (id: string) => {
     if (window.confirm('Delete source?')) {
-      apiFetch(`/api/admin/ingest/sources/${id}`, { method: 'DELETE' }).then(load);
+      const tenantSuffix = tenantId ? `?tenantId=${tenantId}` : '';
+      apiFetch(`/api/admin/ingest/sources/${id}${tenantSuffix}`, { method: 'DELETE' }).then(load);
     }
   };
 
   const reindex = (id: string) => {
-    apiFetch(`/api/admin/ingest/sources/${id}/reindex`, { method: 'POST' }).then(() => {});
+    const tenantSuffix = tenantId ? `?tenantId=${tenantId}` : '';
+    apiFetch(`/api/admin/ingest/sources/${id}/reindex${tenantSuffix}`, { method: 'POST' }).then(() => {});
   };
 
   return (

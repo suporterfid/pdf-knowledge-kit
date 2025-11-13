@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { ApiKeyProvider } from '../../apiKey';
+import { AuthProvider } from '../../auth/AuthProvider';
 import Sources from '../Sources';
 import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
@@ -33,6 +33,28 @@ const server = setupServer(
   })
 );
 
+function toBase64Url(value: string) {
+  return Buffer.from(value)
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function createJwt(payload: Record<string, unknown>) {
+  const header = toBase64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = toBase64Url(JSON.stringify(payload));
+  return `${header}.${body}.signature`;
+}
+
+const testAccessToken = createJwt({
+  exp: Math.floor(Date.now() / 1000) + 3600,
+  tenant_id: 'tenant-1',
+  roles: ['operator'],
+  email: 'operator@example.com',
+});
+const testRefreshToken = 'refresh-token';
+
 beforeAll(() => server.listen());
 afterEach(() => {
   server.resetHandlers();
@@ -41,11 +63,22 @@ afterEach(() => {
 afterAll(() => server.close());
 
 test('loads and adds sources', async () => {
-  localStorage.setItem('apiKey', 'test');
   render(
-    <ApiKeyProvider>
+    <AuthProvider
+      initialSession={{
+        accessToken: testAccessToken,
+        refreshToken: testRefreshToken,
+        user: {
+          email: 'operator@example.com',
+          tenantId: 'tenant-1',
+          roles: ['operator'],
+        },
+        tenants: [{ id: 'tenant-1', name: 'Tenant 1' }],
+        activeTenantId: 'tenant-1',
+      }}
+    >
       <Sources />
-    </ApiKeyProvider>
+    </AuthProvider>
   );
 
   await screen.findByDisplayValue('/data');

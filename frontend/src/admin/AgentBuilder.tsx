@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useApiFetch } from '../apiKey';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuthenticatedFetch } from '../auth/AuthProvider';
 import useAuth from '../hooks/useAuth';
 
 interface AgentSummary {
@@ -94,8 +94,8 @@ function detailToForm(detail: AgentDetail): AgentFormState {
 }
 
 export default function AgentBuilder() {
-  const apiFetch = useApiFetch();
-  const { roles } = useAuth();
+  const apiFetch = useAuthenticatedFetch();
+  const { roles, tenantId, tenants, setActiveTenant } = useAuth();
   const canOperate = roles.includes('operator') || roles.includes('admin');
 
   const [agents, setAgents] = useState<AgentSummary[]>([]);
@@ -106,6 +106,11 @@ export default function AgentBuilder() {
   const [testInput, setTestInput] = useState('Hello! How can you help me today?');
   const [testResult, setTestResult] = useState<AgentTestResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const tenantOptions = tenants.length > 0 ? tenants : tenantId ? [{ id: tenantId }] : [];
+
+  const handleTenantChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setActiveTenant(event.target.value);
+  };
 
   const environments = useMemo(() => {
     return (
@@ -113,44 +118,53 @@ export default function AgentBuilder() {
     );
   }, [selectedAgent]);
 
-  useEffect(() => {
-    loadProviders();
-    loadAgents();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadAgents = async () => {
+  const loadAgents = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/agents');
+      const url = tenantId ? `/api/agents?tenantId=${tenantId}` : '/api/agents';
+      const res = await apiFetch(url);
       if (!res.ok) throw new Error('Failed to load agents');
       const data = (await res.json()) as AgentListResponse;
       setAgents(data.items || []);
     } catch {
       setAgents([]);
     }
-  };
+  }, [apiFetch, tenantId]);
 
-  const loadProviders = async () => {
+  const loadProviders = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/agents/providers');
+      const url = tenantId ? `/api/agents/providers?tenantId=${tenantId}` : '/api/agents/providers';
+      const res = await apiFetch(url);
       if (!res.ok) throw new Error('Failed to load providers');
       const data = (await res.json()) as Record<string, string | null>;
       setProviders(Object.keys(data));
     } catch {
       setProviders(['openai', 'anthropic', 'google', 'meta']);
     }
-  };
+  }, [apiFetch, tenantId]);
 
-  const resetForm = () => {
+  useEffect(() => {
+    loadProviders();
+  }, [loadProviders]);
+
+  useEffect(() => {
+    loadAgents();
+  }, [loadAgents]);
+
+  const resetForm = useCallback(() => {
     setSelectedAgent(null);
     setForm(defaultForm);
     setTestResult(null);
-  };
+  }, []);
+
+  useEffect(() => {
+    resetForm();
+  }, [tenantId, resetForm]);
 
   const selectAgent = async (agentId: number) => {
     setError(null);
     try {
-      const res = await apiFetch(`/api/agents/${agentId}`);
+      const url = tenantId ? `/api/agents/${agentId}?tenantId=${tenantId}` : `/api/agents/${agentId}`;
+      const res = await apiFetch(url);
       if (!res.ok) throw new Error('Failed to load agent');
       const data = (await res.json()) as AgentDetail;
       setSelectedAgent(data);
@@ -190,13 +204,14 @@ export default function AgentBuilder() {
       tags: selectedAgent?.tags || [],
     };
     try {
+      const tenantSuffix = tenantId ? `?tenantId=${tenantId}` : '';
       const res = selectedAgent
-        ? await apiFetch(`/api/agents/${selectedAgent.id}`, {
+        ? await apiFetch(`/api/agents/${selectedAgent.id}${tenantSuffix}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(basePayload),
           })
-        : await apiFetch('/api/agents', {
+        : await apiFetch(`/api/agents${tenantSuffix}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -221,7 +236,8 @@ export default function AgentBuilder() {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/agents/${selectedAgent.id}/test`, {
+      const tenantSuffix = tenantId ? `?tenantId=${tenantId}` : '';
+      const res = await apiFetch(`/api/agents/${selectedAgent.id}/test${tenantSuffix}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: testInput }),
@@ -242,7 +258,8 @@ export default function AgentBuilder() {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/agents/${selectedAgent.id}/deploy`, {
+      const tenantSuffix = tenantId ? `?tenantId=${tenantId}` : '';
+      const res = await apiFetch(`/api/agents/${selectedAgent.id}/deploy${tenantSuffix}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -274,6 +291,30 @@ export default function AgentBuilder() {
 
   return (
     <div className="agent-builder">
+      <header className="mb-4 flex flex-col gap-2 rounded-lg border border-gray-800 bg-gray-900 p-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-white">Agentes por tenant</h2>
+          <p className="text-sm text-gray-400">
+            Selecione uma organização para visualizar e editar os agentes disponíveis.
+          </p>
+        </div>
+        {tenantOptions.length > 0 && (
+          <label className="text-sm text-gray-300">
+            <span className="mr-2">Organização:</span>
+            <select
+              value={tenantId ?? tenantOptions[0].id}
+              onChange={handleTenantChange}
+              className="rounded border border-gray-700 bg-gray-800 p-2"
+            >
+              {tenantOptions.map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>
+                  {tenant.name || tenant.slug || tenant.id}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </header>
       <div className="agent-grid">
         <section aria-label="Agent list">
           <header className="agent-grid__header">

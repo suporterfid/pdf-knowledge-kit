@@ -1,6 +1,6 @@
 import React, { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
-import { useApiFetch } from '../apiKey';
+import { useAuthenticatedFetch } from '../auth/AuthProvider';
 import useAuth from '../hooks/useAuth';
 
 interface Job {
@@ -68,8 +68,8 @@ interface ConversationDashboardPayload {
 }
 
 export default function Dashboard() {
-  const apiFetch = useApiFetch();
-  const { roles } = useAuth();
+  const apiFetch = useAuthenticatedFetch();
+  const { roles, tenantId } = useAuth();
   const canOperate = roles.includes('operator') || roles.includes('admin');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
@@ -82,7 +82,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     const loadJobs = () => {
-      apiFetch('/api/admin/ingest/jobs')
+      const url = tenantId
+        ? `/api/admin/ingest/jobs?tenantId=${tenantId}`
+        : '/api/admin/ingest/jobs';
+      apiFetch(url)
         .then((r) => r.json() as Promise<JobList>)
         .then((d) => setJobs(d.items))
         .catch(() => {});
@@ -90,10 +93,11 @@ export default function Dashboard() {
     loadJobs();
     const id = setInterval(loadJobs, 3000);
     return () => clearInterval(id);
-  }, [apiFetch]);
+  }, [apiFetch, tenantId]);
 
   useEffect(() => {
-    apiFetch('/api/agents')
+    const url = tenantId ? `/api/agents?tenantId=${tenantId}` : '/api/agents';
+    apiFetch(url)
       .then((r) => (r.ok ? (r.json() as Promise<AgentListResponse>) : Promise.reject()))
       .then((data) => {
         setAgents(data.items);
@@ -102,16 +106,19 @@ export default function Dashboard() {
         }
       })
       .catch(() => setAgents([]));
-  }, [apiFetch]);
+  }, [apiFetch, tenantId]);
 
   useEffect(() => {
     if (!selectedAgentId) return;
     loadChannelConfigs(selectedAgentId);
     loadConversationDashboard(selectedAgentId);
-  }, [selectedAgentId]);
+  }, [selectedAgentId, tenantId]);
 
   const loadChannelConfigs = (agentId: number) => {
-    apiFetch(`/api/agents/${agentId}/channels`)
+    const url = tenantId
+      ? `/api/agents/${agentId}/channels?tenantId=${tenantId}`
+      : `/api/agents/${agentId}/channels`;
+    apiFetch(url)
       .then((r) => (r.ok ? (r.json() as Promise<ChannelConfigList>) : Promise.reject()))
       .then((data) => {
         setChannelConfigs(data.items);
@@ -129,7 +136,10 @@ export default function Dashboard() {
 
   const loadConversationDashboard = (agentId: number) => {
     setLoadingDashboard(true);
-    apiFetch(`/api/agents/${agentId}/conversations/dashboard`)
+    const url = tenantId
+      ? `/api/agents/${agentId}/conversations/dashboard?tenantId=${tenantId}`
+      : `/api/agents/${agentId}/conversations/dashboard`;
+    apiFetch(url)
       .then((r) => (r.ok ? (r.json() as Promise<ConversationDashboardPayload>) : Promise.reject()))
       .then((payload) => setDashboard(payload))
       .catch(() => setDashboard(null))

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { useApiFetch } from '../apiKey';
+import { useAuthenticatedFetch } from '../auth/AuthProvider';
 import useAuth from '../hooks/useAuth';
 
 export default function IngestUrls() {
-  const apiFetch = useApiFetch();
-  const { roles } = useAuth();
+  const apiFetch = useAuthenticatedFetch();
+  const { roles, tenantId } = useAuth();
   const canOperate = roles.includes('operator') || roles.includes('admin');
   const [urls, setUrls] = useState<string[]>(['']);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -18,7 +18,8 @@ export default function IngestUrls() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     interface StartJobResponse { job_id: string }
-    apiFetch('/api/admin/ingest/urls', {
+    const tenantSuffix = tenantId ? `?tenantId=${tenantId}` : '';
+    apiFetch(`/api/admin/ingest/urls${tenantSuffix}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ urls: urls.filter((u) => u) }),
