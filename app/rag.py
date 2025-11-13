@@ -121,6 +121,9 @@ def build_context(question: str, k: int) -> Tuple[str, List[Dict]]:
     # L2 (Euclidean) distance operator. We choose pre_k = max(k*4, 20)
     # heuristically to balance quality and latency.
     pre_k = max(k * 4, 20)
+    # Note: Row Level Security (RLS) policies automatically filter chunks and documents
+    # by organization_id based on the app.tenant_id session variable set by the
+    # TenantContextMiddleware. No explicit WHERE clause for tenant filtering is needed.
     sql = """
     SELECT d.path, c.chunk_index, c.content, (c.embedding <-> %s) AS distance
     FROM chunks c
