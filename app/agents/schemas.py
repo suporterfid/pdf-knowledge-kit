@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -10,6 +11,7 @@ from pydantic import BaseModel, Field
 class AgentBase(BaseModel):
     """Base configuration shared by create/update operations."""
 
+    tenant_id: Optional[UUID] = None
     name: str
     description: Optional[str] = None
     provider: str
@@ -57,6 +59,7 @@ class AgentVersionConfig(BaseModel):
 
 class AgentVersion(BaseModel):
     id: int
+    tenant_id: UUID
     agent_id: int
     version: int
     label: Optional[str] = None
@@ -70,6 +73,7 @@ class AgentVersion(BaseModel):
 
 class Agent(BaseModel):
     id: int
+    tenant_id: UUID
     slug: str
     name: str
     description: Optional[str] = None
@@ -115,6 +119,7 @@ class AgentTestRequest(BaseModel):
 
 class AgentTestRecord(BaseModel):
     id: int
+    tenant_id: UUID
     agent_id: int
     agent_version_id: Optional[int] = None
     input_prompt: str
@@ -126,6 +131,7 @@ class AgentTestRecord(BaseModel):
 
 
 class AgentTestRecordCreate(BaseModel):
+    tenant_id: Optional[UUID] = None
     agent_id: int
     agent_version_id: Optional[int] = None
     input_prompt: str
@@ -156,6 +162,7 @@ class AgentDeployResponse(AgentDetail):
 
 
 class ChannelConfig(BaseModel):
+    tenant_id: UUID
     channel: str
     is_enabled: bool = True
     webhook_secret: Optional[str] = None

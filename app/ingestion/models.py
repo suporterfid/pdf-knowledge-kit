@@ -353,6 +353,7 @@ class ReindexRequest(BaseModel):
 class SourceCreate(BaseModel):
     """Model used to create a new source record."""
 
+    tenant_id: UUID
     type: SourceType
     path: str | None = None
     url: HttpUrl | None = None
@@ -417,6 +418,7 @@ class SourceCreate(BaseModel):
 class SourceUpdate(BaseModel):
     """Model used to update an existing source record."""
 
+    tenant_id: UUID | None = None
     path: str | None = None
     url: HttpUrl | None = None
     label: str | None = None
@@ -467,6 +469,7 @@ class JobCreated(BaseModel):
 
 class Source(BaseModel):
     id: UUID
+    tenant_id: UUID
     type: SourceType
     label: str | None = None
     location: str | None = None
@@ -492,6 +495,7 @@ class Source(BaseModel):
 class ConnectorDefinitionBase(BaseModel):
     """Shared fields for connector definitions."""
 
+    tenant_id: UUID | None = None
     name: str
     description: str | None = None
     type: SourceType
@@ -590,6 +594,7 @@ class ConnectorDefinitionUpdate(BaseModel):
 class ConnectorDefinition(ConnectorDefinitionBase):
     """Representation of a stored connector definition."""
 
+    tenant_id: UUID
     id: UUID
     created_at: datetime
     updated_at: datetime | None = None
@@ -597,6 +602,7 @@ class ConnectorDefinition(ConnectorDefinitionBase):
 
 class Job(BaseModel):
     id: UUID
+    tenant_id: UUID
     source_id: UUID
     status: JobStatus
     created_at: datetime
@@ -611,6 +617,7 @@ class JobSummary(BaseModel):
     """A lightweight summary of a job."""
 
     id: UUID
+    tenant_id: UUID
     status: JobStatus
     created_at: datetime
     updated_at: datetime | None = None
@@ -663,6 +670,7 @@ class DocumentVersion(BaseModel):
     """Snapshot of a document's metadata for version history APIs."""
 
     document_id: UUID
+    tenant_id: UUID
     source_id: UUID | None = None
     version: int
     bytes: int | None = None
