@@ -135,12 +135,14 @@ pytest
 
    | Ferramenta | Comando | Objetivo |
    | ---------- | ------- | -------- |
-   | **Ruff**   | `ruff check .` | Lint e diagnósticos rápidos para Python. |
-   | **Black**  | `black --check .` | Confirma que o código segue o formato padrão. |
+   | **Ruff**   | `ruff check --config pyproject.toml .` | Lint e diagnósticos rápidos para Python usando as regras do projeto. |
+   | **Black**  | `black --check --config pyproject.toml .` | Confirma que o código segue o formato padrão definido no projeto. |
    | **MyPy**   | `mypy --config-file pyproject.toml` | Valida os tipos estáticos do backend. |
    | **Bandit** | `bandit -c pyproject.toml -r app/` | Aponta problemas de segurança em tempo de desenvolvimento. |
 
 Use `ruff format` ou `black` sem a flag `--check` para aplicar correções automáticas quando necessário.
+
+> 💡 O workflow de lint do GitHub Actions agora é bloqueante: qualquer falha em Ruff, Black, MyPy ou Bandit interrompe o pipeline de CI.
 
 
 ## Como Executar

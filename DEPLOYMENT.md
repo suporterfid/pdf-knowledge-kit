@@ -78,13 +78,13 @@ When iterating locally without containers:
 2. Run the standard quality gates before committing:
 
    ```bash
-   ruff check .
-   black --check .
+   ruff check --config pyproject.toml .
+   black --check --config pyproject.toml .
    mypy --config-file pyproject.toml
    bandit -c pyproject.toml -r app/
    ```
 
-Use `ruff format` or `black` (sem `--check`) to apply formatting fixes automatically. These are the same commands executed in CI so keeping a clean local run prevents pipeline failures.
+Use `ruff format` or `black` (sem `--check`) to apply formatting fixes automatically. These checks are now blocking in GitHub Actions: any issue reported by Ruff, Black, MyPy, or Bandit will stop the CI pipeline.
 
 ### 3.4 Frontend development outside Docker
 
