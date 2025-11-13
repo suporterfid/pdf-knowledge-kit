@@ -194,6 +194,12 @@ This checklist ensures that all necessary steps are completed before releasing a
 
 ### 3.2 Docker Image Build
 
+- [ ] Confirm CI and release engineers retain `write` access to `ghcr.io/chatvolt/pdf-knowledge-kit`
+  ```bash
+  echo $CR_PAT | docker login ghcr.io -u <github-username> --password-stdin
+  docker pull ghcr.io/chatvolt/pdf-knowledge-kit:latest || true
+  docker logout ghcr.io
+  ```
 - [ ] Build Docker image locally
   ```bash
   docker build -t pdf-knowledge-kit:X.Y.Z .
