@@ -1,0 +1,2 @@
+[2025-11-13 01:11:53,905] INFO in app.ingestion.connectors.transcription: running transcription provider=mock
+[2025-11-13 01:11:53,907] INFO in app.ingestion.connectors.transcription: running transcription provider=whisper
