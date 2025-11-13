@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfig } from "../config";
 import { useTheme } from "../theme";
+import useAuth from "../hooks/useAuth";
 
 interface Props {
   onMenuClick?: () => void;
@@ -13,6 +14,14 @@ export default function Header({ onMenuClick }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { theme, toggleTheme } = useTheme();
+  const { user, tenantId, tenants, logout } = useAuth();
+  const currentTenant = tenants.find((tenant) => tenant.id === tenantId) || null;
+
+  const handleLogout = async () => {
+    setMenuOpen(false);
+    await logout();
+    navigate("/auth/login");
+  };
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -64,16 +73,19 @@ export default function Header({ onMenuClick }: Props) {
             aria-haspopup="true"
             aria-expanded={menuOpen}
           >
-            ☺
+            {user?.email ? user.email.charAt(0).toUpperCase() : "☺"}
           </button>
           {menuOpen && (
             <div className="menu" role="menu">
-              <a href="#" role="menuitem">
-                Perfil
-              </a>
-              <a href="#" role="menuitem">
+              {currentTenant && (
+                <div className="px-3 py-2 text-sm text-gray-400">
+                  <p className="font-semibold text-gray-200">{user?.fullName || user?.email}</p>
+                  <p>Tenant: {currentTenant.name || currentTenant.slug || currentTenant.id}</p>
+                </div>
+              )}
+              <button type="button" onClick={handleLogout} role="menuitem">
                 Sair
-              </a>
+              </button>
             </div>
           )}
         </div>

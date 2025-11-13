@@ -2,18 +2,18 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ConfigProvider } from "./config";
-import { ApiKeyProvider } from "./apiKey";
+import { AuthProvider } from "./auth/AuthProvider";
 import { ThemeProvider } from "./theme";
 import "./theme.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ThemeProvider>
-      <ApiKeyProvider>
+      <AuthProvider>
         <ConfigProvider>
           <App />
         </ConfigProvider>
-      </ApiKeyProvider>
+      </AuthProvider>
     </ThemeProvider>
   </React.StrictMode>,
 );

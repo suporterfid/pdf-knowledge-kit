@@ -3,10 +3,11 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import ChatPage from './ChatPage';
-import Login from './Login';
-import RequireApiKey from './RequireApiKey';
 import AdminApp from './admin/AdminApp';
 import AdminRoute from './admin/AdminRoute';
+import LoginPage from './auth/LoginPage';
+import RegisterPage from './auth/RegisterPage';
+import RequireAuth from './auth/RequireAuth';
 
 export default function App() {
   return (
@@ -14,24 +15,25 @@ export default function App() {
       <div className="flex h-screen flex-col bg-gray-900 text-gray-100">
         <ToastContainer />
         <Routes>
-          <Route path="/login" element={<Login />} />
           <Route path="/" element={<Navigate to="/chat/new" replace />} />
+          <Route path="/auth/login" element={<LoginPage />} />
+          <Route path="/auth/register" element={<RegisterPage />} />
           <Route
             path="/chat/:id"
             element={
-              <RequireApiKey>
+              <RequireAuth>
                 <ChatPage />
-              </RequireApiKey>
+              </RequireAuth>
             }
           />
           <Route
             path="/admin/*"
             element={
-              <RequireApiKey>
+              <RequireAuth>
                 <AdminRoute>
                   <AdminApp />
                 </AdminRoute>
-              </RequireApiKey>
+              </RequireAuth>
             }
           />
           <Route path="*" element={<Navigate to="/chat/new" replace />} />

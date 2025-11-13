@@ -8,9 +8,11 @@ This document explains how the React client inside `frontend/src/` is organized,
 frontend/src/
 ├── App.tsx                 # Router with public and protected routes
 ├── ChatPage.tsx            # Main end-user chat experience
-├── Login.tsx               # API key capture form
-├── RequireApiKey.tsx       # Route guard redirecting to login when missing a key
-├── apiKey.tsx              # API key context + authenticated fetch helper
+├── auth/                   # Authentication pages, provider and guards
+│   ├── AuthProvider.tsx
+│   ├── LoginPage.tsx
+│   ├── RegisterPage.tsx
+│   └── RequireAuth.tsx
 ├── chat.tsx                # Chat context with streaming + retry logic
 ├── chat.test.tsx           # Integration tests for the chat flow
 ├── components/             # Chat-specific presentational components
@@ -61,16 +63,16 @@ The application boots from `main.tsx`, which wires a stack of React providers be
 // main.tsx (excerpt)
 <React.StrictMode>
   <ThemeProvider>
-    <ApiKeyProvider>
+    <AuthProvider>
       <ConfigProvider>
         <App />
       </ConfigProvider>
-    </ApiKeyProvider>
+    </AuthProvider>
   </ThemeProvider>
 </React.StrictMode>
 ```
 
-`App.tsx` owns the router setup. Public routes include `/login`; everything else is wrapped in `<RequireApiKey>` so users without an API key are redirected back to the login flow. Admin-only routes are also wrapped in `<AdminRoute>` which verifies operator/admin roles before rendering the admin console.
+`App.tsx` owns the router setup. Public routes include `/auth/login` and `/auth/register`; everything else is wrapped in `<RequireAuth>` so users without a valid session are redirected back to the login flow. Admin-only routes are also wrapped in `<AdminRoute>` which verifies operator/admin roles before rendering the admin console.
 
 ## Main chat experience
 
@@ -99,22 +101,22 @@ When building new UI, prefer colocating logic inside the chat context and keep c
 
 This project does not use Redux/Zustand—state is managed with React context providers located alongside their domains:
 
-- **`ApiKeyProvider` (`apiKey.tsx`)** – stores the API key in `localStorage` and exposes `apiKey`, `setApiKey`, and `clearApiKey`. Also exports `useApiFetch`, a memoised wrapper around `fetch` that injects the API key header and surfaces authentication errors via `react-toastify`.
+- **`AuthProvider` (`auth/AuthProvider.tsx`)** – handles login, registration, JWT storage/refresh, active tenant selection and exposes `useAuthenticatedFetch`, a memoised wrapper around `fetch` that injects `Authorization`, `X-Tenant-Id` and role headers while retrying on token expiry.
 - **`ConfigProvider` (`config.tsx`)** – bootstraps runtime configuration (brand label, upload limits, etc.) from a server-injected global and an `/api/config` request. Components consume the config through `useConfig()`.
 - **`ThemeProvider` (`theme.tsx`)** – toggles light/dark mode by applying CSS variables to the `document.documentElement` and persisting the user’s choice in `localStorage`.
 - **`ChatProvider` (`chat.tsx`)** – holds the entire chat session state: messages, streaming progress, sources, errors, cancellation, retry, and regenerate helpers. It persists message history per conversation in `localStorage`.
-- **`useAuth` hook (`hooks/useAuth.ts`)** – reacts to API key changes, calls `/api/auth/roles`, and returns `{ roles, loading }`. `AdminRoute` and admin screens leverage this to gate privileged actions.
+- **`useAuth` hook (`hooks/useAuth.ts`)** – exposes the session returned by `AuthProvider`, including `{ roles, tenantId, tenants, loading, logout }`. `AdminRoute` and admin screens leverage this to gate privileged actions and to switch tenants when managing shared resources.
 
 When introducing new global state, follow this pattern: create a dedicated context/provider pair and mount it in `main.tsx` so the provider order stays consistent.
 
 ## Backend integration
 
-The app talks to the backend exclusively through `useApiFetch` and higher-level hooks/components that call it. This ensures the API key header and toast-based error reporting are always applied.
+The app talks to the backend exclusively through `useAuthenticatedFetch` and higher-level hooks/components that call it. This ensures JWT headers, tenant metadata and toast-based error reporting are always applied.
 
 Typical usage looks like:
 
 ```tsx
-const apiFetch = useApiFetch();
+const apiFetch = useAuthenticatedFetch();
 
 async function sendPrompt(text: string) {
   const params = new URLSearchParams({ q: text, k: "5", sessionId });
@@ -126,11 +128,11 @@ async function sendPrompt(text: string) {
 Key integrations include:
 
 - **Chat streaming (`chat.tsx`)** – orchestrates SSE-style streaming by reading chunks from `Response.body.getReader()`, interpreting `event:` lines, and updating `messages`/`sources` incrementally. It also handles file uploads, large-file pre-uploads (`/api/upload`), cancellation via `AbortController`, rate-limit errors, and retries.
-- **Admin ingestion screens** – e.g., `IngestLocal.tsx` posts to `/api/admin/ingest/local` and requires `operator` or `admin` roles to enable the form. Other admin modules follow the same `useApiFetch` pattern.
+- **Admin ingestion screens** – e.g., `IngestLocal.tsx` posts to `/api/admin/ingest/local` and requires `operator` or `admin` roles to enable the form. Other admin modules follow the same `useAuthenticatedFetch` pattern, automatically scoping calls to the active tenant.
 - **Configuration** – `ConfigProvider` fetches `/api/config` once at mount to augment the injected defaults.
-- **Authentication/Authorization** – `useAuth` hits `/api/auth/roles` and controls whether privileged UI should render.
+- **Authentication/Authorization** – `AuthProvider` consumes the login/register/refresh/logout endpoints to manage tokens, while `useAuth` surfaces session metadata to the UI.
 
-Whenever you add a new backend call, ensure it goes through `useApiFetch()` so credentials and standard error handling remain consistent.
+Whenever you add a new backend call, ensure it goes through `useAuthenticatedFetch()` so credentials, tenant headers and standard error handling remain consistent.
 
 ## Styling conventions
 

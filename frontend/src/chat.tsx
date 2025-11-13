@@ -6,7 +6,7 @@ import React, {
   useState,
 } from 'react';
 import { useConfig } from './config';
-import { useApiFetch } from './apiKey';
+import { useAuthenticatedFetch } from './auth/AuthProvider';
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -54,7 +54,7 @@ export function ChatProvider({
   const controllerRef = useRef<AbortController | null>(null);
   const lastRequestRef = useRef<{ text: string; files: File[] } | null>(null);
   const { UPLOAD_MAX_SIZE, UPLOAD_MAX_FILES } = useConfig();
-  const apiFetch = useApiFetch();
+  const apiFetch = useAuthenticatedFetch();
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(messages));

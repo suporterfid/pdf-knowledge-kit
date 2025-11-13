@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useApiFetch } from '../apiKey';
+import { useAuthenticatedFetch } from '../auth/AuthProvider';
+import useAuth from '../hooks/useAuth';
 
 interface LogSlice {
   content: string;
@@ -8,7 +9,8 @@ interface LogSlice {
 }
 
 export default function LogViewer({ jobId, onStatus }: { jobId: string; onStatus?: (s: string) => void }) {
-  const apiFetch = useApiFetch();
+  const apiFetch = useAuthenticatedFetch();
+  const { tenantId } = useAuth();
   const [log, setLog] = useState('');
   const [status, setStatus] = useState('');
 
@@ -17,7 +19,10 @@ export default function LogViewer({ jobId, onStatus }: { jobId: string; onStatus
     let offset = 0;
     async function poll() {
       while (!canceled) {
-        const res = await apiFetch(`/api/admin/ingest/jobs/${jobId}/logs?offset=${offset}`);
+        const tenantSuffix = tenantId ? `&tenantId=${tenantId}` : '';
+        const res = await apiFetch(
+          `/api/admin/ingest/jobs/${jobId}/logs?offset=${offset}${tenantSuffix}`
+        );
         const data: LogSlice = await res.json();
         if (data.content) {
           setLog((prev) => prev + data.content);
@@ -35,7 +40,7 @@ export default function LogViewer({ jobId, onStatus }: { jobId: string; onStatus
     return () => {
       canceled = true;
     };
-  }, [jobId, apiFetch, onStatus]);
+  }, [jobId, tenantId, apiFetch, onStatus]);
 
   return (
     <div>
