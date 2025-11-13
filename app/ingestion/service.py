@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Sequence, Tuple
+from uuid import UUID
 
 import requests
 from fastembed import TextEmbedding
@@ -28,6 +29,9 @@ import pytesseract
 import psycopg
 from pgvector.psycopg import register_vector
 import sqlalchemy as sa
+
+from app.core.db import apply_tenant_settings
+from app.core.tenant_context import get_current_tenant_id
 
 
 from . import storage
@@ -53,6 +57,19 @@ EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2-cls"
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema.sql"
 
 _PDF_SEGMENT_CACHE: Dict[Tuple[str, bool, str | None], List[ParsedSegment]] = {}
+
+
+def _normalize_tenant_id(tenant_id: UUID | str | None) -> UUID:
+    """Resolve a tenant identifier from explicit argument or context."""
+
+    if tenant_id is None:
+        context = get_current_tenant_id()
+        if context is None:
+            raise RuntimeError("tenant_id is required for ingestion operations")
+        tenant_id = context
+    if isinstance(tenant_id, UUID):
+        return tenant_id
+    return uuid.UUID(str(tenant_id))
 
 
 def _pdf_cache_key(pdf_path: Path, use_ocr: bool, ocr_lang: str | None) -> Tuple[str, bool, str | None]:
@@ -364,41 +381,48 @@ def reset_schema(
 
 
 @contextmanager
-def connect_and_init(db_url: str):
-    """Connect to the database, ensure schema, then register pgvector.
+def connect_and_init(db_url: str, *, tenant_id: UUID | str | None = None):
+    """Connect to the database, ensure schema, then register pgvector."""
 
-    Ensures ``ensure_schema`` runs before ``register_vector`` for every
-    connection.
-    """
-
+    tenant_uuid = _normalize_tenant_id(tenant_id)
     with psycopg.connect(db_url) as conn:
         ensure_schema(conn)
         register_vector(conn)
+        apply_tenant_settings(conn, tenant_uuid)
         yield conn
 
 
 def upsert_document(
     conn: psycopg.Connection,
+    tenant_id: UUID,
     path: str | Path,
     bytes_len: int,
     page_count: int,
     *,
     source_id: uuid.UUID | None = None,
+    connector_type: str | None = None,
+    credentials: Any | None = None,
+    sync_state: dict | None = None,
 ) -> uuid.UUID:
     """Create or update a document and return its identifier."""
 
     version = storage.upsert_document(
         conn,
+        tenant_id=tenant_id,
         path=str(path),
         bytes_len=bytes_len,
         page_count=page_count,
         source_id=source_id,
+        connector_type=connector_type,
+        credentials=credentials,
+        sync_state=sync_state,
     )
     return version.document_id
 
 
 def insert_chunks(
     conn: psycopg.Connection,
+    tenant_id: UUID,
     doc_id: uuid.UUID,
     chunks: Sequence[Chunk],
     embeddings: Sequence[list[float]],
@@ -418,6 +442,7 @@ def insert_chunks(
     ]
     storage.insert_chunks(
         conn,
+        tenant_id=tenant_id,
         document_id=doc_id,
         chunks=[chunk.content for chunk in chunks],
         embeddings=embeddings,
@@ -434,6 +459,7 @@ def _process_connector_stream(
     cancel_event,
     logger: logging.Logger,
     job_id: uuid.UUID,
+    tenant_id: UUID,
 ) -> tuple[int, int, bool]:
     """Stream records from a connector, embed them and persist to storage."""
 
@@ -463,6 +489,7 @@ def _process_connector_stream(
 
         version = storage.upsert_document(
             conn,
+            tenant_id=tenant_id,
             path=str(record.document_path),
             bytes_len=record.bytes_len,
             page_count=record.page_count,
@@ -470,7 +497,13 @@ def _process_connector_stream(
             connector_type=source.connector_type or source.type.value,
             sync_state=record.document_sync_state,
         )
-        insert_chunks(conn, version.document_id, record.chunks, embeddings)
+        insert_chunks(
+            conn,
+            tenant_id,
+            version.document_id,
+            record.chunks,
+            embeddings,
+        )
         documents += 1
         chunks_total += len(record.chunks)
         logger.info("document=%s chunks=%d", record.document_path, len(record.chunks))
@@ -478,10 +511,12 @@ def _process_connector_stream(
     if not canceled:
         next_state = getattr(connector, "next_sync_state", None)
         if next_state is not None:
-            storage.update_source_sync_state(conn, source.id, sync_state=next_state)
+            storage.update_source_sync_state(
+                conn, source.id, tenant_id=tenant_id, sync_state=next_state
+            )
         job_params = dict(getattr(connector, "job_metadata", {}))
         job_params.update({"documents": documents, "chunks": chunks_total})
-        storage.update_job_params(conn, job_id, job_params)
+        storage.update_job_params(conn, job_id, tenant_id=tenant_id, params=job_params)
 
     return documents, chunks_total, canceled
 
@@ -504,12 +539,15 @@ def _setup_job_logging(job_id: uuid.UUID) -> tuple[logging.Logger, Path]:
     return logger, log_path
 
 
-def ingest_source(source_id: uuid.UUID) -> uuid.UUID:
+def ingest_source(
+    source_id: uuid.UUID, *, tenant_id: UUID | str | None = None
+) -> uuid.UUID:
     """Ingest a connector-backed source such as a database or REST API."""
 
     db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
-    with connect_and_init(db_url) as conn:
-        source = storage.get_source(conn, source_id)
+    tenant_uuid = _normalize_tenant_id(tenant_id)
+    with connect_and_init(db_url, tenant_id=tenant_uuid) as conn:
+        source = storage.get_source(conn, source_id, tenant_id=tenant_uuid)
         if not source:
             raise ValueError(f"source {source_id} not found")
         if source.type not in {
@@ -524,7 +562,8 @@ def ingest_source(source_id: uuid.UUID) -> uuid.UUID:
             )
         job_id = storage.create_job(
             conn,
-            source_id,
+            tenant_id=tenant_uuid,
+            source_id=source_id,
             params={
                 "source_type": source.type.value,
                 "provider": (source.params or {}).get("provider") if source.params else None,
@@ -535,16 +574,17 @@ def ingest_source(source_id: uuid.UUID) -> uuid.UUID:
 
     def _work(cancel_event):
         try:
-            with connect_and_init(db_url) as conn:
+            with connect_and_init(db_url, tenant_id=tenant_uuid) as conn:
                 storage.update_job_status(
                     conn,
                     job_id,
-                    JobStatus.RUNNING,
+                    tenant_id=tenant_uuid,
+                    status=JobStatus.RUNNING,
                     started_at=datetime.utcnow(),
                     log_path=str(log_path),
                 )
 
-                source = storage.get_source(conn, source_id)
+                source = storage.get_source(conn, source_id, tenant_id=tenant_uuid)
                 if not source:
                     raise ValueError(f"source {source_id} not found")
 
@@ -569,6 +609,7 @@ def ingest_source(source_id: uuid.UUID) -> uuid.UUID:
                         cancel_event=cancel_event,
                         logger=logger,
                         job_id=job_id,
+                        tenant_id=tenant_uuid,
                     )
                 elif source.type == SourceType.API:
                     connector = RestConnector(source, logger=logger)
@@ -580,6 +621,7 @@ def ingest_source(source_id: uuid.UUID) -> uuid.UUID:
                         cancel_event=cancel_event,
                         logger=logger,
                         job_id=job_id,
+                        tenant_id=tenant_uuid,
                     )
                 elif source.type in {SourceType.AUDIO_TRANSCRIPT, SourceType.VIDEO_TRANSCRIPT}:
                     connector = TranscriptionConnector(source, logger=logger)
@@ -591,6 +633,7 @@ def ingest_source(source_id: uuid.UUID) -> uuid.UUID:
                         cancel_event=cancel_event,
                         logger=logger,
                         job_id=job_id,
+                        tenant_id=tenant_uuid,
                     )
                 else:
                     raise ValueError(
@@ -602,7 +645,8 @@ def ingest_source(source_id: uuid.UUID) -> uuid.UUID:
                     storage.update_job_status(
                         conn,
                         job_id,
-                        JobStatus.CANCELED,
+                        tenant_id=tenant_uuid,
+                        status=JobStatus.CANCELED,
                         finished_at=datetime.utcnow(),
                     )
                     return
@@ -613,17 +657,20 @@ def ingest_source(source_id: uuid.UUID) -> uuid.UUID:
                 storage.update_job_status(
                     conn,
                     job_id,
-                    JobStatus.SUCCEEDED,
+                    tenant_id=tenant_uuid,
+                    status=JobStatus.SUCCEEDED,
                     finished_at=datetime.utcnow(),
                 )
         except Exception as e:  # pragma: no cover - defensive
             logger.exception("ingestion failed: %s", e)
             try:
                 with psycopg.connect(db_url) as conn:
+                    apply_tenant_settings(conn, tenant_uuid)
                     storage.update_job_status(
                         conn,
                         job_id,
-                        JobStatus.FAILED,
+                        tenant_id=tenant_uuid,
+                        status=JobStatus.FAILED,
                         error=str(e),
                         finished_at=datetime.utcnow(),
                     )
@@ -639,23 +686,36 @@ def ingest_source(source_id: uuid.UUID) -> uuid.UUID:
     return job_id
 
 
-def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = None) -> uuid.UUID:
+def ingest_local(
+    path: Path,
+    *,
+    tenant_id: UUID | str | None = None,
+    use_ocr: bool = False,
+    ocr_lang: str | None = None,
+) -> uuid.UUID:
     """Ingest a local Markdown or PDF file as a background job."""
 
     db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
-    with connect_and_init(db_url) as conn:
-        source_id = storage.get_or_create_source(conn, type=SourceType.LOCAL_DIR, path=str(path))
-        job_id = storage.create_job(conn, source_id)
+    tenant_uuid = _normalize_tenant_id(tenant_id)
+    with connect_and_init(db_url, tenant_id=tenant_uuid) as conn:
+        source_id = storage.get_or_create_source(
+            conn,
+            tenant_id=tenant_uuid,
+            type=SourceType.LOCAL_DIR,
+            path=str(path),
+        )
+        job_id = storage.create_job(conn, tenant_id=tenant_uuid, source_id=source_id)
 
     logger, log_path = _setup_job_logging(job_id)
 
     def _work(cancel_event):
         try:
-            with connect_and_init(db_url) as conn:
+            with connect_and_init(db_url, tenant_id=tenant_uuid) as conn:
                 storage.update_job_status(
                     conn,
                     job_id,
-                    JobStatus.RUNNING,
+                    tenant_id=tenant_uuid,
+                    status=JobStatus.RUNNING,
                     started_at=datetime.utcnow(),
                     log_path=str(log_path),
                 )
@@ -698,7 +758,8 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                     storage.update_job_status(
                         conn,
                         job_id,
-                        JobStatus.CANCELED,
+                        tenant_id=tenant_uuid,
+                        status=JobStatus.CANCELED,
                         finished_at=datetime.utcnow(),
                     )
                     return
@@ -729,7 +790,8 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                     storage.update_job_status(
                         conn,
                         job_id,
-                        JobStatus.CANCELED,
+                        tenant_id=tenant_uuid,
+                        status=JobStatus.CANCELED,
                         finished_at=datetime.utcnow(),
                     )
                     return
@@ -748,30 +810,41 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
                             storage.update_job_status(
                                 conn,
                                 job_id,
-                                JobStatus.CANCELED,
+                                tenant_id=tenant_uuid,
+                                status=JobStatus.CANCELED,
                                 finished_at=datetime.utcnow(),
                             )
                             return
                         embeddings.append(emb)
 
                 bytes_len = path.stat().st_size if path.exists() else 0
-                doc_id = upsert_document(conn, path, bytes_len, page_count, source_id=source_id)
-                insert_chunks(conn, doc_id, chunks, embeddings)
+                doc_id = upsert_document(
+                    conn,
+                    tenant_uuid,
+                    path,
+                    bytes_len,
+                    page_count,
+                    source_id=source_id,
+                )
+                insert_chunks(conn, tenant_uuid, doc_id, chunks, embeddings)
 
                 storage.update_job_status(
                     conn,
                     job_id,
-                    JobStatus.SUCCEEDED,
+                    tenant_id=tenant_uuid,
+                    status=JobStatus.SUCCEEDED,
                     finished_at=datetime.utcnow(),
                 )
         except Exception as e:  # pragma: no cover - defensive
             logger.exception("ingestion failed: %s", e)
             try:
                 with psycopg.connect(db_url) as conn:
+                    apply_tenant_settings(conn, tenant_uuid)
                     storage.update_job_status(
                         conn,
                         job_id,
-                        JobStatus.FAILED,
+                        tenant_id=tenant_uuid,
+                        status=JobStatus.FAILED,
                         error=str(e),
                         finished_at=datetime.utcnow(),
                     )
@@ -787,30 +860,37 @@ def ingest_local(path: Path, *, use_ocr: bool = False, ocr_lang: str | None = No
     return job_id
 
 
-def ingest_url(url: str) -> uuid.UUID:
-    return ingest_urls([url])
+def ingest_url(url: str, *, tenant_id: UUID | str | None = None) -> uuid.UUID:
+    return ingest_urls([url], tenant_id=tenant_id)
 
 
-def ingest_urls(urls: List[str]) -> uuid.UUID:
+def ingest_urls(urls: List[str], *, tenant_id: UUID | str | None = None) -> uuid.UUID:
     """Ingest multiple public URLs as a background job."""
     if not urls:
         raise ValueError("no URLs provided")
 
     db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
     first_url = urls[0]
-    with connect_and_init(db_url) as conn:
-        source_id = storage.get_or_create_source(conn, type=SourceType.URL_LIST, url=first_url)
-        job_id = storage.create_job(conn, source_id)
+    tenant_uuid = _normalize_tenant_id(tenant_id)
+    with connect_and_init(db_url, tenant_id=tenant_uuid) as conn:
+        source_id = storage.get_or_create_source(
+            conn,
+            tenant_id=tenant_uuid,
+            type=SourceType.URL_LIST,
+            url=first_url,
+        )
+        job_id = storage.create_job(conn, tenant_id=tenant_uuid, source_id=source_id)
 
     logger, log_path = _setup_job_logging(job_id)
 
     def _work(cancel_event):
         try:
-            with connect_and_init(db_url) as conn:
+            with connect_and_init(db_url, tenant_id=tenant_uuid) as conn:
                 storage.update_job_status(
                     conn,
                     job_id,
-                    JobStatus.RUNNING,
+                    tenant_id=tenant_uuid,
+                    status=JobStatus.RUNNING,
                     started_at=datetime.utcnow(),
                     log_path=str(log_path),
                 )
@@ -827,18 +907,25 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
                         storage.update_job_status(
                             conn,
                             job_id,
-                            JobStatus.CANCELED,
+                            tenant_id=tenant_uuid,
+                            status=JobStatus.CANCELED,
                             finished_at=datetime.utcnow(),
                         )
                         return
 
-                    storage.get_or_create_source(conn, type=SourceType.URL, url=url)
+                    storage.get_or_create_source(
+                        conn,
+                        tenant_id=tenant_uuid,
+                        type=SourceType.URL,
+                        url=url,
+                    )
                     text = read_url_text(url)
                     if cancel_event.is_set():
                         storage.update_job_status(
                             conn,
                             job_id,
-                            JobStatus.CANCELED,
+                            tenant_id=tenant_uuid,
+                            status=JobStatus.CANCELED,
                             finished_at=datetime.utcnow(),
                         )
                         return
@@ -854,7 +941,8 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
                         storage.update_job_status(
                             conn,
                             job_id,
-                            JobStatus.CANCELED,
+                            tenant_id=tenant_uuid,
+                            status=JobStatus.CANCELED,
                             finished_at=datetime.utcnow(),
                         )
                         return
@@ -867,30 +955,41 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
                                 storage.update_job_status(
                                     conn,
                                     job_id,
-                                    JobStatus.CANCELED,
+                                    tenant_id=tenant_uuid,
+                                    status=JobStatus.CANCELED,
                                     finished_at=datetime.utcnow(),
                                 )
                                 return
                             embeddings.append(emb)
 
                     bytes_len = len(text.encode("utf-8"))
-                    doc_id = upsert_document(conn, url, bytes_len, 1, source_id=source_id)
-                    insert_chunks(conn, doc_id, chunks, embeddings)
+                    doc_id = upsert_document(
+                        conn,
+                        tenant_uuid,
+                        url,
+                        bytes_len,
+                        1,
+                        source_id=source_id,
+                    )
+                    insert_chunks(conn, tenant_uuid, doc_id, chunks, embeddings)
 
                 storage.update_job_status(
                     conn,
                     job_id,
-                    JobStatus.SUCCEEDED,
+                    tenant_id=tenant_uuid,
+                    status=JobStatus.SUCCEEDED,
                     finished_at=datetime.utcnow(),
                 )
         except Exception as e:  # pragma: no cover - defensive
             logger.exception("ingestion failed: %s", e)
             try:
                 with psycopg.connect(db_url) as conn:
+                    apply_tenant_settings(conn, tenant_uuid)
                     storage.update_job_status(
                         conn,
                         job_id,
-                        JobStatus.FAILED,
+                        tenant_id=tenant_uuid,
+                        status=JobStatus.FAILED,
                         error=str(e),
                         finished_at=datetime.utcnow(),
                     )
@@ -906,24 +1005,23 @@ def ingest_urls(urls: List[str]) -> uuid.UUID:
     return job_id
 
 
-def reindex_source(_source_id: uuid.UUID) -> uuid.UUID | None:
-    """Re-ingest content for an existing source.
-
-    The current chunks (and associated document record) for the given
-    ``source_id`` are removed and a new ingestion job is started using the
-    stored source parameters. The newly created job identifier is returned,
-    or ``None`` if the source cannot be found or lacks the required
-    parameters.
-    """
+def reindex_source(
+    _source_id: uuid.UUID, *, tenant_id: UUID | str | None = None
+) -> uuid.UUID | None:
+    """Re-ingest content for an existing source."""
 
     db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+    tenant_uuid = _normalize_tenant_id(tenant_id)
 
-    with connect_and_init(db_url) as conn:
-
+    with connect_and_init(db_url, tenant_id=tenant_uuid) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT type, path, url FROM sources WHERE id = %s AND deleted_at IS NULL",
-                (_source_id,),
+                """
+                SELECT type, path, url
+                FROM sources
+                WHERE id = %s AND tenant_id = %s AND deleted_at IS NULL
+                """,
+                (_source_id, tenant_uuid),
             )
             row = cur.fetchone()
             if not row:
@@ -932,31 +1030,31 @@ def reindex_source(_source_id: uuid.UUID) -> uuid.UUID | None:
             type_val, path, url = row
             identifier = path or url
             if identifier:
-                # Remove existing chunks/documents for this source. Deleting the
-                # document record cascades to ``chunks``.
                 cur.execute(
-                    "DELETE FROM documents WHERE path = %s",
-                    (identifier,),
+                    "DELETE FROM documents WHERE tenant_id = %s AND path = %s",
+                    (tenant_uuid, identifier),
                 )
 
         conn.commit()
 
     source_type = SourceType(type_val)
     if source_type == SourceType.LOCAL_DIR and path:
-        return ingest_local(Path(path))
+        return ingest_local(Path(path), tenant_id=tenant_uuid)
     if source_type == SourceType.URL and url:
-        return ingest_url(url)
+        return ingest_url(url, tenant_id=tenant_uuid)
     if source_type in {
         SourceType.DATABASE,
         SourceType.API,
         SourceType.AUDIO_TRANSCRIPT,
         SourceType.VIDEO_TRANSCRIPT,
     }:
-        return ingest_source(source_id)
+        return ingest_source(_source_id, tenant_id=tenant_uuid)
     return None
 
 
-def rerun_job(_job_id: uuid.UUID) -> uuid.UUID | None:
+def rerun_job(
+    _job_id: uuid.UUID, *, tenant_id: UUID | str | None = None
+) -> uuid.UUID | None:
     """Recreate a job using its original source parameters.
 
     Returns the new job identifier or ``None`` if the given job cannot be
@@ -967,22 +1065,18 @@ def rerun_job(_job_id: uuid.UUID) -> uuid.UUID | None:
         "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
     )
 
-    with connect_and_init(db_url) as conn:
+    tenant_uuid = _normalize_tenant_id(tenant_id)
 
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT source_id FROM ingestion_jobs WHERE id = %s",
-                (_job_id,),
-            )
-            row = cur.fetchone()
-            if not row:
-                return None
-            source_id = row[0]
+    with connect_and_init(db_url, tenant_id=tenant_uuid) as conn:
+        job = storage.get_job(conn, _job_id, tenant_id=tenant_uuid)
+        if not job:
+            return None
+        source_id = job.source_id
 
-    return reindex_source(source_id)
+    return reindex_source(source_id, tenant_id=tenant_uuid)
 
 
-def cancel_job(job_id: uuid.UUID) -> None:
+def cancel_job(job_id: uuid.UUID, *, tenant_id: UUID | str | None = None) -> None:
     _runner.cancel(job_id)
     _runner.clear(job_id)
     logger = logging.getLogger(f"ingestion.{job_id}")
@@ -992,8 +1086,10 @@ def cancel_job(job_id: uuid.UUID) -> None:
     db_url = os.getenv(
         "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
     )
+    tenant_uuid = _normalize_tenant_id(tenant_id)
     with psycopg.connect(db_url) as conn:
-        job = storage.get_job(conn, job_id)
+        apply_tenant_settings(conn, tenant_uuid)
+        job = storage.get_job(conn, job_id, tenant_id=tenant_uuid)
         if job and job.status not in {
             JobStatus.SUCCEEDED,
             JobStatus.FAILED,
@@ -1002,7 +1098,8 @@ def cancel_job(job_id: uuid.UUID) -> None:
             storage.update_job_status(
                 conn,
                 job_id,
-                JobStatus.CANCELED,
+                tenant_id=tenant_uuid,
+                status=JobStatus.CANCELED,
                 finished_at=datetime.utcnow(),
             )
 
@@ -1014,23 +1111,33 @@ def wait_for_job(job_id: uuid.UUID) -> None:
         future.result()
 
 
-def get_job(job_id: uuid.UUID) -> Job | None:
+def get_job(job_id: uuid.UUID, *, tenant_id: UUID | str | None = None) -> Job | None:
     db_url = os.getenv(
         "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
     )
+    tenant_uuid = _normalize_tenant_id(tenant_id)
     with psycopg.connect(db_url) as conn:
-        return storage.get_job(conn, job_id)
+        apply_tenant_settings(conn, tenant_uuid)
+        return storage.get_job(conn, job_id, tenant_id=tenant_uuid)
 
 
-def list_jobs() -> List[Job]:
+def list_jobs(*, tenant_id: UUID | str | None = None) -> List[Job]:
     db_url = os.getenv(
         "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
     )
+    tenant_uuid = _normalize_tenant_id(tenant_id)
     with psycopg.connect(db_url) as conn:
-        return list(storage.list_jobs(conn))
+        apply_tenant_settings(conn, tenant_uuid)
+        return list(storage.list_jobs(conn, tenant_id=tenant_uuid))
 
 
-def read_job_log(job_id: uuid.UUID, offset: int = 0, limit: int = 16_384) -> JobLogSlice:
+def read_job_log(
+    job_id: uuid.UUID,
+    *,
+    tenant_id: UUID | str | None = None,
+    offset: int = 0,
+    limit: int = 16_384,
+) -> JobLogSlice:
     """Read a portion of a job log.
 
     Parameters
@@ -1046,8 +1153,10 @@ def read_job_log(job_id: uuid.UUID, offset: int = 0, limit: int = 16_384) -> Job
     db_url = os.getenv(
         "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
     )
+    tenant_uuid = _normalize_tenant_id(tenant_id)
     with psycopg.connect(db_url) as conn:
-        job = storage.get_job(conn, job_id)
+        apply_tenant_settings(conn, tenant_uuid)
+        job = storage.get_job(conn, job_id, tenant_id=tenant_uuid)
 
     if not job or not job.log_path:
         return JobLogSlice(

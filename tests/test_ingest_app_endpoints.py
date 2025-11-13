@@ -1,10 +1,13 @@
+import json
+import os
+import pathlib
 import sys
 import types
-import json
-import pathlib
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+import psycopg
 
 # Stub fastembed and prometheus instrumentator before importing application modules
 class DummyEmbedder:
@@ -32,6 +35,11 @@ sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 from app.main import app  # noqa: E402
 from starlette.routing import Mount  # noqa: E402
 from app.ingestion import service  # noqa: E402
+import app.rag as rag  # noqa: E402
+from app.core.db import apply_tenant_settings  # noqa: E402
+
+
+TEST_TENANT_ID = uuid4()
 
 # Remove static mount to make API routes available
 app.router.routes = [r for r in app.router.routes if not (isinstance(r, Mount) and r.path == '')]
@@ -87,19 +95,57 @@ def test_ingest_and_query_via_endpoints(pg_tmp, client, tmp_path):
     md_text = "Hello world\n\nThis is a test file."
     md_path.write_text(md_text, encoding="utf-8")
 
-    job_id = service.ingest_local(md_path)
-    future = service._runner.get(job_id)
-    assert future is not None
-    future.result(timeout=60)
+    db_url = os.environ["DATABASE_URL"]
+    with psycopg.connect(db_url) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO organizations (id, name, subdomain)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (subdomain) DO NOTHING
+                """,
+                (
+                    str(TEST_TENANT_ID),
+                    "Tenant",
+                    f"tenant-{TEST_TENANT_ID.hex[:8]}",
+                ),
+            )
+        conn.commit()
 
-    # Ask endpoint
-    resp = client.post("/api/ask", json={"q": "Hello", "k": 1})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert any("hello world" in s["content"].lower() for s in data["sources"])
+    original_get_conn = rag.get_conn
 
-    # Chat endpoint
-    with client.stream("POST", "/api/chat", data={"q": "Hello", "k": "1", "sessionId": "s1"}) as resp2:
-        events = _parse_events(resp2)
-    sources_json = next(json.loads(d) for e, d in events if e == "sources")
-    assert any("hello world" in s["content"].lower() for s in sources_json)
+    def _tenant_conn():
+        conn = original_get_conn()
+        apply_tenant_settings(conn, TEST_TENANT_ID)
+        return conn
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(rag, "get_conn", _tenant_conn)
+    try:
+        job_id = service.ingest_local(md_path, tenant_id=TEST_TENANT_ID)
+        future = service._runner.get(job_id)
+        assert future is not None
+        future.result(timeout=60)
+
+        # Ask endpoint
+        resp = client.post(
+            "/api/ask",
+            json={"q": "Hello", "k": 1},
+            headers={"X-Debug-Tenant": str(TEST_TENANT_ID)},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert any("hello world" in s["content"].lower() for s in data["sources"])
+
+        # Chat endpoint
+        with client.stream(
+            "POST",
+            "/api/chat",
+            data={"q": "Hello", "k": "1", "sessionId": "s1"},
+            headers={"X-Debug-Tenant": str(TEST_TENANT_ID)},
+        ) as resp2:
+            events = _parse_events(resp2)
+        sources_json = next(json.loads(d) for e, d in events if e == "sources")
+        assert any("hello world" in s["content"].lower() for s in sources_json)
+    finally:
+        monkeypatch.undo()

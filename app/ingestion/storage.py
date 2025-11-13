@@ -7,6 +7,7 @@ embedding while centralizing persistence logic here.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from typing import Any, Callable, Iterable, Optional, Sequence
 from uuid import UUID, uuid4
@@ -14,6 +15,8 @@ from uuid import UUID, uuid4
 import psycopg
 from psycopg import sql
 from psycopg.types.json import Jsonb
+
+logger = logging.getLogger(__name__)
 
 _MISSING = object()
 
@@ -27,14 +30,6 @@ from .models import (
     Source,
     SourceType,
 )
-
-try:
-    from app.core.tenant_context import get_current_tenant_id
-except ImportError:
-    # Fallback for environments where tenant context is not available
-    def get_current_tenant_id() -> str | None:
-        return None
-
 
 def _encode_credentials(
     credentials: Any | None,
@@ -121,6 +116,7 @@ def _normalize_sync_state(value: Any | None) -> Any | None:
 def get_or_create_source(
     conn: psycopg.Connection,
     *,
+    tenant_id: UUID,
     type: SourceType,
     path: str | None = None,
     url: str | None = None,
@@ -136,10 +132,10 @@ def get_or_create_source(
     version: int | None = None,
     encrypt_credentials: Callable[[bytes], bytes] | None = None,
 ) -> UUID:
-    """Fetch an existing source or create a new record.
+    """Fetch an existing source or create a new record for ``tenant_id``.
 
-    A source is considered unique by its ``path`` or ``url``. Soft deleted
-    sources are ignored when checking for existing records.
+    A source is considered unique by its ``path`` or ``url`` within the same tenant.
+    Soft deleted sources are ignored when checking for existing records.
     """
 
     with conn.transaction():
@@ -166,27 +162,21 @@ def get_or_create_source(
             if version is not None:
                 update_kwargs["version"] = version
 
+            lookup_params: tuple[tuple[str, str], ...] = ()
             if path is not None:
-                cur.execute(
-                    "SELECT id FROM sources WHERE path = %s AND deleted_at IS NULL",
-                    (path,),
-                )
-                row = cur.fetchone()
-                if row:
-                    source_id = row[0]
-                    if update_kwargs:
-                        update_source(
-                            conn,
-                            source_id,
-                            encrypt_credentials=encrypt_credentials,
-                            **update_kwargs,
-                        )
-                    return source_id
-
+                lookup_params += (("path", path),)
             if url is not None:
+                lookup_params += (("url", url),)
+
+            for column, value in lookup_params:
                 cur.execute(
-                    "SELECT id FROM sources WHERE url = %s AND deleted_at IS NULL",
-                    (url,),
+                    f"""
+                    SELECT id FROM sources
+                    WHERE tenant_id = %s
+                      AND {column} = %s
+                      AND deleted_at IS NULL
+                    """,
+                    (tenant_id, value),
                 )
                 row = cur.fetchone()
                 if row:
@@ -195,6 +185,7 @@ def get_or_create_source(
                         update_source(
                             conn,
                             source_id,
+                            tenant_id=tenant_id,
                             encrypt_credentials=encrypt_credentials,
                             **update_kwargs,
                         )
@@ -205,6 +196,7 @@ def get_or_create_source(
                 """
                 INSERT INTO sources (
                     id,
+                    tenant_id,
                     type,
                     path,
                     url,
@@ -220,10 +212,11 @@ def get_or_create_source(
                     version,
                     created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                 """,
                 (
                     source_id,
+                    tenant_id,
                     type.value,
                     path,
                     url,
@@ -245,6 +238,7 @@ def get_or_create_source(
 def list_sources(
     conn: psycopg.Connection,
     *,
+    tenant_id: UUID,
     active: Optional[bool] = True,
     type: SourceType | None = None,
     limit: int | None = None,
@@ -253,8 +247,8 @@ def list_sources(
 ) -> Iterable[Source]:
     """Return sources ordered by creation date with optional filters."""
 
-    conditions = ["deleted_at IS NULL"]
-    params: list = []
+    conditions = ["tenant_id = %s", "deleted_at IS NULL"]
+    params: list[Any] = [tenant_id]
     if active is not None:
         conditions.append("active = %s")
         params.append(active)
@@ -263,8 +257,11 @@ def list_sources(
         params.append(type.value if isinstance(type, SourceType) else type)
 
     query = (
-        "SELECT id, type, label, location, path, url, active, params, connector_type, connector_definition_id, connector_metadata, credentials, sync_state, version, created_at "
-        "FROM sources WHERE " + " AND ".join(conditions) + " ORDER BY created_at DESC"
+        "SELECT id, tenant_id, type, label, location, path, url, active, params, "
+        "connector_type, connector_definition_id, connector_metadata, credentials, sync_state, version, created_at "
+        "FROM sources WHERE "
+        + " AND ".join(conditions)
+        + " ORDER BY created_at DESC"
     )
     if limit is not None:
         query += " LIMIT %s"
@@ -280,20 +277,21 @@ def list_sources(
     for row in rows:
         yield Source(
             id=row[0],
-            type=SourceType(row[1]),
-            label=row[2],
-            location=row[3],
-            path=row[4],
-            url=row[5],
-            active=row[6],
-            params=row[7],
-            connector_type=row[8],
-            connector_definition_id=row[9],
-            connector_metadata=row[10],
-            credentials=_decode_credentials(row[11], decrypt=decrypt_credentials),
-            sync_state=_normalize_sync_state(row[12]),
-            version=row[13] or 1,
-            created_at=row[14],
+            tenant_id=row[1],
+            type=SourceType(row[2]),
+            label=row[3],
+            location=row[4],
+            path=row[5],
+            url=row[6],
+            active=row[7],
+            params=row[8],
+            connector_type=row[9],
+            connector_definition_id=row[10],
+            connector_metadata=row[11],
+            credentials=_decode_credentials(row[12], decrypt=decrypt_credentials),
+            sync_state=_normalize_sync_state(row[13]),
+            version=row[14] or 1,
+            created_at=row[15],
         )
 
 
@@ -301,18 +299,21 @@ def get_source(
     conn: psycopg.Connection,
     source_id: UUID,
     *,
+    tenant_id: UUID,
     decrypt_credentials: Callable[[bytes], bytes] | None = None,
 ) -> Source | None:
-    """Return a single source by identifier."""
+    """Return a single source by identifier for ``tenant_id``."""
 
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, type, label, location, path, url, active, params, connector_type, connector_definition_id, connector_metadata, credentials, sync_state, version, created_at
+            SELECT id, tenant_id, type, label, location, path, url, active, params,
+                   connector_type, connector_definition_id, connector_metadata,
+                   credentials, sync_state, version, created_at
             FROM sources
-            WHERE id = %s AND deleted_at IS NULL
+            WHERE id = %s AND tenant_id = %s AND deleted_at IS NULL
             """,
-            (source_id,),
+            (source_id, tenant_id),
         )
         row = cur.fetchone()
 
@@ -321,20 +322,21 @@ def get_source(
 
     return Source(
         id=row[0],
-        type=SourceType(row[1]),
-        label=row[2],
-        location=row[3],
-        path=row[4],
-        url=row[5],
-        active=row[6],
-        params=row[7],
-        connector_type=row[8],
-        connector_definition_id=row[9],
-        connector_metadata=row[10],
-        credentials=_decode_credentials(row[11], decrypt=decrypt_credentials),
-        sync_state=_normalize_sync_state(row[12]),
-        version=row[13] or 1,
-        created_at=row[14],
+        tenant_id=row[1],
+        type=SourceType(row[2]),
+        label=row[3],
+        location=row[4],
+        path=row[5],
+        url=row[6],
+        active=row[7],
+        params=row[8],
+        connector_type=row[9],
+        connector_definition_id=row[10],
+        connector_metadata=row[11],
+        credentials=_decode_credentials(row[12], decrypt=decrypt_credentials),
+        sync_state=_normalize_sync_state(row[13]),
+        version=row[14] or 1,
+        created_at=row[15],
     )
 
 
@@ -344,19 +346,20 @@ def _build_connector_definition(
     include_credentials: bool,
     decrypt_credentials: Callable[[bytes], bytes] | None,
 ) -> ConnectorDefinition:
-    raw_credentials = _decode_credentials(row[5], decrypt=decrypt_credentials)
+    raw_credentials = _decode_credentials(row[6], decrypt=decrypt_credentials)
     has_credentials = raw_credentials is not None
     credentials = raw_credentials if include_credentials else None
     return ConnectorDefinition(
         id=row[0],
-        name=row[1],
-        type=SourceType(row[2]),
-        description=row[3],
-        params=row[4],
+        tenant_id=row[1],
+        name=row[2],
+        type=SourceType(row[3]),
+        description=row[4],
+        params=row[5],
         credentials=credentials,
-        metadata=row[6],
-        created_at=row[7],
-        updated_at=row[8],
+        metadata=row[7],
+        created_at=row[8],
+        updated_at=row[9],
         has_credentials=has_credentials,
     )
 
@@ -364,6 +367,7 @@ def _build_connector_definition(
 def create_connector_definition(
     conn: psycopg.Connection,
     *,
+    tenant_id: UUID,
     name: str,
     type: SourceType,
     description: str | None = None,
@@ -380,6 +384,7 @@ def create_connector_definition(
                 """
                 INSERT INTO connector_definitions (
                     id,
+                    tenant_id,
                     name,
                     type,
                     description,
@@ -388,10 +393,11 @@ def create_connector_definition(
                     metadata,
                     created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, now())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
                 """,
                 (
                     definition_id,
+                    tenant_id,
                     name,
                     type.value if isinstance(type, SourceType) else type,
                     description,
@@ -407,6 +413,7 @@ def update_connector_definition(
     conn: psycopg.Connection,
     definition_id: UUID,
     *,
+    tenant_id: UUID,
     name: str | None = None,
     description: str | None = None,
     params: dict | None = None,
@@ -439,31 +446,39 @@ def update_connector_definition(
         return
 
     fields.append(sql.SQL("updated_at = now()"))
-    query = sql.SQL("UPDATE connector_definitions SET {fields} WHERE id = %s").format(
-        fields=sql.SQL(", ").join(fields)
-    )
-    values.append(definition_id)
+    query = sql.SQL(
+        "UPDATE connector_definitions SET {fields} WHERE id = %s AND tenant_id = %s"
+    ).format(fields=sql.SQL(", ").join(fields))
+    values.extend([definition_id, tenant_id])
 
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute(query, values)
+            if cur.rowcount == 0:
+                logger.warning(
+                    "Attempt to update connector definition %s for tenant %s failed",
+                    definition_id,
+                    tenant_id,
+                )
+                raise ValueError("Connector definition not found for tenant")
 
 
 def get_connector_definition(
     conn: psycopg.Connection,
     definition_id: UUID,
     *,
+    tenant_id: UUID,
     include_credentials: bool = False,
     decrypt_credentials: Callable[[bytes], bytes] | None = None,
 ) -> ConnectorDefinition | None:
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, name, type, description, params, credentials, metadata, created_at, updated_at
+            SELECT id, tenant_id, name, type, description, params, credentials, metadata, created_at, updated_at
             FROM connector_definitions
-            WHERE id = %s
+            WHERE id = %s AND tenant_id = %s
             """,
-            (definition_id,),
+            (definition_id, tenant_id),
         )
         row = cur.fetchone()
 
@@ -480,15 +495,19 @@ def get_connector_definition(
 def list_connector_definitions(
     conn: psycopg.Connection,
     *,
+    tenant_id: UUID,
     type: SourceType | None = None,
     limit: int | None = None,
     offset: int = 0,
     include_credentials: bool = False,
     decrypt_credentials: Callable[[bytes], bytes] | None = None,
 ) -> Iterable[ConnectorDefinition]:
-    query = "SELECT id, name, type, description, params, credentials, metadata, created_at, updated_at FROM connector_definitions"
-    params_list: list[Any] = []
-    conditions: list[str] = []
+    query = (
+        "SELECT id, tenant_id, name, type, description, params, credentials, metadata, created_at, updated_at "
+        "FROM connector_definitions"
+    )
+    params_list: list[Any] = [tenant_id]
+    conditions: list[str] = ["tenant_id = %s"]
     if type is not None:
         conditions.append("type = %s")
         params_list.append(type.value if isinstance(type, SourceType) else type)
@@ -514,17 +533,28 @@ def list_connector_definitions(
         )
 
 
-def delete_connector_definition(conn: psycopg.Connection, definition_id: UUID) -> None:
+def delete_connector_definition(
+    conn: psycopg.Connection, definition_id: UUID, *, tenant_id: UUID
+) -> None:
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute(
-                "DELETE FROM connector_definitions WHERE id = %s",
-                (definition_id,),
+                "DELETE FROM connector_definitions WHERE id = %s AND tenant_id = %s",
+                (definition_id, tenant_id),
             )
+            if cur.rowcount == 0:
+                logger.warning(
+                    "Attempt to delete connector definition %s for tenant %s failed",
+                    definition_id,
+                    tenant_id,
+                )
+                raise ValueError("Connector definition not found for tenant")
 
 
 def create_job(
     conn: psycopg.Connection,
+    *,
+    tenant_id: UUID,
     source_id: UUID,
     status: JobStatus = JobStatus.QUEUED,
     params: dict | None = None,
@@ -534,8 +564,19 @@ def create_job(
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO ingestion_jobs (id, source_id, status, created_at, params) VALUES (%s, %s, %s, now(), %s)",
-                (job_id, source_id, status.value, Jsonb(params) if params is not None else None),
+                """
+                INSERT INTO ingestion_jobs (
+                    id, tenant_id, source_id, status, created_at, params
+                )
+                VALUES (%s, %s, %s, %s, now(), %s)
+                """,
+                (
+                    job_id,
+                    tenant_id,
+                    source_id,
+                    status.value,
+                    Jsonb(params) if params is not None else None,
+                ),
             )
     return job_id
 
@@ -543,8 +584,9 @@ def create_job(
 def update_job_status(
     conn: psycopg.Connection,
     job_id: UUID,
-    status: JobStatus,
     *,
+    tenant_id: UUID,
+    status: JobStatus,
     error: str | None = None,
     log_path: str | None = None,
     started_at: Optional[datetime] = None,
@@ -567,18 +609,25 @@ def update_job_status(
         fields.append(sql.SQL("finished_at = %s"))
         values.append(finished_at)
 
-    query = sql.SQL("UPDATE ingestion_jobs SET {fields} WHERE id = %s").format(
-        fields=sql.SQL(", ").join(fields)
-    )
-    values.append(job_id)
+    query = sql.SQL(
+        "UPDATE ingestion_jobs SET {fields} WHERE id = %s AND tenant_id = %s"
+    ).format(fields=sql.SQL(", ").join(fields))
+    values.extend([job_id, tenant_id])
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute(query, values)
+            if cur.rowcount == 0:
+                logger.warning(
+                    "Attempt to update job %s for tenant %s failed", job_id, tenant_id
+                )
+                raise ValueError("Job not found for tenant")
 
 
 def update_job_params(
     conn: psycopg.Connection,
     job_id: UUID,
+    *,
+    tenant_id: UUID,
     params: dict | None,
 ) -> None:
     """Persist metadata about a job run in the ``params`` column."""
@@ -586,40 +635,56 @@ def update_job_params(
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE ingestion_jobs SET params = %s, updated_at = now() WHERE id = %s",
-                (Jsonb(params) if params is not None else None, job_id),
+                """
+                UPDATE ingestion_jobs
+                SET params = %s, updated_at = now()
+                WHERE id = %s AND tenant_id = %s
+                """,
+                (Jsonb(params) if params is not None else None, job_id, tenant_id),
             )
+            if cur.rowcount == 0:
+                logger.warning(
+                    "Attempt to update params for job %s in tenant %s failed",
+                    job_id,
+                    tenant_id,
+                )
+                raise ValueError("Job not found for tenant")
 
 
-def get_job(conn: psycopg.Connection, job_id: UUID) -> Optional[Job]:
+def get_job(
+    conn: psycopg.Connection, job_id: UUID, *, tenant_id: UUID
+) -> Optional[Job]:
     """Return a single job by id or ``None`` if not found."""
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, source_id, status, created_at, updated_at, error, log_path, started_at, finished_at
-            FROM ingestion_jobs WHERE id = %s
+            SELECT id, tenant_id, source_id, status, created_at, updated_at,
+                   error, log_path, started_at, finished_at
+            FROM ingestion_jobs WHERE id = %s AND tenant_id = %s
             """,
-            (job_id,),
+            (job_id, tenant_id),
         )
         row = cur.fetchone()
     if not row:
         return None
     return Job(
         id=row[0],
-        source_id=row[1],
-        status=JobStatus(row[2]),
-        created_at=row[3],
-        updated_at=row[4],
-        error=row[5],
-        log_path=row[6],
-        started_at=row[7],
-        finished_at=row[8],
+        tenant_id=row[1],
+        source_id=row[2],
+        status=JobStatus(row[3]),
+        created_at=row[4],
+        updated_at=row[5],
+        error=row[6],
+        log_path=row[7],
+        started_at=row[8],
+        finished_at=row[9],
     )
 
 
 def list_jobs(
     conn: psycopg.Connection,
     *,
+    tenant_id: UUID,
     status: JobStatus | None = None,
     source_id: UUID | None = None,
     limit: int | None = None,
@@ -627,8 +692,8 @@ def list_jobs(
 ) -> Iterable[Job]:
     """List jobs with optional filters."""
 
-    conditions = []
-    params: list = []
+    conditions = ["tenant_id = %s"]
+    params: list[Any] = [tenant_id]
     if status is not None:
         conditions.append("status = %s")
         params.append(status.value if isinstance(status, JobStatus) else status)
@@ -637,7 +702,7 @@ def list_jobs(
         params.append(source_id)
 
     query = (
-        "SELECT id, source_id, status, created_at, updated_at, error, log_path, started_at, finished_at "
+        "SELECT id, tenant_id, source_id, status, created_at, updated_at, error, log_path, started_at, finished_at "
         "FROM ingestion_jobs"
     )
     if conditions:
@@ -657,14 +722,15 @@ def list_jobs(
     for row in rows:
         yield Job(
             id=row[0],
-            source_id=row[1],
-            status=JobStatus(row[2]),
-            created_at=row[3],
-            updated_at=row[4],
-            error=row[5],
-            log_path=row[6],
-            started_at=row[7],
-            finished_at=row[8],
+            tenant_id=row[1],
+            source_id=row[2],
+            status=JobStatus(row[3]),
+            created_at=row[4],
+            updated_at=row[5],
+            error=row[6],
+            log_path=row[7],
+            started_at=row[8],
+            finished_at=row[9],
         )
 
 
@@ -672,6 +738,7 @@ def update_source(
     conn: psycopg.Connection,
     source_id: UUID,
     *,
+    tenant_id: UUID,
     path: str | None = None,
     url: str | None = None,
     label: str | None = None,
@@ -731,29 +798,50 @@ def update_source(
         return
 
     fields.append(sql.SQL("updated_at = now()"))
-    query = sql.SQL("UPDATE sources SET {fields} WHERE id = %s").format(
+    query = sql.SQL("UPDATE sources SET {fields} WHERE id = %s AND tenant_id = %s").format(
         fields=sql.SQL(", ").join(fields)
     )
-    values.append(source_id)
+    values.extend([source_id, tenant_id])
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute(query, values)
+            if cur.rowcount == 0:
+                logger.warning(
+                    "Attempt to update source %s for tenant %s failed",
+                    source_id,
+                    tenant_id,
+                )
+                raise ValueError("Source not found for tenant")
 
 
-def soft_delete_source(conn: psycopg.Connection, source_id: UUID) -> None:
+def soft_delete_source(
+    conn: psycopg.Connection, source_id: UUID, *, tenant_id: UUID
+) -> None:
     """Soft delete a source (mark deleted_at and set active=false)."""
 
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE sources SET active = FALSE, deleted_at = now(), updated_at = now() WHERE id = %s",
-                (source_id,),
+                """
+                UPDATE sources
+                SET active = FALSE, deleted_at = now(), updated_at = now()
+                WHERE id = %s AND tenant_id = %s
+                """,
+                (source_id, tenant_id),
             )
+            if cur.rowcount == 0:
+                logger.warning(
+                    "Attempt to delete source %s for tenant %s failed",
+                    source_id,
+                    tenant_id,
+                )
+                raise ValueError("Source not found for tenant")
 
 
 def upsert_document(
     conn: psycopg.Connection,
     *,
+    tenant_id: UUID,
     path: str,
     bytes_len: int | None = None,
     page_count: int | None = None,
@@ -764,14 +852,7 @@ def upsert_document(
     encrypt_credentials: Callable[[bytes], bytes] | None = None,
     decrypt_credentials: Callable[[bytes], bytes] | None = None,
 ) -> DocumentVersion:
-    """Insert or update a document row and persist a version snapshot.
-    
-    If a tenant context is available, the organization_id will be set on the document.
-    This enables Row Level Security (RLS) policies to enforce tenant isolation.
-    """
-    # Get current tenant context if available
-    tenant_id = get_current_tenant_id()
-    organization_id_uuid = UUID(tenant_id) if tenant_id else None
+    """Insert or update a tenant-scoped document and persist a version snapshot."""
 
     encoded_credentials = _encode_credentials(credentials, encrypt=encrypt_credentials)
     with conn.transaction():
@@ -780,10 +861,10 @@ def upsert_document(
                 """
                 SELECT id, version, source_id, connector_type, credentials, sync_state, bytes, page_count
                 FROM documents
-                WHERE path = %s
+                WHERE tenant_id = %s AND path = %s
                 FOR UPDATE
                 """,
-                (path,),
+                (tenant_id, path),
             )
             row = cur.fetchone()
 
@@ -812,12 +893,19 @@ def upsert_document(
 
                 if next_connector_type is None and next_source_id is not None:
                     cur.execute(
-                        "SELECT connector_type FROM sources WHERE id = %s",
-                        (next_source_id,),
+                        "SELECT connector_type FROM sources WHERE id = %s AND tenant_id = %s",
+                        (next_source_id, tenant_id),
                     )
                     src_row = cur.fetchone()
                     if src_row and src_row[0]:
                         next_connector_type = src_row[0]
+                    else:
+                        logger.warning(
+                            "Source %s missing or inaccessible for tenant %s during document update",
+                            next_source_id,
+                            tenant_id,
+                        )
+                        raise ValueError("Source not found for tenant")
 
                 cur.execute(
                     """
@@ -828,9 +916,8 @@ def upsert_document(
                         connector_type = %s,
                         credentials = %s,
                         sync_state = %s,
-                        version = %s,
-                        organization_id = COALESCE(%s, organization_id)
-                    WHERE id = %s
+                        version = %s
+                    WHERE id = %s AND tenant_id = %s
                     """,
                     (
                         next_bytes,
@@ -840,8 +927,8 @@ def upsert_document(
                         next_credentials,
                         _jsonb_or_none(next_sync_state),
                         new_version,
-                        organization_id_uuid,
                         doc_id,
+                        tenant_id,
                     ),
                 )
             else:
@@ -854,19 +941,27 @@ def upsert_document(
                 next_bytes = bytes_len
                 next_page_count = page_count
 
-                if next_connector_type is None and next_source_id is not None:
+                if next_source_id is not None:
                     cur.execute(
-                        "SELECT connector_type FROM sources WHERE id = %s",
-                        (next_source_id,),
+                        "SELECT connector_type FROM sources WHERE id = %s AND tenant_id = %s",
+                        (next_source_id, tenant_id),
                     )
                     src_row = cur.fetchone()
                     if src_row and src_row[0]:
                         next_connector_type = src_row[0]
+                    else:
+                        logger.warning(
+                            "Source %s missing or inaccessible for tenant %s during document insert",
+                            next_source_id,
+                            tenant_id,
+                        )
+                        raise ValueError("Source not found for tenant")
 
                 cur.execute(
                     """
                     INSERT INTO documents (
                         id,
+                        tenant_id,
                         path,
                         bytes,
                         page_count,
@@ -875,13 +970,13 @@ def upsert_document(
                         credentials,
                         sync_state,
                         version,
-                        organization_id,
                         created_at
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                     """,
                     (
                         doc_id,
+                        tenant_id,
                         path,
                         next_bytes,
                         next_page_count,
@@ -890,13 +985,13 @@ def upsert_document(
                         next_credentials,
                         _jsonb_or_none(next_sync_state),
                         new_version,
-                        organization_id_uuid,
                     ),
                 )
 
             cur.execute(
                 """
                 INSERT INTO document_versions (
+                    tenant_id,
                     document_id,
                     source_id,
                     version,
@@ -906,7 +1001,7 @@ def upsert_document(
                     credentials,
                     sync_state
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (document_id, version) DO UPDATE
                 SET bytes = EXCLUDED.bytes,
                     page_count = EXCLUDED.page_count,
@@ -916,6 +1011,7 @@ def upsert_document(
                 RETURNING created_at
                 """,
                 (
+                    tenant_id,
                     doc_id,
                     next_source_id,
                     new_version,
@@ -930,6 +1026,7 @@ def upsert_document(
 
     return DocumentVersion(
         document_id=doc_id,
+        tenant_id=tenant_id,
         source_id=next_source_id,
         version=new_version,
         bytes=next_bytes,
@@ -944,19 +1041,14 @@ def upsert_document(
 def insert_chunks(
     conn: psycopg.Connection,
     *,
+    tenant_id: UUID,
     document_id: UUID,
     chunks: Sequence[str],
     embeddings: Sequence[Sequence[float]],
     metadatas: Sequence[ChunkMetadata],
 ) -> None:
     """Insert chunk rows ensuring metadata is persisted as JSONB.
-    
-    If a tenant context is available, the organization_id will be set on each chunk.
-    This enables Row Level Security (RLS) policies to enforce tenant isolation.
     """
-    # Get current tenant context if available
-    tenant_id = get_current_tenant_id()
-    organization_id_uuid = UUID(tenant_id) if tenant_id else None
 
     with conn.transaction():
         with conn.cursor() as cur:
@@ -965,23 +1057,23 @@ def insert_chunks(
             ):
                 cur.execute(
                     """
-                    INSERT INTO chunks (doc_id, chunk_index, content, token_est, metadata, embedding, organization_id)
+                    INSERT INTO chunks (tenant_id, doc_id, chunk_index, content, token_est, metadata, embedding)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (doc_id, chunk_index) DO UPDATE
                     SET content = EXCLUDED.content,
                         token_est = EXCLUDED.token_est,
                         metadata = EXCLUDED.metadata,
                         embedding = EXCLUDED.embedding,
-                        organization_id = EXCLUDED.organization_id
+                        tenant_id = EXCLUDED.tenant_id
                     """,
                     (
+                        tenant_id,
                         document_id,
                         index,
                         content,
                         int(len(content) / 4) if content else 0,
                         _jsonb_or_none(metadata.to_json()),
                         embedding,
-                        organization_id_uuid,
                     ),
                 )
 
@@ -990,6 +1082,7 @@ def update_source_sync_state(
     conn: psycopg.Connection,
     source_id: UUID,
     *,
+    tenant_id: UUID,
     sync_state: dict | None,
     version: int | None = None,
 ) -> None:
@@ -1001,19 +1094,27 @@ def update_source_sync_state(
         fields.append(sql.SQL("version = %s"))
         values.append(version)
 
-    query = sql.SQL("UPDATE sources SET {fields}, updated_at = now() WHERE id = %s").format(
-        fields=sql.SQL(", ").join(fields)
-    )
-    values.append(source_id)
+    query = sql.SQL(
+        "UPDATE sources SET {fields}, updated_at = now() WHERE id = %s AND tenant_id = %s"
+    ).format(fields=sql.SQL(", ").join(fields))
+    values.extend([source_id, tenant_id])
 
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute(query, values)
+            if cur.rowcount == 0:
+                logger.warning(
+                    "Attempt to update sync state for source %s tenant %s failed",
+                    source_id,
+                    tenant_id,
+                )
+                raise ValueError("Source not found for tenant")
 
 
 def get_latest_versions_for_connector(
     conn: psycopg.Connection,
     *,
+    tenant_id: UUID,
     connector_type: str,
     source_id: UUID | None = None,
     decrypt_credentials: Callable[[bytes], bytes] | None = None,
@@ -1022,6 +1123,7 @@ def get_latest_versions_for_connector(
 
     query = """
         SELECT dv.document_id,
+               dv.tenant_id,
                dv.source_id,
                dv.version,
                dv.bytes,
@@ -1039,7 +1141,8 @@ def get_latest_versions_for_connector(
         JOIN documents d ON d.id = dv.document_id
         WHERE d.connector_type = %s
     """
-    params: list[Any] = [connector_type]
+    params: list[Any] = [connector_type, tenant_id]
+    query += " AND dv.tenant_id = %s"
     if source_id is not None:
         query += " AND dv.source_id = %s"
         params.append(source_id)
@@ -1049,13 +1152,14 @@ def get_latest_versions_for_connector(
         for row in cur.fetchall():
             yield DocumentVersion(
                 document_id=row[0],
-                source_id=row[1],
-                version=row[2],
-                bytes=row[3],
-                page_count=row[4],
-                connector_type=row[5],
-                credentials=_decode_credentials(row[6], decrypt=decrypt_credentials),
-                sync_state=_normalize_sync_state(row[7]),
-                created_at=row[8],
+                tenant_id=row[1],
+                source_id=row[2],
+                version=row[3],
+                bytes=row[4],
+                page_count=row[5],
+                connector_type=row[6],
+                credentials=_decode_credentials(row[7], decrypt=decrypt_credentials),
+                sync_state=_normalize_sync_state(row[8]),
+                created_at=row[9],
             )
 
