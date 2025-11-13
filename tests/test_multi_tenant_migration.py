@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import uuid
 
 import psycopg
 import pytest
@@ -169,5 +170,81 @@ def test_multi_tenant_migration_creates_tables(tmp_path: pathlib.Path) -> None:
                     expected = "((tenant_id = app.current_tenant_id()))"
                     assert qual == expected
                     assert with_check == expected
+    finally:
+        pg.stop()
+
+
+@pytest.mark.integration
+def test_rls_blocks_cross_tenant_queries(tmp_path: pathlib.Path) -> None:
+    testing_postgresql = pytest.importorskip("testing.postgresql")
+    try:
+        pg = testing_postgresql.Postgresql()
+    except RuntimeError as exc:
+        pytest.skip(f"testing.postgresql is unavailable: {exc}")
+
+    schema_path = _schema_without_vector(tmp_path)
+    tenant_a = uuid.uuid4()
+    tenant_b = uuid.uuid4()
+
+    try:
+        with psycopg.connect(pg.url()) as conn:
+            ensure_schema(conn, schema_sql_path=schema_path)
+
+            source_a = uuid.uuid4()
+            source_b = uuid.uuid4()
+            job_a = uuid.uuid4()
+            job_b = uuid.uuid4()
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO organizations (id, name, subdomain, plan_type) VALUES (%s, %s, %s, 'free')"
+                    " ON CONFLICT (id) DO NOTHING",
+                    (tenant_a, "Tenant A", "tenant-a"),
+                )
+                cur.execute(
+                    "INSERT INTO organizations (id, name, subdomain, plan_type) VALUES (%s, %s, %s, 'free')"
+                    " ON CONFLICT (id) DO NOTHING",
+                    (tenant_b, "Tenant B", "tenant-b"),
+                )
+                cur.execute(
+                    "INSERT INTO sources (id, tenant_id, type, created_at) VALUES (%s, %s, %s, now())",
+                    (source_a, tenant_a, "url"),
+                )
+                cur.execute(
+                    "INSERT INTO sources (id, tenant_id, type, created_at) VALUES (%s, %s, %s, now())",
+                    (source_b, tenant_b, "url"),
+                )
+                cur.execute(
+                    "INSERT INTO ingestion_jobs (id, tenant_id, source_id, status, created_at)"
+                    " VALUES (%s, %s, %s, %s, now())",
+                    (job_a, tenant_a, source_a, "queued"),
+                )
+                cur.execute(
+                    "INSERT INTO ingestion_jobs (id, tenant_id, source_id, status, created_at)"
+                    " VALUES (%s, %s, %s, %s, now())",
+                    (job_b, tenant_b, source_b, "queued"),
+                )
+            conn.commit()
+
+            with conn.cursor() as cur:
+                cur.execute("SET app.tenant_id = %s", (str(tenant_a),))
+                cur.execute("SELECT COUNT(*) FROM sources")
+                assert cur.fetchone() == (1,)
+                cur.execute("SELECT COUNT(*) FROM ingestion_jobs")
+                assert cur.fetchone() == (1,)
+                cur.execute("SELECT id FROM sources WHERE id = %s", (source_b,))
+                assert cur.fetchone() is None
+
+                cur.execute("SET app.tenant_id = %s", (str(tenant_b),))
+                cur.execute("SELECT COUNT(*) FROM sources")
+                assert cur.fetchone() == (1,)
+                cur.execute("SELECT COUNT(*) FROM ingestion_jobs")
+                assert cur.fetchone() == (1,)
+                cur.execute("SELECT id FROM ingestion_jobs WHERE id = %s", (job_a,))
+                assert cur.fetchone() is None
+
+                cur.execute("RESET app.tenant_id")
+                cur.execute("SELECT COUNT(*) FROM sources")
+                assert cur.fetchone() == (0,)
     finally:
         pg.stop()

@@ -1,7 +1,7 @@
 import pathlib
 import sys
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 from fastapi import FastAPI, Request
@@ -22,10 +22,44 @@ class AuthContext:
     users: dict[str, uuid.UUID]
     tokens: dict[str, str]
     password: str = "Secret123!"
+    tenant_tokens: dict[uuid.UUID, dict[str, str]] = field(default_factory=dict)
 
-    def header(self, role: str) -> dict[str, str]:
-        token = self.tokens[role]
+    def token(self, role: str, tenant_id: uuid.UUID | None = None) -> str:
+        if tenant_id is None or tenant_id == self.organization_id:
+            return self.tokens[role]
+        try:
+            return self.tenant_tokens[tenant_id][role]
+        except KeyError as exc:  # pragma: no cover - defensive guard for tests
+            raise KeyError(f"Unknown tenant {tenant_id} for role {role}") from exc
+
+    def header(self, role: str, tenant_id: uuid.UUID | None = None) -> dict[str, str]:
+        token = self.token(role, tenant_id)
         return {"Authorization": f"Bearer {token}"}
+
+    def create_tenant(self, name: str, subdomain: str) -> uuid.UUID:
+        """Provision an additional tenant with users and JWT tokens for tests."""
+
+        with self.session_factory.begin() as session:
+            organization = Organization(name=name, subdomain=subdomain)
+            session.add(organization)
+            session.flush()
+
+            user_tokens: dict[str, str] = {}
+            for role in ("viewer", "operator", "admin"):
+                user = User(
+                    organization_id=organization.id,
+                    email=f"{role}@{subdomain}.example",
+                    name=f"{name} {role.title()}",
+                    password_hash=hash_password(self.password),
+                    role=role,
+                )
+                session.add(user)
+                session.flush()
+                token, _ = create_access_token(user)
+                user_tokens[role] = token
+
+        self.tenant_tokens[organization.id] = user_tokens
+        return organization.id
 
 
 @pytest.fixture
@@ -98,6 +132,7 @@ def tenant_auth(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPa
         users=users,
         tokens=tokens,
     )
+    context.tenant_tokens[organization_id] = tokens
 
     yield context
 
