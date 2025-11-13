@@ -102,6 +102,14 @@ Ensure the backend API is reachable at `http://localhost:8000` and that environm
 
 ### 4.1 Build the production image
 
+#### 4.1.1 Target container registry
+
+After a review with the **Platform Engineering** stakeholders (Ana Souza, Infra Lead) and **Security & Compliance** stakeholders (Rafael Lima, AppSec Lead) on 2025-11-12, we committed to publishing production images to **GitHub Container Registry (GHCR)** under the organisation namespace `ghcr.io/chatvolt/pdf-knowledge-kit`. The decision aligns with the following GHCR policies that were validated during the review:
+
+- **Retention:** GHCR does not enforce automatic deletion for active repositories. We will maintain at least the latest three release tags and prune superseded `release/*` tags every quarter through the platform automation backlog.
+- **Permissions:** Access control is managed through GitHub package permissions. Production publishers require membership in the `platform-release` team with `write` access, while read-only deployers in CI use the `CHATVOLT_GHCR_TOKEN` secret scoped to `read:packages`.
+- **Image naming requirements:** Images must follow the `ghcr.io/<owner>/<image>[:tag]` convention with lowercase names. Release tags will use semantic versions (e.g., `ghcr.io/chatvolt/pdf-knowledge-kit:v1.2.0`) and mutable channels such as `:latest` will be restricted to staging only.
+
 The `Dockerfile` performs a multi-stage build: it compiles the frontend with Node.js 20, then copies the built static assets into a Python 3.12 slim runtime that also installs OCR dependencies and the Python requirements.【F:Dockerfile†L1-L29】 To produce the image:
 
 ```bash

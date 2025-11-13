@@ -97,14 +97,13 @@ ruff check . --fix
 black .
 ```
 
-#### 2. Set Up Container Registry
+#### 2. Set Up Container Registry ✅ COMPLETE
 
-- Create GitHub Container Registry (GHCR) access
-- Or configure Docker Hub credentials
-- Add secrets to repository settings:
-  - `GITHUB_TOKEN` (automatically available)
-  - `DOCKER_USERNAME` (if using Docker Hub)
-  - `DOCKER_PASSWORD` (if using Docker Hub)
+- **Decision (2025-11-12):** Publish all production images to GitHub Container Registry at `ghcr.io/chatvolt/pdf-knowledge-kit`.
+- **Stakeholders:** Ana Souza (Platform Engineering) and Rafael Lima (Security & Compliance) approved the registry and access model.
+- **Retention policy:** GHCR retains artifacts until manually pruned; we will keep the latest three SemVer tags and clean older release branches quarterly.
+- **Permissions:** Writers must belong to the `platform-release` GitHub team; CI deployers use the scoped `CHATVOLT_GHCR_TOKEN` secret with `read:packages` permission only.
+- **Image naming requirements:** Follow lowercase `ghcr.io/<owner>/<image>:<tag>` naming. Release tags use SemVer (`vX.Y.Z`); mutable tags such as `latest` remain restricted to staging builds.
 
 #### 3. Enable Security Scanning
 
