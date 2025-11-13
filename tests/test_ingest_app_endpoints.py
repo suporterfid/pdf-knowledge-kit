@@ -114,8 +114,8 @@ def test_ingest_and_query_via_endpoints(pg_tmp, client, tmp_path):
 
     original_get_conn = rag.get_conn
 
-    def _tenant_conn():
-        conn = original_get_conn()
+    def _tenant_conn(*, tenant_id=None):
+        conn = original_get_conn(tenant_id=str(TEST_TENANT_ID))
         apply_tenant_settings(conn, TEST_TENANT_ID)
         return conn
 

@@ -59,11 +59,22 @@ def main():
     parser = argparse.ArgumentParser(description="Consulta semântica (kNN) no pgvector")
     parser.add_argument("--q", type=str, required=True, help="Pergunta/consulta")
     parser.add_argument("--k", type=int, default=5, help="Número de trechos retornados")
+    parser.add_argument(
+        "--tenant-id",
+        default=os.getenv("TENANT_ID"),
+        help="Identificador do tenant (UUID)",
+    )
     args = parser.parse_args()
+
+    tenant_id = args.tenant_id
+    if not tenant_id:
+        parser.error("--tenant-id é obrigatório (ou defina TENANT_ID)")
 
     dsn = f"host={os.getenv('PGHOST','db')} port={os.getenv('PGPORT','5432')} dbname={os.getenv('PGDATABASE','pdfkb')} user={os.getenv('PGUSER','pdfkb')} password={os.getenv('PGPASSWORD','pdfkb')}"
     conn = psycopg.connect(dsn)
     register_vector(conn)
+    with conn.cursor() as cur:
+        cur.execute("SET app.tenant_id = %s", (tenant_id,))
 
     # Use a supported multilingual embedding model
     embedder = TextEmbedding(model_name="paraphrase-multilingual-MiniLM-L12-v2-cls")
@@ -74,6 +85,7 @@ def main():
     FROM chunks c
     JOIN documents d ON d.id = c.doc_id
     WHERE c.embedding IS NOT NULL
+      AND d.tenant_id = current_setting('app.tenant_id')
     ORDER BY c.embedding <-> %s
     LIMIT %s;
     """

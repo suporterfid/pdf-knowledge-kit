@@ -23,7 +23,7 @@ sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 from app.main import app, CHAT_MAX_MESSAGE_LENGTH, SESSION_ID_MAX_LENGTH
 
 
-def dummy_build_context(q, k):
+def dummy_build_context(q, k, tenant_id=None):
     return "context", [
         {"path": "doc.pdf", "chunk_index": 0, "content": "context", "distance": 0.0}
     ]
@@ -61,7 +61,7 @@ def client():
 
 
 def test_chat_without_attachment(client):
-    headers = {"X-Forwarded-For": "1.1.1.1"}
+    headers = {"X-Forwarded-For": "1.1.1.1", "X-Debug-Tenant": "tenant-1"}
     with patch("app.main.build_context", dummy_build_context):
         data = {"q": "hi", "k": "1", "sessionId": "s1"}
         with client.stream("POST", "/api/chat", data=data, headers=headers) as resp:
@@ -71,7 +71,7 @@ def test_chat_without_attachment(client):
 
 
 def test_chat_with_pdf_attachment(client):
-    headers = {"X-Forwarded-For": "1.1.1.2"}
+    headers = {"X-Forwarded-For": "1.1.1.2", "X-Debug-Tenant": "tenant-1"}
     files = {"files": ("test.pdf", _pdf_bytes(), "application/pdf")}
     data = {"q": "hi", "k": "1", "attachments": "[]", "sessionId": "s2"}
     with patch("app.main.build_context", dummy_build_context):
@@ -82,7 +82,7 @@ def test_chat_with_pdf_attachment(client):
 
 
 def test_cancel_and_reconnect(client):
-    headers = {"X-Forwarded-For": "1.1.1.3"}
+    headers = {"X-Forwarded-For": "1.1.1.3", "X-Debug-Tenant": "tenant-1"}
     with patch("app.main.build_context", dummy_build_context):
         with client.stream(
             "POST",
@@ -104,7 +104,7 @@ def test_cancel_and_reconnect(client):
 
 
 def test_invalid_mime_type(client):
-    headers = {"X-Forwarded-For": "1.1.1.4"}
+    headers = {"X-Forwarded-For": "1.1.1.4", "X-Debug-Tenant": "tenant-1"}
     files = {"files": ("evil.txt", b"hello", "text/plain")}
     data = {"q": "hi", "k": "1", "attachments": "[]", "sessionId": "s4"}
     resp = client.post("/api/chat", data=data, files=files, headers=headers)
@@ -112,7 +112,7 @@ def test_invalid_mime_type(client):
 
 
 def test_message_and_session_validation(client):
-    headers = {"X-Forwarded-For": "1.1.1.5"}
+    headers = {"X-Forwarded-For": "1.1.1.5", "X-Debug-Tenant": "tenant-1"}
     long_msg = "a" * (CHAT_MAX_MESSAGE_LENGTH + 1)
     resp_msg = client.post(
         "/api/chat",
@@ -130,7 +130,7 @@ def test_message_and_session_validation(client):
 
 
 def test_rate_limit(client):
-    headers = {"X-Forwarded-For": "2.2.2.2"}
+    headers = {"X-Forwarded-For": "2.2.2.2", "X-Debug-Tenant": "tenant-1"}
     data = {"q": "hi", "k": "1", "sessionId": "rl"}
     with patch("app.main.build_context", dummy_build_context):
         for _ in range(5):
@@ -141,7 +141,7 @@ def test_rate_limit(client):
 
 
 def test_chat_with_llm_prompt(client):
-    headers = {"X-Forwarded-For": "3.3.3.3"}
+    headers = {"X-Forwarded-For": "3.3.3.3", "X-Debug-Tenant": "tenant-1"}
 
     class DummyStream:
         def __iter__(self):
@@ -176,7 +176,7 @@ def test_chat_with_llm_prompt(client):
 
 
 def test_chat_with_custom_system_prompt(client, monkeypatch):
-    headers = {"X-Forwarded-For": "3.3.3.4"}
+    headers = {"X-Forwarded-For": "3.3.3.4", "X-Debug-Tenant": "tenant-1"}
 
     class DummyStream:
         def __iter__(self):

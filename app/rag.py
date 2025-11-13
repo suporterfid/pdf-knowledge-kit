@@ -41,13 +41,42 @@ except Exception:
     )
 
 
-def get_conn() -> psycopg.Connection:
+def _resolve_tenant_id(candidate: str | None = None) -> str:
+    """Return a tenant identifier, falling back to ``TENANT_ID`` environment.
+
+    Parameters
+    ----------
+    candidate:
+        Optional explicit tenant identifier provided by the caller.
+
+    Returns
+    -------
+    str
+        Effective tenant identifier.
+
+    Raises
+    ------
+    RuntimeError
+        If neither ``candidate`` nor ``TENANT_ID`` environment variable is
+        defined.
+    """
+    tenant = candidate or os.getenv("TENANT_ID")
+    if tenant:
+        return tenant
+    raise RuntimeError("tenant_id is required for tenant-scoped retrieval")
+
+
+def get_conn(*, tenant_id: str | None = None) -> psycopg.Connection:
     """Open a PostgreSQL connection and register pgvector type adapters.
 
     Connection parameters are read from environment variables (compatible with
     Docker Compose defaults). The caller is responsible for closing the
-    returned connection.
+    returned connection. When ``tenant_id`` is provided (or defaults to the
+    ``TENANT_ID`` environment variable), the connection is configured with
+    ``SET app.tenant_id`` so subsequent queries can rely on RLS filters.
     """
+    resolved_tenant = tenant_id if tenant_id else _resolve_tenant_id()
+
     dsn = (
         f"host={os.getenv('PGHOST','db')} "
         f"port={os.getenv('PGPORT','5432')} "
@@ -57,6 +86,8 @@ def get_conn() -> psycopg.Connection:
     )
     conn = psycopg.connect(dsn)
     register_vector(conn)
+    with conn.cursor() as cur:
+        cur.execute("SET app.tenant_id = %s", (resolved_tenant,))
     return conn
 
 
@@ -85,7 +116,9 @@ def _bm25_rerank(query: str, sources: List[Dict]) -> List[Dict]:
     return [s for _, s in ranked]
 
 
-def build_context(question: str, k: int) -> Tuple[str, List[Dict]]:
+def build_context(
+    question: str, k: int, *, tenant_id: str | None = None
+) -> Tuple[str, List[Dict]]:
     """Retrieve top-k chunks and build a context string for the LLM.
 
     Steps
@@ -114,7 +147,8 @@ def build_context(question: str, k: int) -> Tuple[str, List[Dict]]:
         List of dictionaries containing path, chunk index, content and raw
         vector distance for UI display and auditing.
     """
-    conn = get_conn()
+    resolved_tenant = _resolve_tenant_id(tenant_id)
+    conn = get_conn(tenant_id=resolved_tenant)
     # 1) Embed the raw question (no "query:" prefix needed with this model family)
     qvec = list(embedder.embed([question]))[0]
     # 2) Retrieve a larger candidate set for reranking. ``<->`` is pgvector's
@@ -129,6 +163,7 @@ def build_context(question: str, k: int) -> Tuple[str, List[Dict]]:
     FROM chunks c
     JOIN documents d ON d.id = c.doc_id
     WHERE c.embedding IS NOT NULL
+      AND d.tenant_id = current_setting('app.tenant_id')
     ORDER BY c.embedding <-> %s
     LIMIT %s;
     """

@@ -30,15 +30,16 @@ def client():
     return TestClient(app)
 
 
-def dummy_build_context(q, k):
+def dummy_build_context(q, k, tenant_id=None):
     return "context", [
         {"path": "doc.pdf", "chunk_index": 0, "content": "context", "distance": 0.0}
     ]
 
 
 def test_ask_without_llm(client):
+    headers = {"X-Debug-Tenant": "tenant-1"}
     with patch("app.main.build_context", dummy_build_context), patch("app.main.client", None):
-        resp = client.post("/api/ask", json={"q": "hi", "k": 1})
+        resp = client.post("/api/ask", json={"q": "hi", "k": 1}, headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["answer"] == "context"
@@ -61,8 +62,9 @@ def test_ask_with_llm(client):
             return DummyCompletion()
 
     dummy_client = DummyClient()
+    headers = {"X-Debug-Tenant": "tenant-1"}
     with patch("app.main.build_context", dummy_build_context), patch("app.main.client", dummy_client), patch("app.main.detect", lambda _: "en"):
-        resp = client.post("/api/ask", json={"q": "hi", "k": 1})
+        resp = client.post("/api/ask", json={"q": "hi", "k": 1}, headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["answer"] == "llm"
@@ -87,8 +89,9 @@ def test_ask_with_custom_system_prompt(client, monkeypatch):
 
     dummy_client = DummyClient()
     monkeypatch.setenv("SYSTEM_PROMPT", "You are a helper.")
+    headers = {"X-Debug-Tenant": "tenant-1"}
     with patch("app.main.build_context", dummy_build_context), patch("app.main.client", dummy_client), patch("app.main.detect", lambda _: "en"):
-        resp = client.post("/api/ask", json={"q": "hi", "k": 1})
+        resp = client.post("/api/ask", json={"q": "hi", "k": 1}, headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["answer"] == "llm"

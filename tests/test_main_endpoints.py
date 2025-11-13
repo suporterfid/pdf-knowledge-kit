@@ -195,14 +195,14 @@ class TestUploadEndpoint:
 class TestChatGetEndpoint:
     """Tests for /api/chat GET variant."""
 
-    def dummy_build_context(self, q, k):
+    def dummy_build_context(self, q, k, tenant_id=None):
         return "context", [
             {"path": "doc.pdf", "chunk_index": 0, "content": "context", "distance": 0.0}
         ]
 
     def test_chat_get_basic_query(self, client):
         """Test GET chat endpoint with basic query."""
-        headers = {"X-Forwarded-For": "10.0.0.1"}
+        headers = {"X-Forwarded-For": "10.0.0.1", "X-Debug-Tenant": "tenant-1"}
         with patch("app.main.build_context", self.dummy_build_context):
             with client.stream("GET", "/api/chat?q=hello&k=1&sessionId=test", headers=headers) as resp:
                 assert resp.status_code == 200
@@ -216,14 +216,14 @@ class TestChatGetEndpoint:
 
     def test_chat_get_without_session_id(self, client):
         """Test GET chat endpoint without sessionId (optional)."""
-        headers = {"X-Forwarded-For": "10.0.0.2"}
+        headers = {"X-Forwarded-For": "10.0.0.2", "X-Debug-Tenant": "tenant-1"}
         with patch("app.main.build_context", self.dummy_build_context):
             with client.stream("GET", "/api/chat?q=hello&k=1", headers=headers) as resp:
                 assert resp.status_code == 200
 
     def test_chat_get_message_too_long(self, client):
         """Test GET chat endpoint rejects messages that are too long."""
-        headers = {"X-Forwarded-For": "10.0.0.3"}
+        headers = {"X-Forwarded-For": "10.0.0.3", "X-Debug-Tenant": "tenant-1"}
         long_msg = "a" * (CHAT_MAX_MESSAGE_LENGTH + 1)
         resp = client.get(f"/api/chat?q={long_msg}&k=1", headers=headers)
         assert resp.status_code == 400
@@ -231,7 +231,7 @@ class TestChatGetEndpoint:
 
     def test_chat_get_session_id_too_long(self, client):
         """Test GET chat endpoint rejects invalid sessionId."""
-        headers = {"X-Forwarded-For": "10.0.0.4"}
+        headers = {"X-Forwarded-For": "10.0.0.4", "X-Debug-Tenant": "tenant-1"}
         long_session = "s" * (SESSION_ID_MAX_LENGTH + 1)
         resp = client.get(f"/api/chat?q=hello&sessionId={long_session}", headers=headers)
         assert resp.status_code == 400
