@@ -13,8 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Versioning strategy documentation (VERSION_STRATEGY.md)
 - Release checklist for structured release process (RELEASE_CHECKLIST.md)
 - Changelog template for tracking changes
+- Row Level Security (RLS) implementation for multi-tenancy (migration 011)
+- Test suite for RLS tenant isolation (`test_rls_tenant_isolation.py`)
 
 ### Changed
+
+- Documents and chunks tables now include `organization_id` column for tenant isolation
+- Ingestion storage layer updated to set `organization_id` from tenant context
+- RAG query enhanced with comment documenting RLS behavior
 
 ### Deprecated
 
@@ -23,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 ### Security
+
+- Implemented Row Level Security (RLS) on documents and chunks tables
+- PostgreSQL RLS policies automatically filter data by tenant via `app.tenant_id` session variable
+- Tenant isolation enforced at the database level, preventing cross-tenant data access
+- Backward compatibility maintained for non-tenant queries (when `app.tenant_id` not set)
 
 ---
 
