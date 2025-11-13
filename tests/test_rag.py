@@ -13,13 +13,24 @@ TEST_TENANT = "tenant-a"
 
 # Helper to get a database connection or skip the test if unavailable
 
-def _get_conn():
+def _set_tenant(conn: psycopg.Connection, tenant_id: str | None) -> None:
+    if tenant_id is None:
+        with conn.cursor() as cur:
+            cur.execute("RESET app.tenant_id")
+        return
+    with conn.cursor() as cur:
+        cur.execute("SET app.tenant_id = %s", (str(tenant_id),))
+
+
+def _get_conn(*, tenant_id: str | None = None):
     url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
     try:
         conn = psycopg.connect(url)
     except Exception:
         pytest.skip("database not available")
     register_vector(conn)
+    if tenant_id is not None:
+        _set_tenant(conn, tenant_id)
     return conn
 
 
@@ -81,11 +92,8 @@ def test_build_context_returns_expected_sources(monkeypatch):
     monkeypatch.setattr(rag, "embedder", DummyEmbedder([1, 0, 0]))
 
     def _tenant_conn(*, tenant_id: str | None = None):
-        conn = _get_conn()
         effective = tenant_id or TEST_TENANT
-        with conn.cursor() as cur:
-            cur.execute("SET app.tenant_id = %s", (effective,))
-        return conn
+        return _get_conn(tenant_id=effective)
 
     monkeypatch.setattr(rag, "get_conn", _tenant_conn)
 
@@ -130,17 +138,18 @@ def test_build_context_filters_out_other_tenants(monkeypatch):
     monkeypatch.setattr(rag, "embedder", DummyEmbedder([1, 0, 0]))
 
     def _tenant_conn(*, tenant_id: str | None = None):
-        conn = _get_conn()
         effective = tenant_id or local_tenant
-        with conn.cursor() as cur:
-            cur.execute("SET app.tenant_id = %s", (effective,))
-        return conn
+        return _get_conn(tenant_id=effective)
 
     monkeypatch.setattr(rag, "get_conn", _tenant_conn)
 
     context, sources = rag.build_context("q", 2, tenant_id=local_tenant)
     assert "chunk-other" not in context
     assert all(src["path"] != "other" for src in sources)
+
+    other_context, other_sources = rag.build_context("q", 2, tenant_id=other_tenant)
+    assert "chunk-local" not in other_context
+    assert all(src["path"] != "local" for src in other_sources)
 
     cleanup = _get_conn()
     with cleanup.cursor() as cur:
