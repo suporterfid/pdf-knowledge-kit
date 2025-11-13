@@ -34,3 +34,17 @@ def apply_tenant_settings(
     except Exception:  # pragma: no cover - defensive logging
         logger.exception("Failed to apply tenant settings to connection")
         raise
+
+
+def get_required_tenant_id(tenant_id: str | UUID | None = None) -> UUID:
+    """Return the current tenant identifier or raise ``RuntimeError``."""
+
+    effective = tenant_id or get_current_tenant_id()
+    if effective is None:
+        raise RuntimeError("Tenant context missing")
+    if isinstance(effective, UUID):
+        return effective
+    try:
+        return UUID(str(effective))
+    except ValueError as exc:  # pragma: no cover - defensive
+        raise RuntimeError("Invalid tenant identifier") from exc

@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 
 @dataclass
@@ -20,6 +21,7 @@ class NormalizedMessage:
     attachments: List[Dict[str, Any]] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
     sent_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    tenant_id: Optional[UUID] = None
 
 
 @dataclass

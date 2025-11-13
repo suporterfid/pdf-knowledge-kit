@@ -12,6 +12,7 @@ from ..agents.service import AgentNotFoundError, AgentService, PostgresAgentRepo
 from ..conversations.repository import PostgresConversationRepository
 from ..conversations.service import ConversationService
 from ..conversations import schemas as convo_schemas
+from ..core.db import apply_tenant_settings, get_required_tenant_id
 from ..security.auth import require_role
 
 router = APIRouter(tags=["conversations"])
@@ -31,10 +32,19 @@ def _get_conn() -> psycopg.Connection:
 @contextmanager
 def _service_context() -> Iterator[Tuple[AgentService, ConversationService]]:
     conn = _get_conn()
-    agent_repo = PostgresAgentRepository(conn)
-    convo_repo = PostgresConversationRepository(conn)
-    agent_service = AgentService(agent_repo)
-    convo_service = ConversationService(convo_repo)
+    try:
+        tenant_id = get_required_tenant_id()
+        apply_tenant_settings(conn, tenant_id)
+    except RuntimeError as exc:
+        conn.close()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - defensive
+        conn.close()
+        raise HTTPException(status_code=500, detail="Failed to configure tenant") from exc
+    agent_repo = PostgresAgentRepository(conn, tenant_id=tenant_id)
+    convo_repo = PostgresConversationRepository(conn, tenant_id=tenant_id)
+    agent_service = AgentService(agent_repo, tenant_id=tenant_id)
+    convo_service = ConversationService(convo_repo, tenant_id=tenant_id)
     try:
         yield agent_service, convo_service
         conn.commit()

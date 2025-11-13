@@ -6,10 +6,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import re
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Protocol
+from uuid import UUID, uuid4
 
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+
+from app.core.db import get_required_tenant_id
 
 from . import schemas
 from .providers import ProviderRegistry
@@ -74,11 +77,14 @@ class AgentService:
     def __init__(
         self,
         repository: AgentRepository,
+        *,
+        tenant_id: Optional[UUID] = None,
         provider_registry: Optional[ProviderRegistry] = None,
         prompt_store: Optional[PromptTemplateStore] = None,
         response_store: Optional[ResponseParameterStore] = None,
     ) -> None:
         self._repository = repository
+        self._tenant_id = tenant_id or getattr(repository, "tenant_id", None)
         self._providers = provider_registry or ProviderRegistry()
         self._prompts = prompt_store or PromptTemplateStore()
         self._responses = response_store or ResponseParameterStore()
@@ -136,6 +142,10 @@ class AgentService:
             response_parameters,
             bool(credentials.api_key),
         )
+        if self._tenant_id and not cleaned_payload.tenant_id:
+            cleaned_payload = _model_copy(
+                cleaned_payload, update={"tenant_id": self._tenant_id}
+            )
         agent = self._repository.create_agent(cleaned_payload)
         version_config = schemas.AgentVersionConfig(
             provider=agent.provider,
@@ -213,6 +223,7 @@ class AgentService:
         # Sandboxed execution: we don't call real LLMs in tests, instead echo behaviour.
         output = _simulate_model_response(agent.name, rendered_prompt, parameters)
         record_payload = schemas.AgentTestRecordCreate(
+            tenant_id=agent.tenant_id,
             agent_id=agent.id,
             agent_version_id=latest_version.id if latest_version else None,
             input_prompt=request.input,
@@ -345,6 +356,12 @@ def _model_dump(model: Any, exclude: Optional[Iterable[str]] = None) -> Dict[str
     return {k: v for k, v in model.dict().items() if k not in exclude and v is not None}
 
 
+def _model_copy(model: Any, **kwargs: Any) -> Any:
+    if hasattr(model, "model_copy"):
+        return model.model_copy(**kwargs)
+    return model.copy(**kwargs)
+
+
 # ---------------------------------------------------------------------------
 # Postgres repository implementation
 
@@ -360,21 +377,30 @@ class _ConnectionWrapper:
 class PostgresAgentRepository:
     """PostgreSQL-backed agent repository."""
 
-    def __init__(self, connection: psycopg.Connection):
+    def __init__(
+        self, connection: psycopg.Connection, tenant_id: Optional[UUID] = None
+    ) -> None:
         self._conn = connection
+        self._tenant_id = get_required_tenant_id(tenant_id)
 
     def cursor(self):
         return self._conn.cursor(row_factory=dict_row)
+
+    @property
+    def tenant_id(self) -> UUID:
+        return self._tenant_id
 
     def list_agents(self) -> List[schemas.Agent]:
         with self.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, slug, name, description, provider, model, persona, prompt_template,
+                SELECT id, tenant_id, slug, name, description, provider, model, persona, prompt_template,
                        response_params, deployment_metadata, tags, is_active, created_at, updated_at
                 FROM agents
+                WHERE tenant_id = %s
                 ORDER BY name
-                """
+                """,
+                (self._tenant_id,),
             )
             rows = cur.fetchall()
         agents = [self._row_to_agent(row) for row in rows]
@@ -388,12 +414,12 @@ class PostgresAgentRepository:
         with self.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, slug, name, description, provider, model, persona, prompt_template,
+                SELECT id, tenant_id, slug, name, description, provider, model, persona, prompt_template,
                        response_params, deployment_metadata, tags, is_active, created_at, updated_at
                 FROM agents
-                WHERE id = %s
+                WHERE tenant_id = %s AND id = %s
                 """,
-                (agent_id,),
+                (self._tenant_id, agent_id),
             )
             row = cur.fetchone()
         if not row:
@@ -415,12 +441,12 @@ class PostgresAgentRepository:
         with self.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, slug, name, description, provider, model, persona, prompt_template,
+                SELECT id, tenant_id, slug, name, description, provider, model, persona, prompt_template,
                        response_params, deployment_metadata, tags, is_active, created_at, updated_at
                 FROM agents
-                WHERE slug = %s
+                WHERE tenant_id = %s AND slug = %s
                 """,
-                (slug,),
+                (self._tenant_id, slug),
             )
             row = cur.fetchone()
         if not row:
@@ -442,13 +468,14 @@ class PostgresAgentRepository:
             cur.execute(
                 """
                 INSERT INTO agents
-                    (slug, name, description, provider, model, persona, prompt_template,
+                    (tenant_id, slug, name, description, provider, model, persona, prompt_template,
                      response_params, deployment_metadata, tags, is_active)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, slug, name, description, provider, model, persona, prompt_template,
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, tenant_id, slug, name, description, provider, model, persona, prompt_template,
                           response_params, deployment_metadata, tags, is_active, created_at, updated_at
                 """,
                 (
+                    self._tenant_id,
                     slug,
                     payload.name,
                     payload.description,
@@ -471,7 +498,10 @@ class PostgresAgentRepository:
         candidate = base
         suffix = 1
         while True:
-            cur.execute("SELECT 1 FROM agents WHERE slug = %s", (candidate,))
+            cur.execute(
+                "SELECT 1 FROM agents WHERE tenant_id = %s AND slug = %s",
+                (self._tenant_id, candidate),
+            )
             if cur.fetchone() is None:
                 return candidate
             candidate = f"{base}-{suffix}"
@@ -508,8 +538,14 @@ class PostgresAgentRepository:
                 raise AgentNotFoundError
             return agent
         set_clause = ", ".join(fields)
-        query = f"UPDATE agents SET {set_clause} WHERE id = %s RETURNING id, slug, name, description, provider, model, persona, prompt_template, response_params, deployment_metadata, tags, is_active, created_at, updated_at"
-        values.append(agent_id)
+        query = (
+            "UPDATE agents SET "
+            f"{set_clause}, updated_at = now() "
+            "WHERE tenant_id = %s AND id = %s "
+            "RETURNING id, tenant_id, slug, name, description, provider, model, persona, prompt_template, "
+            "response_params, deployment_metadata, tags, is_active, created_at, updated_at"
+        )
+        values.extend((self._tenant_id, agent_id))
         with self.cursor() as cur:
             cur.execute(query, values)
             row = cur.fetchone()
@@ -519,7 +555,10 @@ class PostgresAgentRepository:
 
     def delete_agent(self, agent_id: int) -> None:
         with self.cursor() as cur:
-            cur.execute("DELETE FROM agents WHERE id = %s", (agent_id,))
+            cur.execute(
+                "DELETE FROM agents WHERE tenant_id = %s AND id = %s",
+                (self._tenant_id, agent_id),
+            )
 
     def create_version(self, agent_id: int, payload: schemas.AgentVersionCreate) -> schemas.AgentVersion:
         latest = self.latest_version(agent_id)
@@ -528,11 +567,12 @@ class PostgresAgentRepository:
             cur.execute(
                 """
                 INSERT INTO agent_versions
-                    (agent_id, version, label, created_by, config, prompt_template, persona, response_params)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, agent_id, version, label, created_by, config, prompt_template, persona, response_params, created_at
+                    (tenant_id, agent_id, version, label, created_by, config, prompt_template, persona, response_params)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, tenant_id, agent_id, version, label, created_by, config, prompt_template, persona, response_params, created_at
                 """,
                 (
+                    self._tenant_id,
                     agent_id,
                     next_version,
                     payload.label,
@@ -551,12 +591,12 @@ class PostgresAgentRepository:
         with self.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, agent_id, version, label, created_by, config, prompt_template, persona, response_params, created_at
+                SELECT id, tenant_id, agent_id, version, label, created_by, config, prompt_template, persona, response_params, created_at
                 FROM agent_versions
-                WHERE agent_id = %s
+                WHERE tenant_id = %s AND agent_id = %s
                 ORDER BY version
                 """,
-                (agent_id,),
+                (self._tenant_id, agent_id),
             )
             rows = cur.fetchall()
         return [self._row_to_version(row) for row in rows]
@@ -565,13 +605,13 @@ class PostgresAgentRepository:
         with self.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, agent_id, version, label, created_by, config, prompt_template, persona, response_params, created_at
+                SELECT id, tenant_id, agent_id, version, label, created_by, config, prompt_template, persona, response_params, created_at
                 FROM agent_versions
-                WHERE agent_id = %s
+                WHERE tenant_id = %s AND agent_id = %s
                 ORDER BY version DESC
                 LIMIT 1
                 """,
-                (agent_id,),
+                (self._tenant_id, agent_id),
             )
             row = cur.fetchone()
         return self._row_to_version(row) if row else None
@@ -581,11 +621,12 @@ class PostgresAgentRepository:
             cur.execute(
                 """
                 INSERT INTO agent_tests
-                    (agent_version_id, agent_id, input_prompt, response, metrics, status, channel)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, agent_version_id, agent_id, input_prompt, response, metrics, status, channel, ran_at
+                    (tenant_id, agent_version_id, agent_id, input_prompt, response, metrics, status, channel)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, tenant_id, agent_version_id, agent_id, input_prompt, response, metrics, status, channel, ran_at
                 """,
                 (
+                    payload.tenant_id or self._tenant_id,
                     payload.agent_version_id,
                     payload.agent_id,
                     payload.input_prompt,
@@ -602,13 +643,13 @@ class PostgresAgentRepository:
         with self.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, agent_version_id, agent_id, input_prompt, response, metrics, status, channel, ran_at
+                SELECT id, tenant_id, agent_version_id, agent_id, input_prompt, response, metrics, status, channel, ran_at
                 FROM agent_tests
-                WHERE agent_id = %s
+                WHERE tenant_id = %s AND agent_id = %s
                 ORDER BY ran_at DESC
                 LIMIT %s
                 """,
-                (agent_id, limit),
+                (self._tenant_id, agent_id, limit),
             )
             rows = cur.fetchall()
         return [self._row_to_test(row) for row in rows]
@@ -619,11 +660,11 @@ class PostgresAgentRepository:
                 """
                 UPDATE agents
                 SET deployment_metadata = %s
-                WHERE id = %s
-                RETURNING id, slug, name, description, provider, model, persona, prompt_template,
+                WHERE tenant_id = %s AND id = %s
+                RETURNING id, tenant_id, slug, name, description, provider, model, persona, prompt_template,
                           response_params, deployment_metadata, tags, is_active, created_at, updated_at
                 """,
-                (Jsonb(metadata), agent_id),
+                (Jsonb(metadata), self._tenant_id, agent_id),
             )
             row = cur.fetchone()
         if not row:
@@ -636,12 +677,12 @@ class PostgresAgentRepository:
         with self.cursor() as cur:
             cur.execute(
                 """
-                SELECT channel, is_enabled, webhook_secret, credentials, settings, created_at, updated_at
+                SELECT tenant_id, channel, is_enabled, webhook_secret, credentials, settings, created_at, updated_at
                 FROM agent_channel_configs
-                WHERE agent_id = %s
+                WHERE tenant_id = %s AND agent_id = %s
                 ORDER BY channel
                 """,
-                (agent_id,),
+                (self._tenant_id, agent_id),
             )
             rows = cur.fetchall()
         return [self._row_to_channel_config(row) for row in rows]
@@ -650,11 +691,11 @@ class PostgresAgentRepository:
         with self.cursor() as cur:
             cur.execute(
                 """
-                SELECT channel, is_enabled, webhook_secret, credentials, settings, created_at, updated_at
+                SELECT tenant_id, channel, is_enabled, webhook_secret, credentials, settings, created_at, updated_at
                 FROM agent_channel_configs
-                WHERE agent_id = %s AND channel = %s
+                WHERE tenant_id = %s AND agent_id = %s AND channel = %s
                 """,
-                (agent_id, channel),
+                (self._tenant_id, agent_id, channel),
             )
             row = cur.fetchone()
         return self._row_to_channel_config(row) if row else None
@@ -670,17 +711,18 @@ class PostgresAgentRepository:
         with self.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO agent_channel_configs (agent_id, channel, is_enabled, webhook_secret, credentials, settings)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO agent_channel_configs (tenant_id, agent_id, channel, is_enabled, webhook_secret, credentials, settings)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (agent_id, channel) DO UPDATE
-                SET is_enabled = EXCLUDED.is_enabled,
+                    SET is_enabled = EXCLUDED.is_enabled,
                     webhook_secret = EXCLUDED.webhook_secret,
                     credentials = EXCLUDED.credentials,
                     settings = EXCLUDED.settings,
                     updated_at = now()
-                RETURNING channel, is_enabled, webhook_secret, credentials, settings, created_at, updated_at
+                RETURNING tenant_id, channel, is_enabled, webhook_secret, credentials, settings, created_at, updated_at
                 """,
                 (
+                    self._tenant_id,
                     agent_id,
                     channel,
                     is_enabled,
@@ -694,12 +736,16 @@ class PostgresAgentRepository:
 
     def delete_channel_config(self, agent_id: int, channel: str) -> None:
         with self.cursor() as cur:
-            cur.execute("DELETE FROM agent_channel_configs WHERE agent_id = %s AND channel = %s", (agent_id, channel))
+            cur.execute(
+                "DELETE FROM agent_channel_configs WHERE tenant_id = %s AND agent_id = %s AND channel = %s",
+                (self._tenant_id, agent_id, channel),
+            )
 
 
     def _row_to_agent(self, row: Dict[str, Any]) -> schemas.Agent:
         return schemas.Agent(
             id=row["id"],
+            tenant_id=row["tenant_id"],
             slug=row["slug"],
             name=row["name"],
             description=row.get("description"),
@@ -720,6 +766,7 @@ class PostgresAgentRepository:
         config = row.get("config") or {}
         return schemas.AgentVersion(
             id=row["id"],
+            tenant_id=row["tenant_id"],
             agent_id=row["agent_id"],
             version=row["version"],
             label=row.get("label"),
@@ -740,6 +787,7 @@ class PostgresAgentRepository:
     def _row_to_test(self, row: Dict[str, Any]) -> schemas.AgentTestRecord:
         return schemas.AgentTestRecord(
             id=row["id"],
+            tenant_id=row["tenant_id"],
             agent_id=row["agent_id"],
             agent_version_id=row.get("agent_version_id"),
             input_prompt=row["input_prompt"],
@@ -752,6 +800,7 @@ class PostgresAgentRepository:
 
     def _row_to_channel_config(self, row: Dict[str, Any]) -> schemas.ChannelConfig:
         return schemas.ChannelConfig(
+            tenant_id=row["tenant_id"],
             channel=row["channel"],
             is_enabled=row.get("is_enabled", True),
             webhook_secret=row.get("webhook_secret"),
@@ -768,13 +817,18 @@ class PostgresAgentRepository:
 
 
 class InMemoryAgentRepository(AgentRepository):
-    def __init__(self) -> None:
+    def __init__(self, tenant_id: Optional[UUID] = None) -> None:
         self._agents: Dict[int, schemas.AgentDetail] = {}
         self._versions: Dict[int, List[schemas.AgentVersion]] = {}
         self._tests: Dict[int, List[schemas.AgentTestRecord]] = {}
         self._agent_id_seq = 1
         self._version_id_seq = 1
         self._test_id_seq = 1
+        self._tenant_id = tenant_id or uuid4()
+
+    @property
+    def tenant_id(self) -> UUID:
+        return self._tenant_id
 
     def list_agents(self) -> List[schemas.Agent]:
         agents = [schemas.Agent(**agent.model_dump()) for agent in self._agents.values()]
@@ -828,6 +882,7 @@ class InMemoryAgentRepository(AgentRepository):
         slug = self._make_unique_slug(payload.name)
         detail = schemas.AgentDetail(
             id=agent_id,
+            tenant_id=self._tenant_id,
             slug=slug,
             name=payload.name,
             description=payload.description,
@@ -899,6 +954,7 @@ class InMemoryAgentRepository(AgentRepository):
         version_number = versions[-1].version + 1 if versions else 1
         version = schemas.AgentVersion(
             id=self._version_id_seq,
+            tenant_id=self._tenant_id,
             agent_id=agent_id,
             version=version_number,
             label=payload.label,
@@ -926,6 +982,7 @@ class InMemoryAgentRepository(AgentRepository):
     def record_test(self, payload: schemas.AgentTestRecordCreate) -> schemas.AgentTestRecord:
         record = schemas.AgentTestRecord(
             id=self._test_id_seq,
+            tenant_id=self._tenant_id,
             agent_id=payload.agent_id,
             agent_version_id=payload.agent_version_id,
             input_prompt=payload.input_prompt,
@@ -955,16 +1012,18 @@ class InMemoryAgentRepository(AgentRepository):
 # Service factory helpers
 
 
-def create_postgres_service(connection: psycopg.Connection) -> AgentService:
-    repository = PostgresAgentRepository(connection)
-    return AgentService(repository)
+def create_postgres_service(
+    connection: psycopg.Connection, *, tenant_id: Optional[UUID] = None
+) -> AgentService:
+    repository = PostgresAgentRepository(connection, tenant_id=tenant_id)
+    return AgentService(repository, tenant_id=tenant_id)
 
 
 @contextmanager
-def service_context_from_dsn(dsn: str) -> Iterator[AgentService]:
+def service_context_from_dsn(dsn: str, *, tenant_id: Optional[UUID] = None) -> Iterator[AgentService]:
     conn = psycopg.connect(dsn)
     try:
-        service = create_postgres_service(conn)
+        service = create_postgres_service(conn, tenant_id=tenant_id)
         yield service
         conn.commit()
     except Exception:
