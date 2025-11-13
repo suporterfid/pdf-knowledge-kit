@@ -123,6 +123,17 @@ Instrumentator().instrument(app).expose(
 client = OpenAI() if (OpenAI and os.getenv("OPENAI_API_KEY")) else None
 
 
+def _resolve_request_tenant(request: Request) -> str:
+    tenant = getattr(request.state, "tenant_id", None)
+    if not tenant:
+        tenant = request.headers.get("X-Debug-Tenant")
+    if not tenant:
+        tenant = os.getenv("TENANT_ID")
+    if not tenant:
+        raise HTTPException(status_code=400, detail="Tenant identifier is required")
+    return str(tenant)
+
+
 async def remove_file_after_ttl(path: str, ttl: int) -> None:
     """Delete a temporary uploaded file after a time-to-live (seconds).
 
@@ -242,13 +253,14 @@ async def upload(
 
 
 @app.post("/api/ask")
-async def ask(req: AskRequest):
+async def ask(req: AskRequest, request: Request):
     """Answer a question using RAG.
 
     Retrieves the most relevant chunks (vector search + reranker) to build a
     context string, then generates the final answer with or without LLM.
     """
-    context, sources = build_context(req.q, req.k)
+    tenant_id = _resolve_request_tenant(request)
+    context, sources = build_context(req.q, req.k, tenant_id=tenant_id)
     answer, used_llm = _answer_with_context(req.q, context)
     return {"answer": answer, "sources": sources, "used_llm": used_llm}
 
@@ -349,9 +361,11 @@ async def chat_stream(
     context = ""
     sources: List[Dict] = []
 
+    tenant_id = _resolve_request_tenant(request)
+
     async def token_iter():
         nonlocal usage, context, sources
-        context_db, sources_db = build_context(combined_q, k)
+        context_db, sources_db = build_context(combined_q, k, tenant_id=tenant_id)
         if attachment_context:
             context = attachment_context + ("\n\n" + context_db if context_db else "")
             sources = attachment_sources + sources_db
