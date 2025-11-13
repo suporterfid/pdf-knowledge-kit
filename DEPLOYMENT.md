@@ -165,6 +165,13 @@ GitHub Actions provides multiple workflows for CI/CD:
 
 - **`.github/workflows/release.yml`**: Automated release workflow triggered by version tags (e.g., `v1.0.0`). Builds multi-platform Docker images, publishes to GitHub Container Registry, and creates GitHub Releases with automated changelog extraction.
 
+#### Registry credentials and image naming
+
+- **GitHub Container Registry (GHCR)**: The workflow authenticates with `docker/login-action` using the default `GITHUB_TOKEN`. Confirm that *Settings → Actions → General → Workflow permissions* is set to “Read and write” for packages, otherwise pushes to `ghcr.io/${owner}/${repo}` will fail.【F:.github/workflows/release.yml†L10-L13】【F:.github/workflows/release.yml†L70-L78】
+- **Docker Hub (optional)**: Create two repository secrets named `DOCKER_USERNAME` and `DOCKER_PASSWORD`. When both are populated, the workflow logs into `docker.io` and publishes images under `docker.io/<DOCKER_USERNAME>/pdf-knowledge-kit`. Leaving either secret empty skips the Docker Hub login and publishing step automatically.【F:.github/workflows/release.yml†L80-L103】
+- **Updating image names**: If the image name changes (e.g., different repository on Docker Hub), edit the `Prepare image registry targets` step and adjust the `dockerhub` output accordingly so the metadata action emits the right tags. Keep the GHCR line unless you intend to disable that registry entirely.【F:.github/workflows/release.yml†L92-L103】
+- **Tag formats**: Tags follow semantic version patterns (`{{version}}`, `{{major}}.{{minor}}`, `{{major}}`) plus `latest` for stable releases. Pushing a tag like `v1.2.0` will therefore produce `1.2.0`, `1.2`, `1`, and `latest` (if not a pre-release).【F:.github/workflows/release.yml†L104-L108】
+
 ### Release Process
 
 For detailed information on creating releases, see:
