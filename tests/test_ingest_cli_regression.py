@@ -1,10 +1,7 @@
-import pathlib
+import runpy
 from uuid import uuid4
 
-
 TEST_TENANT_ID = uuid4()
-
-import runpy
 
 
 def test_cli_invokes_service(tmp_path, monkeypatch):
@@ -39,13 +36,20 @@ def test_cli_invokes_service(tmp_path, monkeypatch):
     monkeypatch.setattr(svc, "reindex_source", fake_reindex)
     monkeypatch.setattr(svc, "wait_for_job", lambda job_id: None)
 
-    mod["main"]([
-        "--docs", str(docs_dir),
-        "--url", "http://a",
-        "--urls-file", str(urls_file),
-        "--tenant-id", str(TEST_TENANT_ID),
-        "--reindex", str(sid),
-    ])
+    mod["main"](
+        [
+            "--docs",
+            str(docs_dir),
+            "--url",
+            "http://a",
+            "--urls-file",
+            str(urls_file),
+            "--tenant-id",
+            str(TEST_TENANT_ID),
+            "--reindex",
+            str(sid),
+        ]
+    )
 
     assert called["local"] == [doc]
     assert called["urls"] == ["http://a", "http://b"]

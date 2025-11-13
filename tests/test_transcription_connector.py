@@ -7,7 +7,6 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-
 from app.ingestion.connectors.transcription import (
     TranscriptionConnector,
     TranscriptionResult,
@@ -43,12 +42,20 @@ def _make_source(audio_path: Path, **overrides: Any) -> Source:
     return Source(**payload)
 
 
-def test_transcription_connector_mock_segments(tmp_path: Path, audio_fixture: Path) -> None:
+def test_transcription_connector_mock_segments(
+    tmp_path: Path, audio_fixture: Path
+) -> None:
     params = {
         "provider": "mock",
         "cache_dir": str(tmp_path / "cache"),
         "segments": [
-            {"text": "Hello", "start": 0.0, "end": 1.0, "speaker": "A", "confidence": 0.9},
+            {
+                "text": "Hello",
+                "start": 0.0,
+                "end": 1.0,
+                "speaker": "A",
+                "confidence": 0.9,
+            },
             {"text": "World", "start": 1.0, "end": 2.0},
         ],
         "extra_metadata": {"topic": "greeting"},
@@ -69,22 +76,31 @@ def test_transcription_connector_mock_segments(tmp_path: Path, audio_fixture: Pa
     assert second_chunk.extra["transcript_index"] == 2
     assert record.document_sync_state["media_checksum"]
     assert connector.job_metadata["segments"] == 2
-    assert connector.next_sync_state["media_checksum"] == record.document_sync_state["media_checksum"]
+    assert (
+        connector.next_sync_state["media_checksum"]
+        == record.document_sync_state["media_checksum"]
+    )
 
 
-def test_transcription_connector_with_custom_provider(monkeypatch, tmp_path: Path, audio_fixture: Path) -> None:
+def test_transcription_connector_with_custom_provider(
+    monkeypatch, tmp_path: Path, audio_fixture: Path
+) -> None:
     class FakeProvider:
         name = "whisper"
 
         def __init__(self) -> None:
             self.called_with: tuple[Path, str] | None = None
 
-        def transcribe(self, media_path: Path, *, media_uri: str, config, cancel_event=None):
+        def transcribe(
+            self, media_path: Path, *, media_uri: str, config, cancel_event=None
+        ):
             self.called_with = (media_path, media_uri)
             return TranscriptionResult(
                 segments=[
                     TranscriptionSegment(text="Segment one", start=0.0, end=1.2),
-                    TranscriptionSegment(text="Segment two", start=1.2, end=2.5, confidence=0.8),
+                    TranscriptionSegment(
+                        text="Segment two", start=1.2, end=2.5, confidence=0.8
+                    ),
                 ],
                 metadata={
                     "provider": "whisper",

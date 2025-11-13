@@ -1,11 +1,13 @@
 """Telegram channel adapter."""
+
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, Mapping
+from typing import Any
 
-from .base import ChannelAdapter
 from ..conversations.models import NormalizedMessage
+from .base import ChannelAdapter
 
 
 class TelegramAdapter(ChannelAdapter):
@@ -39,7 +41,10 @@ class TelegramAdapter(ChannelAdapter):
             message = callback.get("message") or {}
             chat = message.get("chat", {})
             user = callback.get("from") or {}
-            sent_at = datetime.fromtimestamp(callback.get("date", datetime.now(timezone.utc).timestamp()), tz=timezone.utc)
+            sent_at = datetime.fromtimestamp(
+                callback.get("date", datetime.now(timezone.utc).timestamp()),
+                tz=timezone.utc,
+            )
             yield NormalizedMessage(
                 agent_id=self.agent_id,
                 channel=self.channel_name,
@@ -69,7 +74,7 @@ class TelegramAdapter(ChannelAdapter):
             sent_at = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         else:
             sent_at = datetime.now(timezone.utc)
-        metadata: Dict[str, Any] = {
+        metadata: dict[str, Any] = {
             "message_id": message.get("message_id"),
             "entities": message.get("entities"),
             "chat": chat,
@@ -88,6 +93,9 @@ class TelegramAdapter(ChannelAdapter):
         )
 
     def _display_name(self, user: Mapping[str, Any]) -> str:
-        return user.get("username") or " ".join(
-            filter(None, [user.get("first_name"), user.get("last_name")])
-        ).strip()
+        return (
+            user.get("username")
+            or " ".join(
+                filter(None, [user.get("first_name"), user.get("last_name")])
+            ).strip()
+        )

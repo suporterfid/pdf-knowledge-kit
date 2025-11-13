@@ -3,15 +3,14 @@ from uuid import uuid4
 
 import psycopg
 import pytest
-from pgvector.psycopg import register_vector
-
 from app import rag
-
+from pgvector.psycopg import register_vector
 
 TEST_TENANT = "tenant-a"
 
 
 # Helper to get a database connection or skip the test if unavailable
+
 
 def _set_tenant(conn: psycopg.Connection, tenant_id: str | None) -> None:
     if tenant_id is None:
@@ -23,7 +22,9 @@ def _set_tenant(conn: psycopg.Connection, tenant_id: str | None) -> None:
 
 
 def _get_conn(*, tenant_id: str | None = None):
-    url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+    url = os.getenv(
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
+    )
     try:
         conn = psycopg.connect(url)
     except Exception:

@@ -29,7 +29,10 @@ def test_access_logging_request_id_and_scrubbing(caplog, monkeypatch):
     monkeypatch.setenv("LOG_REQUEST_BODIES", "true")
     app = _create_app()
 
-    with TestClient(app) as client, caplog.at_level(logging.INFO, logger="uvicorn.access"):
+    with (
+        TestClient(app) as client,
+        caplog.at_level(logging.INFO, logger="uvicorn.access"),
+    ):
         resp = client.post(
             "/echo",
             json={"token": "secret", "a": 1},
@@ -49,4 +52,3 @@ def test_access_logging_request_id_and_scrubbing(caplog, monkeypatch):
         caplog.clear()
         client.get("/api/health")
         assert len(caplog.records) == 0
-

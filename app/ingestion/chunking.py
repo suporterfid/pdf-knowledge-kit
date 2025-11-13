@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Dict, List
-
 from .parsers import Chunk
 
 
@@ -15,32 +13,32 @@ def chunk_text(
     page_number: int | None = None,
     sheet_name: str | None = None,
     row_number: int | None = None,
-    extra_metadata: Dict[str, object] | None = None,
+    extra_metadata: dict[str, object] | None = None,
     max_chars: int = 1200,
     overlap: int = 200,
-) -> List[Chunk]:
+) -> list[Chunk]:
     """Split text into :class:`Chunk` objects with optional metadata."""
 
     if not text:
         return []
     text = text.replace("\r", "")
     parts = text.split("\n\n")
-    text_chunks: List[str] = []
+    text_chunks: list[str] = []
     buf = ""
     for part in parts:
         if len(buf) + len(part) + 2 <= max_chars:
-            buf += (("\n\n" if buf else "") + part)
+            buf += ("\n\n" if buf else "") + part
         else:
             if buf:
                 text_chunks.append(buf.strip())
             buf = part
             while len(buf) > max_chars:
                 text_chunks.append(buf[:max_chars].strip())
-                buf = buf[max_chars - overlap:]
+                buf = buf[max_chars - overlap :]
     if buf:
         text_chunks.append(buf.strip())
 
-    normalized: List[str] = []
+    normalized: list[str] = []
     for i, ch in enumerate(text_chunks):
         if i == 0:
             normalized.append(ch)
@@ -66,4 +64,3 @@ def chunk_text(
 
 
 __all__ = ["chunk_text"]
-

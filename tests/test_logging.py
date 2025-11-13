@@ -1,13 +1,12 @@
 import json
 import logging
 import tempfile
-from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 
 import pytest
-from starlette.testclient import TestClient
-
 from app.app_logging import init_logging
+from starlette.testclient import TestClient
 
 
 def _clear_handlers(name: str) -> logging.Logger:

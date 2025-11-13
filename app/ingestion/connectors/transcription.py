@@ -9,11 +9,12 @@ import os
 import shutil
 import tempfile
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Event
-from typing import Any, Dict, Iterable, List, Optional, Protocol
+from typing import Any, Protocol
 from uuid import uuid4
 
 import requests
@@ -41,7 +42,6 @@ from ..models import Source, TranscriptionSourceParams
 from ..parsers import Chunk
 from . import ConnectorRecord
 
-
 # ---------------------------------------------------------------------------
 # Dataclasses and result containers
 # ---------------------------------------------------------------------------
@@ -57,8 +57,8 @@ class TranscriptionSegment:
     speaker: str | None = None
     confidence: float | None = None
 
-    def to_metadata(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
+    def to_metadata(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "transcript_start": self.start,
             "transcript_end": self.end,
             "transcript_speaker": self.speaker,
@@ -71,8 +71,8 @@ class TranscriptionSegment:
 class TranscriptionResult:
     """Container returned by providers with structured data."""
 
-    segments: List[TranscriptionSegment] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    segments: list[TranscriptionSegment] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class BaseTranscriptionProvider(Protocol):
@@ -87,8 +87,7 @@ class BaseTranscriptionProvider(Protocol):
         media_uri: str,
         config: TranscriptionSourceParams,
         cancel_event: Event | None = None,
-    ) -> TranscriptionResult:
-        ...
+    ) -> TranscriptionResult: ...
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +112,7 @@ class MockTranscriptionProvider:
         cancel_event: Event | None = None,
     ) -> TranscriptionResult:
         segments_config = config.get("segments") or self._config.get("segments") or []
-        segments: List[TranscriptionSegment] = []
+        segments: list[TranscriptionSegment] = []
         for entry in segments_config:
             segments.append(
                 TranscriptionSegment(
@@ -132,9 +131,11 @@ class MockTranscriptionProvider:
                 or ""
             )
             if transcript_text:
-                segments = [TranscriptionSegment(text=transcript_text, start=0.0, end=None)]
+                segments = [
+                    TranscriptionSegment(text=transcript_text, start=0.0, end=None)
+                ]
 
-        metadata: Dict[str, Any] = {
+        metadata: dict[str, Any] = {
             "provider": self.name,
             "language": config.get("language") or self._config.get("language"),
         }
@@ -150,7 +151,9 @@ class WhisperLocalProvider:
 
     name = "whisper_local"
 
-    def __init__(self, config: TranscriptionSourceParams, logger: logging.Logger) -> None:
+    def __init__(
+        self, config: TranscriptionSourceParams, logger: logging.Logger
+    ) -> None:
         self._config = config
         self.logger = logger
         if _WHISPER_BACKEND == "unavailable":
@@ -170,14 +173,18 @@ class WhisperLocalProvider:
         diarization = config.get("diarization") or self._config.get("diarization")
 
         if _WHISPER_BACKEND == "faster_whisper":  # pragma: no cover - optional path
-            model_name = config.get("whisper_model") or self._config.get("whisper_model") or "base"
+            model_name = (
+                config.get("whisper_model")
+                or self._config.get("whisper_model")
+                or "base"
+            )
             compute_type = (
                 config.get("whisper_compute_type")
                 or self._config.get("whisper_compute_type")
                 or "int8"
             )
             model = WhisperModel(model_name, compute_type=compute_type)
-            segments: List[TranscriptionSegment] = []
+            segments: list[TranscriptionSegment] = []
             total_conf = 0.0
             count_conf = 0
             for segment in model.transcribe(str(media_path), language=language)[0]:
@@ -190,14 +197,18 @@ class WhisperLocalProvider:
                 segments.append(
                     TranscriptionSegment(
                         text=segment.text.strip(),
-                        start=float(segment.start) if segment.start is not None else None,
+                        start=(
+                            float(segment.start) if segment.start is not None else None
+                        ),
                         end=float(segment.end) if segment.end is not None else None,
                         speaker=None,
-                        confidence=float(confidence) if confidence is not None else None,
+                        confidence=(
+                            float(confidence) if confidence is not None else None
+                        ),
                     )
                 )
             avg_conf = total_conf / count_conf if count_conf else None
-            metadata: Dict[str, Any] = {
+            metadata: dict[str, Any] = {
                 "provider": self.name,
                 "backend": _WHISPER_BACKEND,
                 "language": language,
@@ -208,14 +219,24 @@ class WhisperLocalProvider:
             return TranscriptionResult(segments=segments, metadata=metadata)
 
         # pragma: no cover - optional openai whisper branch
-        model_name = config.get("whisper_model") or self._config.get("whisper_model") or "base"
+        model_name = (
+            config.get("whisper_model") or self._config.get("whisper_model") or "base"
+        )
         model = _openai_whisper.load_model(model_name)
         result = model.transcribe(str(media_path), language=language)
         segments = [
             TranscriptionSegment(
                 text=segment.get("text", "").strip(),
-                start=float(segment.get("start")) if segment.get("start") is not None else None,
-                end=float(segment.get("end")) if segment.get("end") is not None else None,
+                start=(
+                    float(segment.get("start"))
+                    if segment.get("start") is not None
+                    else None
+                ),
+                end=(
+                    float(segment.get("end"))
+                    if segment.get("end") is not None
+                    else None
+                ),
                 speaker=None,
                 confidence=None,
             )
@@ -236,7 +257,9 @@ class AwsTranscribeProvider:
 
     name = "aws_transcribe"
 
-    def __init__(self, config: TranscriptionSourceParams, logger: logging.Logger) -> None:
+    def __init__(
+        self, config: TranscriptionSourceParams, logger: logging.Logger
+    ) -> None:
         if boto3 is None:
             raise RuntimeError("AWS transcription requires 'boto3' to be installed")
         self._config = config
@@ -256,17 +279,23 @@ class AwsTranscribeProvider:
         params.update(config.get("aws_transcribe_params") or {})
 
         if not media_uri.startswith("s3://"):
-            raise ValueError("AWS Transcribe provider requires media_uri to be an s3:// URL")
+            raise ValueError(
+                "AWS Transcribe provider requires media_uri to be an s3:// URL"
+            )
 
         job_name = params.get("TranscriptionJobName") or (
-            (config.get("job_name_prefix") or self._config.get("job_name_prefix") or "transcription")
+            (
+                config.get("job_name_prefix")
+                or self._config.get("job_name_prefix")
+                or "transcription"
+            )
             + f"-{uuid4()}"
         )
         media_format = params.get("MediaFormat")
         if not media_format:
             suffix = Path(media_uri).suffix.lstrip(".")
             media_format = suffix or "mp3"
-        job_args: Dict[str, Any] = {
+        job_args: dict[str, Any] = {
             "TranscriptionJobName": job_name,
             "LanguageCode": params.get("LanguageCode")
             or config.get("language")
@@ -280,7 +309,9 @@ class AwsTranscribeProvider:
                 job_args[key] = value
 
         self.client.start_transcription_job(**job_args)
-        poll_seconds = config.get("poll_interval") or self._config.get("poll_interval") or 15.0
+        poll_seconds = (
+            config.get("poll_interval") or self._config.get("poll_interval") or 15.0
+        )
 
         while True:
             if cancel_event and cancel_event.is_set():
@@ -299,15 +330,21 @@ class AwsTranscribeProvider:
         resp.raise_for_status()
         payload = resp.json()
         items = payload.get("results", {}).get("items", [])
-        segments: List[TranscriptionSegment] = []
-        current_text_parts: List[str] = []
-        start_time: Optional[float] = None
-        end_time: Optional[float] = None
+        segments: list[TranscriptionSegment] = []
+        current_text_parts: list[str] = []
+        start_time: float | None = None
+        end_time: float | None = None
         for item in items:
             item_type = item.get("type")
             if item_type == "pronunciation":
-                start_time = float(item.get("start_time")) if item.get("start_time") else start_time
-                end_time = float(item.get("end_time")) if item.get("end_time") else end_time
+                start_time = (
+                    float(item.get("start_time"))
+                    if item.get("start_time")
+                    else start_time
+                )
+                end_time = (
+                    float(item.get("end_time")) if item.get("end_time") else end_time
+                )
                 alternatives = item.get("alternatives", [])
                 if alternatives:
                     current_text_parts.append(alternatives[0].get("content", ""))
@@ -322,7 +359,9 @@ class AwsTranscribeProvider:
                 if current_text_parts:
                     text = " ".join(part for part in current_text_parts if part)
                     segments.append(
-                        TranscriptionSegment(text=text.strip(), start=start_time, end=end_time)
+                        TranscriptionSegment(
+                            text=text.strip(), start=start_time, end=end_time
+                        )
                     )
                 current_text_parts = []
                 start_time = None
@@ -384,7 +423,9 @@ def _resolve_media(
         or (str(source.url) if source.url else None)
     )
     if not media_uri:
-        raise ValueError("Transcription sources require params.media_uri or source location")
+        raise ValueError(
+            "Transcription sources require params.media_uri or source location"
+        )
 
     if media_uri.startswith("s3://"):
         tmp_dir = Path(tempfile.mkdtemp(prefix="transcription-"))
@@ -416,7 +457,9 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _load_cached_segments(cache_path: Path, checksum: str) -> Optional[TranscriptionResult]:
+def _load_cached_segments(
+    cache_path: Path, checksum: str
+) -> TranscriptionResult | None:
     if not cache_path.exists():
         return None
     try:
@@ -439,7 +482,9 @@ def _load_cached_segments(cache_path: Path, checksum: str) -> Optional[Transcrip
     return TranscriptionResult(segments=segments, metadata=metadata)
 
 
-def _persist_cache(cache_path: Path, checksum: str, result: TranscriptionResult) -> None:
+def _persist_cache(
+    cache_path: Path, checksum: str, result: TranscriptionResult
+) -> None:
     payload = {
         "media_checksum": checksum,
         "segments": [
@@ -468,7 +513,7 @@ class TranscriptionConnector:
     def __init__(self, source: Source, *, logger: logging.Logger | None = None) -> None:
         self.source = source
         self.logger = logger or logging.getLogger(__name__)
-        params: TranscriptionSourceParams | Dict[str, Any] = source.params or {}
+        params: TranscriptionSourceParams | dict[str, Any] = source.params or {}
         self.params = params
         self.poll_interval = float(params.get("poll_interval") or 15.0)
         cache_dir = Path(params.get("cache_dir") or "tmp/transcriptions")
@@ -481,17 +526,19 @@ class TranscriptionConnector:
             or (str(source.url) if source.url else None)
             or str(source.id)
         )
-        safe_name = "".join(c if c.isalnum() or c in ("-", "_") else "-" for c in cache_key)
+        safe_name = "".join(
+            c if c.isalnum() or c in ("-", "_") else "-" for c in cache_key
+        )
         self.cache_path = cache_dir / f"{safe_name}.json"
 
         provider_name = (params.get("provider") or "whisper_local").lower()
         self.provider = self._create_provider(provider_name)
 
-        self.job_metadata: Dict[str, Any] = {
+        self.job_metadata: dict[str, Any] = {
             "provider": provider_name,
             "segments": 0,
         }
-        self.next_sync_state: Dict[str, Any] = dict(source.sync_state or {})
+        self.next_sync_state: dict[str, Any] = dict(source.sync_state or {})
 
     # ------------------------------------------------------------------
     # Provider factory
@@ -533,7 +580,9 @@ class TranscriptionConnector:
                 result = _load_cached_segments(self.cache_path, checksum)
 
             if result is None:
-                self.logger.info("running transcription provider=%s", self.provider.name)
+                self.logger.info(
+                    "running transcription provider=%s", self.provider.name
+                )
                 result = self.provider.transcribe(
                     media_path,
                     media_uri=media_uri,
@@ -551,14 +600,16 @@ class TranscriptionConnector:
                 self.logger.warning("no segments produced for %s", media_uri)
                 return
 
-            total_text = "\n".join(segment.text for segment in result.segments if segment.text)
+            total_text = "\n".join(
+                segment.text for segment in result.segments if segment.text
+            )
             mime_type = (
                 self.params.get("output_mime_type")
                 or result.metadata.get("mime_type")
                 or "text/plain+transcript"
             )
 
-            chunks: List[Chunk] = []
+            chunks: list[Chunk] = []
             for idx, segment in enumerate(result.segments, start=1):
                 extra = {
                     **(result.metadata.get("chunk_extra", {}) or {}),
@@ -626,9 +677,12 @@ class TranscriptionConnector:
             if should_cleanup:
                 try:
                     shutil.rmtree(media_path.parent)
-                except Exception:  # pragma: no cover - best effort cleanup
-                    pass
+                except Exception as exc:  # pragma: no cover - best effort cleanup
+                    self.logger.debug(
+                        "Failed to clean up transcription cache %s: %s",
+                        media_path.parent,
+                        exc,
+                    )
 
 
 __all__ = ["TranscriptionConnector", "TranscriptionSegment", "TranscriptionResult"]
-

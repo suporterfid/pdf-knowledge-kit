@@ -1,29 +1,34 @@
 from __future__ import annotations
 
+# ruff: noqa: S101
+from collections.abc import Iterable
 from datetime import datetime
 from threading import Event
-from typing import Any, Dict, Iterable, List
+from typing import Any
 from uuid import uuid4
 
 import pytest
-
 from app.ingestion.connectors.sql import SqlConnector
 from app.ingestion.models import Source, SourceType
 from app.ingestion.parsers import Chunk
 
 
 class _FakeCursor:
-    def __init__(self, rows: Iterable[Dict[str, Any]], executions: List[tuple[str, Dict[str, Any] | None]]):
+    def __init__(
+        self,
+        rows: Iterable[dict[str, Any]],
+        executions: list[tuple[str, dict[str, Any] | None]],
+    ):
         self._rows = list(rows)
         self._executions = executions
 
-    def __enter__(self) -> "_FakeCursor":
+    def __enter__(self) -> _FakeCursor:
         return self
 
     def __exit__(self, *exc: object) -> bool:
         return False
 
-    def execute(self, sql: str, params: Dict[str, Any] | None = None) -> None:
+    def execute(self, sql: str, params: dict[str, Any] | None = None) -> None:
         self._executions.append((sql, params))
 
     def __iter__(self):
@@ -31,11 +36,11 @@ class _FakeCursor:
 
 
 class _FakeConnection:
-    def __init__(self, row_batches: List[List[Dict[str, Any]]]):
+    def __init__(self, row_batches: list[list[dict[str, Any]]]):
         self._row_batches = list(row_batches)
-        self.executions: List[tuple[str, Dict[str, Any] | None]] = []
+        self.executions: list[tuple[str, dict[str, Any] | None]] = []
 
-    def __enter__(self) -> "_FakeConnection":
+    def __enter__(self) -> _FakeConnection:
         return self
 
     def __exit__(self, *exc: object) -> bool:
@@ -48,7 +53,7 @@ class _FakeConnection:
 
 @pytest.fixture()
 def fake_chunk(monkeypatch):
-    captured: List[Dict[str, Any]] = []
+    captured: list[dict[str, Any]] = []
 
     def _chunk(text: str, **kwargs: Any):
         metadata = kwargs.get("extra_metadata") or {}
@@ -75,7 +80,9 @@ def test_sql_connector_streams_rows_and_updates_state(monkeypatch, fake_chunk):
         "category": "announcements",
     }
     fake_conn = _FakeConnection([[row]])
-    monkeypatch.setattr("app.ingestion.connectors.sql.psycopg.connect", lambda *a, **k: fake_conn)
+    monkeypatch.setattr(
+        "app.ingestion.connectors.sql.psycopg.connect", lambda *a, **k: fake_conn
+    )
 
     source = Source(
         id=uuid4(),
@@ -120,7 +127,9 @@ def test_sql_connector_streams_rows_and_updates_state(monkeypatch, fake_chunk):
     assert fake_chunk[0]["extra_metadata"]["connector"] == "sql"
     assert fake_chunk[0]["extra_metadata"]["query"] == "recent"
     assert fake_chunk[0]["extra_metadata"]["row_id"] == row["id"]
-    assert fake_chunk[0]["extra_metadata"]["updated_at"] == row["updated_at"].isoformat()
+    assert (
+        fake_chunk[0]["extra_metadata"]["updated_at"] == row["updated_at"].isoformat()
+    )
     assert fake_chunk[0]["extra_metadata"]["category"] == "announcements"
     assert fake_chunk[0]["source_path"] == "recent/7"
 
@@ -129,7 +138,10 @@ def test_sql_connector_streams_rows_and_updates_state(monkeypatch, fake_chunk):
     assert executed_params == {"limit": 50, "since": "2023-12-01T00:00:00"}
 
     assert connector.job_metadata == {"queries": 1, "rows": 1, "chunks": 1}
-    assert connector.next_sync_state["queries"]["recent"]["cursor"] == row["updated_at"].isoformat()
+    assert (
+        connector.next_sync_state["queries"]["recent"]["cursor"]
+        == row["updated_at"].isoformat()
+    )
 
 
 def test_sql_connector_honours_cancellation(monkeypatch, fake_chunk):
@@ -138,7 +150,9 @@ def test_sql_connector_honours_cancellation(monkeypatch, fake_chunk):
         {"id": 2, "body": "B", "updated_at": datetime(2024, 1, 1, 0, 1)},
     ]
     fake_conn = _FakeConnection([rows])
-    monkeypatch.setattr("app.ingestion.connectors.sql.psycopg.connect", lambda *a, **k: fake_conn)
+    monkeypatch.setattr(
+        "app.ingestion.connectors.sql.psycopg.connect", lambda *a, **k: fake_conn
+    )
 
     source = Source(
         id=uuid4(),
@@ -167,4 +181,7 @@ def test_sql_connector_honours_cancellation(monkeypatch, fake_chunk):
         cancel.set()
 
     assert len(emitted) == 1
-    assert connector.next_sync_state["queries"]["recent"]["cursor"] == rows[0]["updated_at"].isoformat()
+    assert (
+        connector.next_sync_state["queries"]["recent"]["cursor"]
+        == rows[0]["updated_at"].isoformat()
+    )

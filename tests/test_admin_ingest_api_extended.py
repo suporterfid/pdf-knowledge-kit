@@ -2,9 +2,6 @@ import importlib
 from datetime import datetime
 from uuid import UUID, uuid4
 
-import pytest
-from fastapi.testclient import TestClient
-
 from app.ingestion.models import (
     Job,
     JobLogSlice,
@@ -12,14 +9,18 @@ from app.ingestion.models import (
     Source,
     SourceType,
 )
+from fastapi.testclient import TestClient
 
 
 def create_client(monkeypatch, tenant_auth):
     import app.security.auth as auth
+
     importlib.reload(auth)
     import app.routers.admin_ingest_api as admin_api
+
     importlib.reload(admin_api)
     import app.main as main
+
     importlib.reload(main)
     return TestClient(main.app), admin_api, tenant_auth
 
@@ -30,9 +31,7 @@ def test_start_local_job_auth_validation(monkeypatch, tenant_auth):
     monkeypatch.setattr(admin_api.service, "ingest_local", lambda *a, **k: dummy_id)
 
     # missing key
-    res = client.post(
-        "/api/admin/ingest/local", json={"path": "/tmp/a"}
-    )
+    res = client.post("/api/admin/ingest/local", json={"path": "/tmp/a"})
     assert res.status_code == 401
 
     # viewer forbidden
@@ -86,6 +85,7 @@ def test_sources_crud_and_reindex(monkeypatch, tenant_auth):
     class DummyConn:
         def __enter__(self):
             return self
+
         def __exit__(self, *exc):
             return False
 
@@ -127,6 +127,7 @@ def test_sources_crud_and_reindex(monkeypatch, tenant_auth):
         lambda conn, sid, **kwargs: sources.pop(sid, None),
     )
     called = {}
+
     def fake_reindex(sid, *, tenant_id):
         called["rid"] = sid
         called["rid_tenant"] = tenant_id
@@ -266,6 +267,7 @@ def test_rerun_job_endpoint(monkeypatch, tenant_auth):
     client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     orig = uuid4()
     new_id = uuid4()
+
     def fake_rerun(jid, *, tenant_id):
         assert tenant_id == auth_ctx.organization_id
         return new_id
@@ -357,6 +359,7 @@ def test_sources_pagination_filters(monkeypatch, tenant_auth):
     class DummyConn:
         def __enter__(self):
             return self
+
         def __exit__(self, *exc):
             return False
 

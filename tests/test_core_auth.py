@@ -6,9 +6,6 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
-from fastapi import Depends, FastAPI
-from fastapi.testclient import TestClient
-
 from app.core.auth import (
     TenantTokenConfigurationError,
     TenantTokenPayload,
@@ -16,6 +13,8 @@ from app.core.auth import (
     decode_tenant_token,
     get_tenant_context,
 )
+from fastapi import Depends, FastAPI
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture()
@@ -82,7 +81,9 @@ def test_decode_tenant_token_requires_access_type(token_env: None) -> None:
         decode_tenant_token(token)
 
 
-def test_decode_tenant_token_configuration_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_decode_tenant_token_configuration_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Missing configuration raises a configuration error."""
 
     monkeypatch.delenv("TENANT_TOKEN_SECRET", raising=False)
@@ -99,7 +100,9 @@ def _create_test_client() -> TestClient:
     app = FastAPI()
 
     @app.get("/tenant")
-    async def read_tenant(payload: TenantTokenPayload = Depends(get_tenant_context)) -> TenantTokenPayload:
+    async def read_tenant(
+        payload: TenantTokenPayload = Depends(get_tenant_context),
+    ) -> TenantTokenPayload:
         return payload
 
     return TestClient(app)
@@ -149,7 +152,9 @@ def test_get_tenant_context_invalid_signature(token_env: None) -> None:
     assert response.status_code == 401
 
 
-def test_get_tenant_context_configuration_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_tenant_context_configuration_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Configuration issues propagate as HTTP 500 errors."""
 
     monkeypatch.delenv("TENANT_TOKEN_SECRET", raising=False)

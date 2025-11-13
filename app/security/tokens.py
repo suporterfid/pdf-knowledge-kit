@@ -7,8 +7,9 @@ import datetime as dt
 import hashlib
 import os
 import secrets
+from collections.abc import Iterable
 from functools import lru_cache
-from typing import Any, Iterable
+from typing import Any
 
 import jwt
 from sqlalchemy import select, update
@@ -82,7 +83,9 @@ def _user_roles(user: User) -> list[str]:
     return [role for role in roles if role]
 
 
-def create_access_token(user: User, *, settings: JWTSettings | None = None) -> tuple[str, dt.datetime]:
+def create_access_token(
+    user: User, *, settings: JWTSettings | None = None
+) -> tuple[str, dt.datetime]:
     """Issue a signed JWT access token for ``user``."""
 
     settings = settings or get_jwt_settings()
@@ -149,13 +152,17 @@ def verify_refresh_token(session: Session, raw_token: str) -> RefreshToken | Non
     return token
 
 
-def revoke_refresh_token(token: RefreshToken, *, when: dt.datetime | None = None) -> None:
+def revoke_refresh_token(
+    token: RefreshToken, *, when: dt.datetime | None = None
+) -> None:
     """Mark ``token`` as revoked."""
 
     token.revoked_at = when or _utcnow()
 
 
-def revoke_all_refresh_tokens(session: Session, user: User, *, when: dt.datetime | None = None) -> int:
+def revoke_all_refresh_tokens(
+    session: Session, user: User, *, when: dt.datetime | None = None
+) -> int:
     """Revoke every refresh token for ``user`` and return the count."""
 
     when = when or _utcnow()

@@ -1,7 +1,9 @@
 """Prompt template helpers for the agent service."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 
 class PromptTemplateStore:
@@ -23,8 +25,8 @@ class PromptTemplateStore:
         },
     }
 
-    def __init__(self, extra_templates: Optional[Mapping[str, Mapping[str, str]]] = None):
-        self._templates: Dict[str, Dict[str, str]] = {
+    def __init__(self, extra_templates: Mapping[str, Mapping[str, str]] | None = None):
+        self._templates: dict[str, dict[str, str]] = {
             key: dict(value) for key, value in self._DEFAULT_TEMPLATES.items()
         }
         if extra_templates:
@@ -32,12 +34,16 @@ class PromptTemplateStore:
                 merged = self._templates.setdefault(persona, {})
                 merged.update(mapping)
 
-    def resolve(self, persona: Optional[Dict[str, Any]], provider: str, custom_template: Optional[str]) -> str:
+    def resolve(
+        self, persona: dict[str, Any] | None, provider: str, custom_template: str | None
+    ) -> str:
         """Return the prompt template for the persona/provider combination."""
 
         if custom_template:
             return custom_template
-        persona_type = (persona or {}).get("type") or (persona or {}).get("persona") or "general"
+        persona_type = (
+            (persona or {}).get("type") or (persona or {}).get("persona") or "general"
+        )
         persona_type = str(persona_type).lower()
         provider_key = provider.lower()
         persona_templates = self._templates.get(persona_type)
@@ -49,7 +55,9 @@ class PromptTemplateStore:
         fallback = self._templates["general"]
         return fallback.get(provider_key) or fallback["default"]
 
-    def render(self, base_template: str, persona: Optional[Dict[str, Any]], user_input: str) -> str:
+    def render(
+        self, base_template: str, persona: dict[str, Any] | None, user_input: str
+    ) -> str:
         """Render the final prompt for preview/testing."""
 
         persona_instructions = ""
@@ -57,4 +65,6 @@ class PromptTemplateStore:
             traits = ", ".join(f"{k}: {v}" for k, v in persona.items() if k != "type")
             if traits:
                 persona_instructions = f"\nPersona traits: {traits}"
-        return f"{base_template}\nUser input: {user_input}{persona_instructions}".strip()
+        return (
+            f"{base_template}\nUser input: {user_input}{persona_instructions}".strip()
+        )

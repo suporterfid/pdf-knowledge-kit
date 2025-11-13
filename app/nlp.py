@@ -1,12 +1,13 @@
 """Lightweight NLP utilities for intent, entity and sentiment extraction."""
+
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from langdetect import detect, LangDetectException
+from langdetect import LangDetectException, detect
 
 _POSITIVE = {"great", "good", "awesome", "love", "thanks", "helpful"}
 _NEGATIVE = {"bad", "terrible", "angry", "hate", "upset", "cancel", "complain"}
@@ -20,14 +21,16 @@ _INTENT_PATTERNS = {
 
 _EMAIL_PATTERN = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 _AMOUNT_PATTERN = re.compile(r"\b\$?(\d+[.,]?\d*)\b")
-_DATETIME_PATTERN = re.compile(r"\b(?:tomorrow|next week|next monday|later today)\b", re.I)
+_DATETIME_PATTERN = re.compile(
+    r"\b(?:tomorrow|next week|next monday|later today)\b", re.I
+)
 
 
 @dataclass
 class NlpPipeline:
     """Deterministic NLP pipeline used across adapters and services."""
 
-    def analyse(self, text: str) -> Dict[str, Any]:
+    def analyse(self, text: str) -> dict[str, Any]:
         text = text or ""
         lowered = text.lower()
         intent_label = "unknown"
@@ -50,7 +53,7 @@ class NlpPipeline:
             "language": language,
         }
 
-    def _sentiment(self, lowered: str) -> Dict[str, Any]:
+    def _sentiment(self, lowered: str) -> dict[str, Any]:
         positives = sum(1 for token in _POSITIVE if token in lowered)
         negatives = sum(1 for token in _NEGATIVE if token in lowered)
         score = 0.0
@@ -67,8 +70,8 @@ class NlpPipeline:
             score = min(score, 1.0)
         return {"label": label, "score": abs(score)}
 
-    def _entities(self, text: str) -> List[Dict[str, Any]]:
-        entities: List[Dict[str, Any]] = []
+    def _entities(self, text: str) -> list[dict[str, Any]]:
+        entities: list[dict[str, Any]] = []
         for match in _EMAIL_PATTERN.finditer(text):
             entities.append(
                 {
@@ -108,7 +111,7 @@ class NlpPipeline:
             )
         return entities
 
-    def _language(self, text: str) -> Optional[str]:
+    def _language(self, text: str) -> str | None:
         try:
             return detect(text) if text else None
         except LangDetectException:

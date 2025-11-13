@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
 from threading import Event
-from typing import Any, Dict, Iterable, List
+from typing import Any
 from urllib.parse import urljoin
 
 import requests
@@ -29,7 +30,7 @@ class RestConnector:
         self.source = source
         self.logger = logger or logging.getLogger(__name__)
         self.session = session or requests.Session()
-        params: ApiSourceParams | Dict[str, Any] = source.params or {}
+        params: ApiSourceParams | dict[str, Any] = source.params or {}
         endpoint = params.get("endpoint")
         if not endpoint and not source.url:
             raise ValueError("REST connector requires params.endpoint or source.url")
@@ -38,8 +39,12 @@ class RestConnector:
             self._endpoint_url = endpoint
         elif endpoint:
             if not base_url:
-                raise ValueError("REST connector requires params.base_url when endpoint is relative")
-            self._endpoint_url = urljoin(base_url.rstrip("/") + "/", endpoint.lstrip("/"))
+                raise ValueError(
+                    "REST connector requires params.base_url when endpoint is relative"
+                )
+            self._endpoint_url = urljoin(
+                base_url.rstrip("/") + "/", endpoint.lstrip("/")
+            )
         else:
             self._endpoint_url = base_url
 
@@ -54,13 +59,12 @@ class RestConnector:
         self._timestamp_field = params.get("timestamp_field")
         self._mime_type = params.get("mime_type") or "application/json"
         self._document_template = (
-            params.get("document_path_template")
-            or "{endpoint}/{id}"
+            params.get("document_path_template") or "{endpoint}/{id}"
         )
 
         base_state = dict(source.sync_state or {})
-        self.next_sync_state: Dict[str, Any] = dict(base_state)
-        self.job_metadata: Dict[str, Any] = {
+        self.next_sync_state: dict[str, Any] = dict(base_state)
+        self.job_metadata: dict[str, Any] = {
             "pages": 0,
             "records": 0,
             "chunks": 0,
@@ -70,7 +74,7 @@ class RestConnector:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _prepare_headers(self, headers: Dict[str, str]) -> Dict[str, str]:
+    def _prepare_headers(self, headers: dict[str, str]) -> dict[str, str]:
         prepared = dict(headers)
         credentials = self.source.credentials or {}
         if isinstance(credentials, dict):
@@ -101,7 +105,7 @@ class RestConnector:
         if not path:
             return payload
         current = payload
-        for part in path.split('.'):
+        for part in path.split("."):
             if isinstance(current, dict) and part in current:
                 current = current[part]
             elif isinstance(current, list):
@@ -117,20 +121,22 @@ class RestConnector:
                 return None
         return current
 
-    def _prepare_request(self, cursor: Any, page: int | None) -> Dict[str, Any]:
+    def _prepare_request(self, cursor: Any, page: int | None) -> dict[str, Any]:
         params = dict(self._query_params)
         pagination_type = self._pagination.get("type", "cursor")
         if pagination_type == "cursor" and cursor is not None:
             params[self._pagination.get("cursor_param", "cursor")] = cursor
         elif pagination_type == "page" and page is not None:
             params[self._pagination.get("page_param", "page")] = page
-            if self._pagination.get("page_size_param") and self._pagination.get("page_size"):
+            if self._pagination.get("page_size_param") and self._pagination.get(
+                "page_size"
+            ):
                 params.setdefault(
                     self._pagination["page_size_param"],
                     self._pagination["page_size"],
                 )
 
-        request_kwargs: Dict[str, Any] = {"headers": self._headers, "timeout": 30}
+        request_kwargs: dict[str, Any] = {"headers": self._headers, "timeout": 30}
         if self._method in {"GET", "DELETE"}:
             request_kwargs["params"] = params
         else:
@@ -153,8 +159,12 @@ class RestConnector:
             if cancel_event and cancel_event.is_set():
                 break
 
-            request_kwargs = self._prepare_request(cursor, page if pagination_type == "page" else None)
-            response = self.session.request(self._method, self._endpoint_url, **request_kwargs)
+            request_kwargs = self._prepare_request(
+                cursor, page if pagination_type == "page" else None
+            )
+            response = self.session.request(
+                self._method, self._endpoint_url, **request_kwargs
+            )
             response.raise_for_status()
             payload = response.json()
             self.job_metadata["pages"] += 1
@@ -163,13 +173,15 @@ class RestConnector:
             if records is None:
                 records = []
             if not isinstance(records, list):
-                raise ValueError("REST connector expects the records_path to resolve to a list")
+                raise ValueError(
+                    "REST connector expects the records_path to resolve to a list"
+                )
 
             for record in records:
                 if cancel_event and cancel_event.is_set():
                     break
 
-                text_parts: List[str] = []
+                text_parts: list[str] = []
                 for field in self._text_fields:
                     value = self._lookup(record, field)
                     if value is not None:
@@ -181,7 +193,9 @@ class RestConnector:
 
                 record_id = self._lookup(record, self._id_field)
                 if record_id is None:
-                    raise ValueError("REST connector requires id_field to be present in records")
+                    raise ValueError(
+                        "REST connector requires id_field to be present in records"
+                    )
 
                 timestamp_value = None
                 if self._timestamp_field:
@@ -192,7 +206,7 @@ class RestConnector:
                     id=record_id,
                 )
 
-                extra_metadata: Dict[str, Any] = {
+                extra_metadata: dict[str, Any] = {
                     "connector": "rest",
                     "endpoint": self._endpoint_url,
                     "record_id": self._json_safe(record_id),
@@ -234,7 +248,9 @@ class RestConnector:
 
             # Pagination cursor update
             if pagination_type == "cursor":
-                next_cursor = self._lookup(payload, self._pagination.get("next_cursor_path", "next"))
+                next_cursor = self._lookup(
+                    payload, self._pagination.get("next_cursor_path", "next")
+                )
                 if not next_cursor or next_cursor == cursor:
                     self.next_sync_state["cursor"] = self._json_safe(next_cursor)
                     break
@@ -251,4 +267,3 @@ class RestConnector:
 
 
 __all__ = ["RestConnector"]
-

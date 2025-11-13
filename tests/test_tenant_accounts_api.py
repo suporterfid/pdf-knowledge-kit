@@ -1,18 +1,20 @@
 import importlib
 from uuid import uuid4
 
+from app.models import RefreshToken, User
 from fastapi.testclient import TestClient
 from sqlalchemy import select
-
-from app.models import RefreshToken, User
 
 
 def create_client(monkeypatch, tenant_auth):
     import app.security.auth as security_auth
+
     importlib.reload(security_auth)
     import app.routers.tenant_accounts as tenant_router
+
     importlib.reload(tenant_router)
     import app.main as main
+
     importlib.reload(main)
     return TestClient(main.app)
 
@@ -36,7 +38,10 @@ def test_register_login_refresh_logout(monkeypatch, tenant_auth):
 
     login_response = client.post(
         "/api/tenant/accounts/login",
-        json={"email": register_payload["admin_email"], "password": register_payload["password"]},
+        json={
+            "email": register_payload["admin_email"],
+            "password": register_payload["password"],
+        },
     )
     assert login_response.status_code == 200
     login_data = login_response.json()
@@ -91,7 +96,11 @@ def test_invite_accept_and_rotate(monkeypatch, tenant_auth):
 
     accept_response = client.post(
         "/api/tenant/accounts/accept-invite",
-        json={"token": invite_token, "name": "Analyst", "password": tenant_auth.password},
+        json={
+            "token": invite_token,
+            "name": "Analyst",
+            "password": tenant_auth.password,
+        },
     )
     assert accept_response.status_code == 200
     accepted = accept_response.json()
@@ -103,7 +112,9 @@ def test_invite_accept_and_rotate(monkeypatch, tenant_auth):
             select(User).where(User.email == "analyst@tenant.example")
         ).scalar_one()
         assert user.role == "viewer"
-        token_row = session.execute(select(RefreshToken).where(RefreshToken.user_id == user.id)).scalar_one()
+        token_row = session.execute(
+            select(RefreshToken).where(RefreshToken.user_id == user.id)
+        ).scalar_one()
         assert token_row.revoked_at is None
 
     rotate_response = client.post(

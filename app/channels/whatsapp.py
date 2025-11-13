@@ -1,13 +1,15 @@
 """WhatsApp channel adapter."""
+
 from __future__ import annotations
 
 import hashlib
 import hmac
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
-from typing import Any, Iterable, Mapping
+from typing import Any
 
-from .base import ChannelAdapter
 from ..conversations.models import NormalizedMessage
+from .base import ChannelAdapter
 
 
 class WhatsAppAdapter(ChannelAdapter):
@@ -64,7 +66,9 @@ class WhatsAppAdapter(ChannelAdapter):
                     timestamp = message.get("timestamp")
                     if timestamp:
                         try:
-                            sent_at = datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
+                            sent_at = datetime.fromtimestamp(
+                                int(timestamp), tz=timezone.utc
+                            )
                         except (ValueError, TypeError):
                             sent_at = datetime.now(timezone.utc)
                     else:

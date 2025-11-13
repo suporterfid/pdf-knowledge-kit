@@ -1,8 +1,10 @@
 """High-level conversation flow orchestration."""
+
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, Optional
+from typing import Any
 from uuid import UUID
 
 from ..agents import schemas as agent_schemas
@@ -19,8 +21,8 @@ class ConversationService:
         self,
         repository: ConversationRepository,
         *,
-        tenant_id: Optional[UUID] = None,
-        nlp_pipeline: Optional[NlpPipeline] = None,
+        tenant_id: UUID | None = None,
+        nlp_pipeline: NlpPipeline | None = None,
     ) -> None:
         self._repository = repository
         self._tenant_id = tenant_id or getattr(repository, "tenant_id", None)
@@ -33,7 +35,7 @@ class ConversationService:
         self,
         agent: agent_schemas.AgentDetail,
         normalized: NormalizedMessage,
-        channel_config: Optional[Dict[str, Any]] = None,
+        channel_config: dict[str, Any] | None = None,
     ) -> schemas.MessageIngestResponse:
         """Persist a message and update the conversation state."""
 
@@ -67,7 +69,7 @@ class ConversationService:
             "attachments": normalized.attachments,
             "metadata": normalized.metadata,
         }
-        message = self._repository.add_message(
+        self._repository.add_message(
             conversation.id,
             participant.id if participant else None,
             direction="inbound",
@@ -112,12 +114,16 @@ class ConversationService:
             metadata=metadata,
         )
         refreshed = self._repository.get_conversation(conversation.id)
-        return schemas.MessageIngestResponse(conversation=refreshed, processed_messages=1)
+        return schemas.MessageIngestResponse(
+            conversation=refreshed, processed_messages=1
+        )
 
     # ------------------------------------------------------------------
     # Queries
 
-    def list_conversations(self, agent_id: int, limit: int = 50) -> schemas.ConversationList:
+    def list_conversations(
+        self, agent_id: int, limit: int = 50
+    ) -> schemas.ConversationList:
         items = self._repository.list_conversations(agent_id, limit=limit)
         return schemas.ConversationList(items=items, total=len(items))
 
@@ -127,7 +133,9 @@ class ConversationService:
             raise ValueError(f"Conversation {conversation_id} not found")
         return conversation
 
-    def dashboard_snapshot(self, agent_id: int, limit: int = 10) -> schemas.ConversationDashboardPayload:
+    def dashboard_snapshot(
+        self, agent_id: int, limit: int = 10
+    ) -> schemas.ConversationDashboardPayload:
         summary = self._repository.analytics(agent_id)
         channels = self._repository.channel_analytics(agent_id)
         recent = self._repository.list_conversations(agent_id, limit=limit)
@@ -143,8 +151,8 @@ class ConversationService:
     def schedule_follow_up(
         self,
         conversation_id: int,
-        follow_up_at: Optional[datetime],
-        note: Optional[str],
+        follow_up_at: datetime | None,
+        note: str | None,
     ) -> schemas.ConversationDetail:
         self._repository.set_follow_up(conversation_id, follow_up_at, note)
         return self.get_conversation(conversation_id)
@@ -152,8 +160,8 @@ class ConversationService:
     def escalate(
         self,
         conversation_id: int,
-        reason: Optional[str],
-        escalate_to: Optional[str],
+        reason: str | None,
+        escalate_to: str | None,
     ) -> schemas.ConversationDetail:
         self._repository.mark_escalated(
             conversation_id,
@@ -177,33 +185,48 @@ class ConversationService:
 
     def _evaluate_escalation(
         self,
-        nlp: Dict[str, Any],
-        metadata: Dict[str, Any],
-        channel_config: Optional[Dict[str, Any]],
+        nlp: dict[str, Any],
+        metadata: dict[str, Any],
+        channel_config: dict[str, Any] | None,
     ) -> EscalationDecision:
         escalate_flag = metadata.get("escalate") or metadata.get("escalation_required")
         if escalate_flag:
-            return EscalationDecision(True, reason="channel_flag", escalate_to=metadata.get("target"))
+            return EscalationDecision(
+                True, reason="channel_flag", escalate_to=metadata.get("target")
+            )
         sentiment = nlp.get("sentiment", {})
         intent = nlp.get("intent", {})
-        min_score = (channel_config or {}).get("escalation", {}).get("sentiment_threshold", 0.75)
+        min_score = (
+            (channel_config or {})
+            .get("escalation", {})
+            .get("sentiment_threshold", 0.75)
+        )
         escalate_to = (channel_config or {}).get("escalation", {}).get("default_queue")
         if intent.get("label") in {"complaint", "cancellation"}:
-            return EscalationDecision(True, reason=intent.get("label"), escalate_to=escalate_to)
-        if sentiment.get("label") == "negative" and sentiment.get("score", 0) >= min_score:
-            return EscalationDecision(True, reason="negative_sentiment", escalate_to=escalate_to)
+            return EscalationDecision(
+                True, reason=intent.get("label"), escalate_to=escalate_to
+            )
+        if (
+            sentiment.get("label") == "negative"
+            and sentiment.get("score", 0) >= min_score
+        ):
+            return EscalationDecision(
+                True, reason="negative_sentiment", escalate_to=escalate_to
+            )
         return EscalationDecision(False)
 
     def _evaluate_follow_up(
-        self, nlp: Dict[str, Any], metadata: Dict[str, Any]
+        self, nlp: dict[str, Any], metadata: dict[str, Any]
     ) -> FollowUpDecision:
         if metadata.get("follow_up_at"):
-            return FollowUpDecision(metadata["follow_up_at"], metadata.get("follow_up_note"))
+            return FollowUpDecision(
+                metadata["follow_up_at"], metadata.get("follow_up_note")
+            )
         intent = nlp.get("intent", {})
         if intent.get("label") in {"support_followup", "callback_request"}:
             follow_up_at = datetime.now(timezone.utc) + timedelta(hours=24)
             return FollowUpDecision(follow_up_at, note="Automatic follow-up scheduled")
-        entities: Iterable[Dict[str, Any]] = nlp.get("entities", [])
+        entities: Iterable[dict[str, Any]] = nlp.get("entities", [])
         for entity in entities:
             if entity.get("type") == "datetime" and entity.get("value"):
                 value = entity.get("value")

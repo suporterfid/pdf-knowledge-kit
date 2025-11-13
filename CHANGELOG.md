@@ -18,6 +18,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Hardened database update helpers to compose SQL queries using `psycopg.sql`
+  for agent, conversation, and source repositories, eliminating potential SQL
+  injection vectors flagged by security tooling.
+- Replaced direct `print` usage in administrative CLI scripts with consistent
+  stdout helpers to satisfy linting and security requirements.
+- Introduced structured dependency aliases in authentication and ingestion
+  routers to align with Ruff's dependency-injection guidance and improve type
+  clarity.
+
+### Fixed
+
+- Added defensive logging around optional third-party integrations and file
+  parsing fallbacks to make ingestion error handling observable without failing
+  silently.
+
 - Documents and chunks tables now include `organization_id` column for tenant isolation
 - Ingestion storage layer updated to set `organization_id` from tenant context
 - RAG query enhanced with comment documenting RLS behavior

@@ -1,11 +1,13 @@
 """Database repository for conversations."""
+
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 import psycopg
+from psycopg import sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
@@ -19,39 +21,39 @@ class ConversationRepository(Protocol):
 
     def get_by_external(
         self, agent_id: int, channel: str, external_conversation_id: str
-    ) -> Optional[schemas.ConversationDetail]: ...
+    ) -> schemas.ConversationDetail | None: ...
 
     def create_conversation(
         self,
         agent_id: int,
         channel: str,
         external_conversation_id: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> schemas.ConversationDetail: ...
 
     def add_participant(
         self,
         conversation_id: int,
         role: str,
-        external_id: Optional[str],
-        display_name: Optional[str],
-        metadata: Optional[Dict[str, Any]] = None,
+        external_id: str | None,
+        display_name: str | None,
+        metadata: dict[str, Any] | None = None,
     ) -> schemas.ConversationParticipant: ...
 
     def get_participant(
         self,
         conversation_id: int,
         role: str,
-        external_id: Optional[str],
-    ) -> Optional[schemas.ConversationParticipant]: ...
+        external_id: str | None,
+    ) -> schemas.ConversationParticipant | None: ...
 
     def add_message(
         self,
         conversation_id: int,
-        participant_id: Optional[int],
+        participant_id: int | None,
         direction: str,
-        body: Dict[str, Any],
-        nlp: Dict[str, Any],
+        body: dict[str, Any],
+        nlp: dict[str, Any],
         sent_at: datetime,
     ) -> schemas.ConversationMessage: ...
 
@@ -60,19 +62,23 @@ class ConversationRepository(Protocol):
         conversation_id: int,
         *,
         last_message_at: datetime,
-        status: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        status: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None: ...
 
-    def list_conversations(self, agent_id: int, limit: int = 50) -> List[schemas.ConversationSummary]: ...
+    def list_conversations(
+        self, agent_id: int, limit: int = 50
+    ) -> list[schemas.ConversationSummary]: ...
 
-    def get_conversation(self, conversation_id: int) -> Optional[schemas.ConversationDetail]: ...
+    def get_conversation(
+        self, conversation_id: int
+    ) -> schemas.ConversationDetail | None: ...
 
     def set_follow_up(
         self,
         conversation_id: int,
-        follow_up_at: Optional[datetime],
-        note: Optional[str],
+        follow_up_at: datetime | None,
+        note: str | None,
     ) -> None: ...
 
     def mark_escalated(
@@ -80,21 +86,21 @@ class ConversationRepository(Protocol):
         conversation_id: int,
         *,
         is_escalated: bool,
-        reason: Optional[str],
-        escalate_to: Optional[str],
+        reason: str | None,
+        escalate_to: str | None,
     ) -> None: ...
 
     def analytics(self, agent_id: int) -> schemas.ConversationAnalytics: ...
 
-    def channel_analytics(self, agent_id: int) -> List[schemas.ChannelConfigAnalytics]: ...
+    def channel_analytics(
+        self, agent_id: int
+    ) -> list[schemas.ChannelConfigAnalytics]: ...
 
 
 class PostgresConversationRepository:
     """PostgreSQL implementation of :class:`ConversationRepository`."""
 
-    def __init__(
-        self, conn: psycopg.Connection, tenant_id: Optional[UUID] = None
-    ) -> None:
+    def __init__(self, conn: psycopg.Connection, tenant_id: UUID | None = None) -> None:
         self._conn = conn
         self._tenant_id = get_required_tenant_id(tenant_id)
 
@@ -109,7 +115,7 @@ class PostgresConversationRepository:
     # Conversation operations --------------------------------------------------
     def get_by_external(
         self, agent_id: int, channel: str, external_conversation_id: str
-    ) -> Optional[schemas.ConversationDetail]:
+    ) -> schemas.ConversationDetail | None:
         with self._cursor() as cur:
             cur.execute(
                 """
@@ -128,7 +134,7 @@ class PostgresConversationRepository:
         agent_id: int,
         channel: str,
         external_conversation_id: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> schemas.ConversationDetail:
         with self._cursor() as cur:
             cur.execute(
@@ -137,7 +143,13 @@ class PostgresConversationRepository:
                 VALUES (%s, %s, %s, %s, %s)
                 RETURNING *
                 """,
-                (self._tenant_id, agent_id, channel, external_conversation_id, Jsonb(metadata or {})),
+                (
+                    self._tenant_id,
+                    agent_id,
+                    channel,
+                    external_conversation_id,
+                    Jsonb(metadata or {}),
+                ),
             )
             row = cur.fetchone()
         return self._hydrate_conversation(row)
@@ -146,9 +158,9 @@ class PostgresConversationRepository:
         self,
         conversation_id: int,
         role: str,
-        external_id: Optional[str],
-        display_name: Optional[str],
-        metadata: Optional[Dict[str, Any]] = None,
+        external_id: str | None,
+        display_name: str | None,
+        metadata: dict[str, Any] | None = None,
     ) -> schemas.ConversationParticipant:
         with self._cursor() as cur:
             cur.execute(
@@ -158,7 +170,14 @@ class PostgresConversationRepository:
                 VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
-                (self._tenant_id, conversation_id, role, external_id, display_name, Jsonb(metadata or {})),
+                (
+                    self._tenant_id,
+                    conversation_id,
+                    role,
+                    external_id,
+                    display_name,
+                    Jsonb(metadata or {}),
+                ),
             )
             row = cur.fetchone()
         return schemas.ConversationParticipant(**row)
@@ -167,8 +186,8 @@ class PostgresConversationRepository:
         self,
         conversation_id: int,
         role: str,
-        external_id: Optional[str],
-    ) -> Optional[schemas.ConversationParticipant]:
+        external_id: str | None,
+    ) -> schemas.ConversationParticipant | None:
         with self._cursor() as cur:
             cur.execute(
                 """
@@ -188,10 +207,10 @@ class PostgresConversationRepository:
     def add_message(
         self,
         conversation_id: int,
-        participant_id: Optional[int],
+        participant_id: int | None,
         direction: str,
-        body: Dict[str, Any],
-        nlp: Dict[str, Any],
+        body: dict[str, Any],
+        nlp: dict[str, Any],
         sent_at: datetime,
     ) -> schemas.ConversationMessage:
         with self._cursor() as cur:
@@ -220,27 +239,30 @@ class PostgresConversationRepository:
         conversation_id: int,
         *,
         last_message_at: datetime,
-        status: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        status: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
-        fields: List[str] = ["last_message_at = %s"]
-        values: List[Any] = [last_message_at]
+        assignments: list[sql.Composable] = [
+            sql.SQL("{} = %s").format(sql.Identifier("last_message_at"))
+        ]
+        values: list[Any] = [last_message_at]
         if status is not None:
-            fields.append("status = %s")
+            assignments.append(sql.SQL("{} = %s").format(sql.Identifier("status")))
             values.append(status)
         if metadata is not None:
-            fields.append("metadata = %s")
+            assignments.append(sql.SQL("{} = %s").format(sql.Identifier("metadata")))
             values.append(Jsonb(metadata))
         values.extend((self._tenant_id, conversation_id))
-        query = (
-            "UPDATE conversations SET "
-            f"{', '.join(fields)}, updated_at = now() "
-            "WHERE tenant_id = %s AND id = %s"
-        )
+        set_clause = sql.SQL(", ").join(assignments + [sql.SQL("updated_at = now()")])
+        query = sql.SQL(
+            "UPDATE conversations SET {} WHERE tenant_id = %s AND id = %s"
+        ).format(set_clause)
         with self._cursor() as cur:
             cur.execute(query, values)
 
-    def list_conversations(self, agent_id: int, limit: int = 50) -> List[schemas.ConversationSummary]:
+    def list_conversations(
+        self, agent_id: int, limit: int = 50
+    ) -> list[schemas.ConversationSummary]:
         with self._cursor() as cur:
             cur.execute(
                 """
@@ -256,7 +278,9 @@ class PostgresConversationRepository:
             rows = cur.fetchall()
         return [schemas.ConversationSummary(**row) for row in rows]
 
-    def get_conversation(self, conversation_id: int) -> Optional[schemas.ConversationDetail]:
+    def get_conversation(
+        self, conversation_id: int
+    ) -> schemas.ConversationDetail | None:
         with self._cursor() as cur:
             cur.execute(
                 "SELECT * FROM conversations WHERE tenant_id = %s AND id = %s",
@@ -273,7 +297,9 @@ class PostgresConversationRepository:
                 """,
                 (self._tenant_id, conversation_id),
             )
-            participants = [schemas.ConversationParticipant(**row) for row in cur.fetchall()]
+            participants = [
+                schemas.ConversationParticipant(**row) for row in cur.fetchall()
+            ]
             cur.execute(
                 """
                 SELECT * FROM conversation_messages
@@ -291,8 +317,8 @@ class PostgresConversationRepository:
     def set_follow_up(
         self,
         conversation_id: int,
-        follow_up_at: Optional[datetime],
-        note: Optional[str],
+        follow_up_at: datetime | None,
+        note: str | None,
     ) -> None:
         with self._cursor() as cur:
             cur.execute(
@@ -309,23 +335,28 @@ class PostgresConversationRepository:
         conversation_id: int,
         *,
         is_escalated: bool,
-        reason: Optional[str],
-        escalate_to: Optional[str],
+        reason: str | None,
+        escalate_to: str | None,
     ) -> None:
-        metadata_updates: Dict[str, Any] = {}
+        metadata_updates: dict[str, Any] = {}
         if escalate_to:
             metadata_updates["escalated_to"] = escalate_to
-        set_clause = ["is_escalated = %s", "escalation_reason = %s"]
-        params: List[Any] = [is_escalated, reason]
+        assignments: list[sql.Composable] = [
+            sql.SQL("{} = %s").format(sql.Identifier("is_escalated")),
+            sql.SQL("{} = %s").format(sql.Identifier("escalation_reason")),
+        ]
+        params: list[Any] = [is_escalated, reason]
         if metadata_updates:
-            set_clause.append("metadata = metadata || %s")
+            assignments.append(sql.SQL("metadata = metadata || %s"))
             params.append(Jsonb(metadata_updates))
         params.extend((self._tenant_id, conversation_id))
-        query = (
-            "UPDATE conversations SET "
-            f"{', '.join(set_clause)}, escalated_at = now(), updated_at = now() "
-            "WHERE tenant_id = %s AND id = %s"
+        set_clause = sql.SQL(", ").join(
+            assignments
+            + [sql.SQL("escalated_at = now()"), sql.SQL("updated_at = now()")]
         )
+        query = sql.SQL(
+            "UPDATE conversations SET {} WHERE tenant_id = %s AND id = %s"
+        ).format(set_clause)
         with self._cursor() as cur:
             cur.execute(query, params)
 
@@ -349,7 +380,7 @@ class PostgresConversationRepository:
             pending_follow_ups=row["follow_ups"],
         )
 
-    def channel_analytics(self, agent_id: int) -> List[schemas.ChannelConfigAnalytics]:
+    def channel_analytics(self, agent_id: int) -> list[schemas.ChannelConfigAnalytics]:
         with self._cursor() as cur:
             cur.execute(
                 """
@@ -368,7 +399,7 @@ class PostgresConversationRepository:
         return [schemas.ChannelConfigAnalytics(**row) for row in rows]
 
     # Helpers ------------------------------------------------------------------
-    def _hydrate_conversation(self, row: Dict[str, Any]) -> schemas.ConversationDetail:
+    def _hydrate_conversation(self, row: dict[str, Any]) -> schemas.ConversationDetail:
         data = dict(row)
         detail = schemas.ConversationDetail(**data)
         detail.participants = []

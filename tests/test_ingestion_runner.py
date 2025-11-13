@@ -1,9 +1,10 @@
+import pathlib
+import time
+from threading import Event
+from uuid import uuid4
+
 import app.ingestion.service as service
 from app.ingestion.runner import IngestionRunner
-from uuid import uuid4
-from threading import Event
-import time
-import pathlib
 
 
 def test_runner_cancel_stops_work():
@@ -12,7 +13,7 @@ def test_runner_cancel_stops_work():
     events = {}
 
     def work(ev: Event):
-        events['evt'] = ev
+        events["evt"] = ev
         while not ev.is_set():
             time.sleep(0.01)
 
@@ -20,7 +21,7 @@ def test_runner_cancel_stops_work():
     runner.cancel(job_id)
     # give thread time to process cancellation
     time.sleep(0.05)
-    assert events['evt'].is_set()
+    assert events["evt"].is_set()
     assert fut.cancelled() or fut.done()
 
 

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Generic, List, Optional, TypeVar, TypedDict
+from typing import Any, Generic, TypedDict, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
-
 
 # ---------------------------------------------------------------------------
 # Enumerations
@@ -39,8 +38,8 @@ class DatabaseQueryConfig(TypedDict, total=False):
     initial_cursor: str | int | float | None
     mime_type: str
     document_path_template: str
-    params: Dict[str, Any]
-    extra_metadata_fields: List[str]
+    params: dict[str, Any]
+    extra_metadata_fields: list[str]
 
 
 class DatabaseSourceParams(TypedDict, total=False):
@@ -52,7 +51,7 @@ class DatabaseSourceParams(TypedDict, total=False):
     port: int
     database: str
     user: str
-    queries: List[DatabaseQueryConfig]
+    queries: list[DatabaseQueryConfig]
 
 
 class ApiPaginationConfig(TypedDict, total=False):
@@ -73,13 +72,13 @@ class ApiSourceParams(TypedDict, total=False):
     base_url: str
     endpoint: str
     method: str
-    headers: Dict[str, str]
-    query_params: Dict[str, Any]
-    body: Dict[str, Any]
+    headers: dict[str, str]
+    query_params: dict[str, Any]
+    body: dict[str, Any]
     pagination: ApiPaginationConfig
     records_path: str
     id_field: str
-    text_fields: List[str]
+    text_fields: list[str]
     timestamp_field: str
     mime_type: str
     document_path_template: str
@@ -98,10 +97,10 @@ class TranscriptionSourceParams(TypedDict, total=False):
     whisper_model: str
     whisper_compute_type: str
     aws_region: str
-    aws_transcribe_params: Dict[str, Any]
+    aws_transcribe_params: dict[str, Any]
     output_mime_type: str
-    extra_metadata: Dict[str, Any]
-    segments: List[Dict[str, Any]]
+    extra_metadata: dict[str, Any]
+    segments: list[dict[str, Any]]
     transcript_text: str
     cache_ttl_seconds: int
     job_name_prefix: str
@@ -110,7 +109,7 @@ class TranscriptionSourceParams(TypedDict, total=False):
 class ConnectorCredentials(BaseModel):
     """Structured credentials payload supporting inline secrets and references."""
 
-    values: Dict[str, Any] | None = None
+    values: dict[str, Any] | None = None
     token: str | None = None
     secret_id: str | None = None
 
@@ -138,13 +137,13 @@ class DatabaseQuery(BaseModel):
     initial_cursor: str | int | float | None = None
     mime_type: str | None = None
     document_path_template: str | None = None
-    params: Dict[str, Any] | None = None
-    extra_metadata_fields: List[str] | None = None
+    params: dict[str, Any] | None = None
+    extra_metadata_fields: list[str] | None = None
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     @model_validator(mode="after")
-    def _check_required_fields(self) -> "DatabaseQuery":
+    def _check_required_fields(self) -> DatabaseQuery:
         if not self.sql:
             raise ValueError("database query requires 'sql'")
         if not self.text_column:
@@ -163,12 +162,12 @@ class DatabaseConnectorParams(BaseModel):
     port: int | None = None
     database: str | None = None
     user: str | None = None
-    queries: List[DatabaseQuery]
+    queries: list[DatabaseQuery]
 
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
-    def _ensure_queries(self) -> "DatabaseConnectorParams":
+    def _ensure_queries(self) -> DatabaseConnectorParams:
         if not self.queries:
             raise ValueError("database connector requires at least one query")
         return self
@@ -188,7 +187,7 @@ class ApiPagination(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
-    def _validate_type(self) -> "ApiPagination":
+    def _validate_type(self) -> ApiPagination:
         if self.type and self.type not in {"cursor", "page"}:
             raise ValueError("pagination.type must be 'cursor' or 'page'")
         return self
@@ -200,13 +199,13 @@ class ApiConnectorParams(BaseModel):
     base_url: str | None = None
     endpoint: str | None = None
     method: str | None = None
-    headers: Dict[str, str] | None = None
-    query_params: Dict[str, Any] | None = None
-    body: Dict[str, Any] | None = None
+    headers: dict[str, str] | None = None
+    query_params: dict[str, Any] | None = None
+    body: dict[str, Any] | None = None
     pagination: ApiPagination | None = None
     records_path: str | None = None
     id_field: str | None = None
-    text_fields: List[str] | None = None
+    text_fields: list[str] | None = None
     timestamp_field: str | None = None
     mime_type: str | None = None
     document_path_template: str | None = None
@@ -214,7 +213,7 @@ class ApiConnectorParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
-    def _ensure_endpoint(self) -> "ApiConnectorParams":
+    def _ensure_endpoint(self) -> ApiConnectorParams:
         if not self.endpoint and not self.base_url:
             raise ValueError("API connector requires an endpoint or base_url")
         return self
@@ -233,10 +232,10 @@ class TranscriptionConnectorParams(BaseModel):
     whisper_model: str | None = None
     whisper_compute_type: str | None = None
     aws_region: str | None = None
-    aws_transcribe_params: Dict[str, Any] | None = None
+    aws_transcribe_params: dict[str, Any] | None = None
     output_mime_type: str | None = None
-    extra_metadata: Dict[str, Any] | None = None
-    segments: List[Dict[str, Any]] | None = None
+    extra_metadata: dict[str, Any] | None = None
+    segments: list[dict[str, Any]] | None = None
     transcript_text: str | None = None
     cache_ttl_seconds: int | None = None
     job_name_prefix: str | None = None
@@ -251,14 +250,14 @@ class BaseConnectorJobRequest(BaseModel):
     connector_definition_id: UUID | None = None
     label: str | None = None
     location: str | None = None
-    connector_metadata: Dict[str, Any] | None = None
-    credentials: ConnectorCredentials | Dict[str, Any] | str | None = None
-    sync_state: Dict[str, Any] | None = None
+    connector_metadata: dict[str, Any] | None = None
+    credentials: ConnectorCredentials | dict[str, Any] | str | None = None
+    sync_state: dict[str, Any] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="before")
-    def _normalise_credentials(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalise_credentials(cls, values: dict[str, Any]) -> dict[str, Any]:
         credentials = values.get("credentials")
         if isinstance(credentials, ConnectorCredentials):
             resolved = credentials.resolved()
@@ -276,7 +275,7 @@ class DatabaseConnectorJobRequest(BaseConnectorJobRequest):
     params: DatabaseConnectorParams | None = None
 
     @model_validator(mode="before")
-    def _normalise_params(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalise_params(cls, values: dict[str, Any]) -> dict[str, Any]:
         params = values.get("params")
         if isinstance(params, BaseModel):
             values["params"] = params.model_dump(exclude_none=True)
@@ -289,7 +288,7 @@ class ApiConnectorJobRequest(BaseConnectorJobRequest):
     params: ApiConnectorParams | None = None
 
     @model_validator(mode="before")
-    def _normalise_params(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalise_params(cls, values: dict[str, Any]) -> dict[str, Any]:
         params = values.get("params")
         if isinstance(params, BaseModel):
             values["params"] = params.model_dump(exclude_none=True)
@@ -302,7 +301,7 @@ class TranscriptionConnectorJobRequest(BaseConnectorJobRequest):
     params: TranscriptionConnectorParams | None = None
 
     @model_validator(mode="before")
-    def _normalise_params(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalise_params(cls, values: dict[str, Any]) -> dict[str, Any]:
         params = values.get("params")
         if isinstance(params, BaseModel):
             values["params"] = params.model_dump(exclude_none=True)
@@ -341,7 +340,7 @@ class UrlIngestRequest(BaseModel):
 class UrlsIngestRequest(BaseModel):
     """Request model for ingesting multiple URLs."""
 
-    urls: List[HttpUrl]
+    urls: list[HttpUrl]
 
 
 class ReindexRequest(BaseModel):
@@ -364,20 +363,20 @@ class SourceCreate(BaseModel):
         DatabaseSourceParams
         | ApiSourceParams
         | TranscriptionSourceParams
-        | Dict[str, Any]
+        | dict[str, Any]
         | None
     ) = None
     connector_type: str | None = None
     connector_definition_id: UUID | None = None
-    connector_metadata: Dict[str, Any] | None = None
-    credentials: ConnectorCredentials | Dict[str, Any] | str | None = None
+    connector_metadata: dict[str, Any] | None = None
+    credentials: ConnectorCredentials | dict[str, Any] | str | None = None
     sync_state: dict | None = None
     version: int | None = None
 
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="before")
-    def _normalise_payload(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalise_payload(cls, values: dict[str, Any]) -> dict[str, Any]:
         params = values.get("params")
         if isinstance(params, BaseModel):
             values["params"] = params.model_dump(exclude_none=True)
@@ -392,7 +391,7 @@ class SourceCreate(BaseModel):
         return values
 
     @model_validator(mode="after")
-    def _validate_params(self) -> "SourceCreate":
+    def _validate_params(self) -> SourceCreate:
         params_payload = self.params or {}
         if self.type == SourceType.DATABASE:
             if not params_payload:
@@ -428,20 +427,20 @@ class SourceUpdate(BaseModel):
         DatabaseSourceParams
         | ApiSourceParams
         | TranscriptionSourceParams
-        | Dict[str, Any]
+        | dict[str, Any]
         | None
     ) = None
     connector_type: str | None = None
     connector_definition_id: UUID | None = None
-    connector_metadata: Dict[str, Any] | None = None
-    credentials: ConnectorCredentials | Dict[str, Any] | str | None = None
+    connector_metadata: dict[str, Any] | None = None
+    credentials: ConnectorCredentials | dict[str, Any] | str | None = None
     sync_state: dict | None = None
     version: int | None = None
 
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="before")
-    def _normalise_payload(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalise_payload(cls, values: dict[str, Any]) -> dict[str, Any]:
         params = values.get("params")
         if isinstance(params, BaseModel):
             values["params"] = params.model_dump(exclude_none=True)
@@ -480,12 +479,12 @@ class Source(BaseModel):
         DatabaseSourceParams
         | ApiSourceParams
         | TranscriptionSourceParams
-        | Dict[str, Any]
+        | dict[str, Any]
         | None
     ) = None
     connector_type: str | None = None
     connector_definition_id: UUID | None = None
-    connector_metadata: Dict[str, Any] | None = None
+    connector_metadata: dict[str, Any] | None = None
     credentials: Any | None = None
     sync_state: dict | None = None
     version: int = 1
@@ -503,16 +502,16 @@ class ConnectorDefinitionBase(BaseModel):
         DatabaseConnectorParams
         | ApiConnectorParams
         | TranscriptionConnectorParams
-        | Dict[str, Any]
+        | dict[str, Any]
         | None
     ) = None
-    credentials: ConnectorCredentials | Dict[str, Any] | str | None = None
-    metadata: Dict[str, Any] | None = None
+    credentials: ConnectorCredentials | dict[str, Any] | str | None = None
+    metadata: dict[str, Any] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="before")
-    def _normalise_payload(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalise_payload(cls, values: dict[str, Any]) -> dict[str, Any]:
         params = values.get("params")
         if isinstance(params, BaseModel):
             values["params"] = params.model_dump(exclude_none=True)
@@ -527,7 +526,7 @@ class ConnectorDefinitionBase(BaseModel):
         return values
 
     @model_validator(mode="after")
-    def _validate_params(self) -> "ConnectorDefinitionBase":
+    def _validate_params(self) -> ConnectorDefinitionBase:
         params_payload = self.params or {}
         if self.type == SourceType.DATABASE and params_payload:
             DatabaseConnectorParams(**params_payload)
@@ -545,7 +544,7 @@ class ConnectorDefinitionCreate(ConnectorDefinitionBase):
     """Payload used to create a connector definition."""
 
     @model_validator(mode="after")
-    def _require_params(self) -> "ConnectorDefinitionCreate":
+    def _require_params(self) -> ConnectorDefinitionCreate:
         if self.type == SourceType.DATABASE and not self.params:
             raise ValueError("database connector definition requires params")
         if self.type == SourceType.API and not self.params:
@@ -567,16 +566,16 @@ class ConnectorDefinitionUpdate(BaseModel):
         DatabaseConnectorParams
         | ApiConnectorParams
         | TranscriptionConnectorParams
-        | Dict[str, Any]
+        | dict[str, Any]
         | None
     ) = None
-    credentials: ConnectorCredentials | Dict[str, Any] | str | None = None
-    metadata: Dict[str, Any] | None = None
+    credentials: ConnectorCredentials | dict[str, Any] | str | None = None
+    metadata: dict[str, Any] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="before")
-    def _normalise_payload(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalise_payload(cls, values: dict[str, Any]) -> dict[str, Any]:
         params = values.get("params")
         if isinstance(params, BaseModel):
             values["params"] = params.model_dump(exclude_none=True)
@@ -599,6 +598,7 @@ class ConnectorDefinition(ConnectorDefinitionBase):
     created_at: datetime
     updated_at: datetime | None = None
     has_credentials: bool = False
+
 
 class Job(BaseModel):
     id: UUID
@@ -629,7 +629,7 @@ T = TypeVar("T")
 class ListResponse(BaseModel, Generic[T]):
     """Generic container for list responses."""
 
-    items: List[T]
+    items: list[T]
     total: int
 
 
@@ -649,12 +649,12 @@ class ChunkMetadata(BaseModel):
     page_number: int | None = None
     sheet_name: str | None = None
     row_number: int | None = None
-    extra: Dict[str, Any] | None = None
+    extra: dict[str, Any] | None = None
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """Return a JSON-serialisable payload for persistence."""
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "source_path": self.source_path,
             "mime_type": self.mime_type,
             "page_number": self.page_number,
@@ -679,4 +679,3 @@ class DocumentVersion(BaseModel):
     credentials: Any | None = None
     sync_state: dict | None = None
     created_at: datetime
-

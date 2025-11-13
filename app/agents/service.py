@@ -1,22 +1,25 @@
 """Service layer orchestrating agent CRUD, testing and deployment."""
+
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import re
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Protocol
+from typing import Any, Protocol
 from uuid import UUID, uuid4
 
 import psycopg
+from psycopg import sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from app.core.db import get_required_tenant_id
 
 from . import schemas
-from .providers import ProviderRegistry
 from .prompts import PromptTemplateStore
+from .providers import ProviderRegistry
 from .responses import ResponseParameterStore
 
 
@@ -32,37 +35,53 @@ def _slugify(value: str) -> str:
 class AgentRepository(Protocol):
     """Persistence abstraction used by :class:`AgentService`."""
 
-    def list_agents(self) -> List[schemas.Agent]: ...
+    def list_agents(self) -> list[schemas.Agent]: ...
 
     def get_agent(
-        self, agent_id: int, *, include_versions: bool = False, include_tests: bool = False
-    ) -> Optional[schemas.AgentDetail]: ...
+        self,
+        agent_id: int,
+        *,
+        include_versions: bool = False,
+        include_tests: bool = False,
+    ) -> schemas.AgentDetail | None: ...
 
     def get_agent_by_slug(
         self, slug: str, *, include_versions: bool = False, include_tests: bool = False
-    ) -> Optional[schemas.AgentDetail]: ...
+    ) -> schemas.AgentDetail | None: ...
 
     def create_agent(self, payload: schemas.AgentCreate) -> schemas.Agent: ...
 
-    def update_agent(self, agent_id: int, payload: schemas.AgentUpdate) -> schemas.Agent: ...
+    def update_agent(
+        self, agent_id: int, payload: schemas.AgentUpdate
+    ) -> schemas.Agent: ...
 
     def delete_agent(self, agent_id: int) -> None: ...
 
-    def create_version(self, agent_id: int, payload: schemas.AgentVersionCreate) -> schemas.AgentVersion: ...
+    def create_version(
+        self, agent_id: int, payload: schemas.AgentVersionCreate
+    ) -> schemas.AgentVersion: ...
 
-    def list_versions(self, agent_id: int) -> List[schemas.AgentVersion]: ...
+    def list_versions(self, agent_id: int) -> list[schemas.AgentVersion]: ...
 
-    def latest_version(self, agent_id: int) -> Optional[schemas.AgentVersion]: ...
+    def latest_version(self, agent_id: int) -> schemas.AgentVersion | None: ...
 
-    def record_test(self, payload: schemas.AgentTestRecordCreate) -> schemas.AgentTestRecord: ...
+    def record_test(
+        self, payload: schemas.AgentTestRecordCreate
+    ) -> schemas.AgentTestRecord: ...
 
-    def list_tests(self, agent_id: int, limit: int = 20) -> List[schemas.AgentTestRecord]: ...
+    def list_tests(
+        self, agent_id: int, limit: int = 20
+    ) -> list[schemas.AgentTestRecord]: ...
 
-    def update_deployment_metadata(self, agent_id: int, metadata: Dict[str, Any]) -> schemas.Agent: ...
+    def update_deployment_metadata(
+        self, agent_id: int, metadata: dict[str, Any]
+    ) -> schemas.Agent: ...
 
-    def list_channel_configs(self, agent_id: int) -> List[schemas.ChannelConfig]: ...
+    def list_channel_configs(self, agent_id: int) -> list[schemas.ChannelConfig]: ...
 
-    def get_channel_config(self, agent_id: int, channel: str) -> Optional[schemas.ChannelConfig]: ...
+    def get_channel_config(
+        self, agent_id: int, channel: str
+    ) -> schemas.ChannelConfig | None: ...
 
     def upsert_channel_config(
         self, agent_id: int, channel: str, payload: schemas.ChannelConfigUpdate
@@ -78,10 +97,10 @@ class AgentService:
         self,
         repository: AgentRepository,
         *,
-        tenant_id: Optional[UUID] = None,
-        provider_registry: Optional[ProviderRegistry] = None,
-        prompt_store: Optional[PromptTemplateStore] = None,
-        response_store: Optional[ResponseParameterStore] = None,
+        tenant_id: UUID | None = None,
+        provider_registry: ProviderRegistry | None = None,
+        prompt_store: PromptTemplateStore | None = None,
+        response_store: ResponseParameterStore | None = None,
     ) -> None:
         self._repository = repository
         self._tenant_id = tenant_id or getattr(repository, "tenant_id", None)
@@ -92,7 +111,7 @@ class AgentService:
     # ------------------------------------------------------------------
     # CRUD operations
 
-    def list_agents(self) -> List[schemas.Agent]:
+    def list_agents(self) -> list[schemas.Agent]:
         return self._repository.list_agents()
 
     def get_agent(
@@ -132,8 +151,12 @@ class AgentService:
         if payload.persona_type:
             persona.setdefault("type", payload.persona_type)
         persona.setdefault("type", persona.get("type", "general"))
-        prompt_template = self._prompts.resolve(persona, payload.provider, payload.prompt_template)
-        response_parameters = self._responses.merge(payload.provider, payload.response_parameters)
+        prompt_template = self._prompts.resolve(
+            persona, payload.provider, payload.prompt_template
+        )
+        response_parameters = self._responses.merge(
+            payload.provider, payload.response_parameters
+        )
         credentials = self._providers.get_credentials(payload.provider)
         cleaned_payload = _normalise_create_payload(
             payload,
@@ -163,7 +186,9 @@ class AgentService:
         agent.latest_version = version
         return self.get_agent(agent.id)
 
-    def update_agent(self, agent_id: int, payload: schemas.AgentUpdate) -> schemas.AgentDetail:
+    def update_agent(
+        self, agent_id: int, payload: schemas.AgentUpdate
+    ) -> schemas.AgentDetail:
         existing = self._repository.get_agent(agent_id)
         if not existing:
             raise AgentNotFoundError(f"Agent {agent_id} not found")
@@ -180,7 +205,9 @@ class AgentService:
             existing.response_parameters,
             payload.response_parameters,
         )
-        credentials = self._providers.get_credentials(payload.provider or existing.provider)
+        credentials = self._providers.get_credentials(
+            payload.provider or existing.provider
+        )
         merged_payload = _normalise_update_payload(
             payload,
             persona,
@@ -198,27 +225,39 @@ class AgentService:
     # ------------------------------------------------------------------
     # Versions
 
-    def create_version(self, agent_id: int, payload: schemas.AgentVersionCreate) -> schemas.AgentVersion:
+    def create_version(
+        self, agent_id: int, payload: schemas.AgentVersionCreate
+    ) -> schemas.AgentVersion:
         existing = self._repository.get_agent(agent_id)
         if not existing:
             raise AgentNotFoundError(f"Agent {agent_id} not found")
         version = self._repository.create_version(agent_id, payload)
         return version
 
-    def list_versions(self, agent_id: int) -> List[schemas.AgentVersion]:
+    def list_versions(self, agent_id: int) -> list[schemas.AgentVersion]:
         return self._repository.list_versions(agent_id)
 
     # ------------------------------------------------------------------
     # Testing & deployment
 
-    def run_test(self, agent_id: int, request: schemas.AgentTestRequest) -> schemas.AgentTestResponse:
+    def run_test(
+        self, agent_id: int, request: schemas.AgentTestRequest
+    ) -> schemas.AgentTestResponse:
         agent = self._repository.get_agent(agent_id)
         if not agent:
             raise AgentNotFoundError(f"Agent {agent_id} not found")
-        latest_version = agent.latest_version or self._repository.latest_version(agent_id)
-        parameters = self._responses.merge(agent.provider, agent.response_parameters, request.response_overrides)
-        prompt_template = agent.prompt_template or self._prompts.resolve(agent.persona, agent.provider, None)
-        rendered_prompt = self._prompts.render(prompt_template, agent.persona, request.input)
+        latest_version = agent.latest_version or self._repository.latest_version(
+            agent_id
+        )
+        parameters = self._responses.merge(
+            agent.provider, agent.response_parameters, request.response_overrides
+        )
+        prompt_template = agent.prompt_template or self._prompts.resolve(
+            agent.persona, agent.provider, None
+        )
+        rendered_prompt = self._prompts.render(
+            prompt_template, agent.persona, request.input
+        )
         credentials = self._providers.get_credentials(agent.provider)
         # Sandboxed execution: we don't call real LLMs in tests, instead echo behaviour.
         output = _simulate_model_response(agent.name, rendered_prompt, parameters)
@@ -245,7 +284,9 @@ class AgentService:
             record=record,
         )
 
-    def deploy_agent(self, agent_id: int, request: schemas.AgentDeployRequest) -> schemas.AgentDetail:
+    def deploy_agent(
+        self, agent_id: int, request: schemas.AgentDeployRequest
+    ) -> schemas.AgentDetail:
         agent = self._repository.get_agent(agent_id)
         if not agent:
             raise AgentNotFoundError(f"Agent {agent_id} not found")
@@ -259,44 +300,53 @@ class AgentService:
         updated_agent = self._repository.update_deployment_metadata(agent_id, metadata)
         return self.get_agent(updated_agent.id)
 
-    def list_tests(self, agent_id: int, limit: int = 20) -> List[schemas.AgentTestRecord]:
+    def list_tests(
+        self, agent_id: int, limit: int = 20
+    ) -> list[schemas.AgentTestRecord]:
         return self._repository.list_tests(agent_id, limit=limit)
 
-    def list_supported_providers(self) -> Dict[str, Optional[str]]:
+    def list_supported_providers(self) -> dict[str, str | None]:
         return self._providers.list_supported_providers()
 
     # ------------------------------------------------------------------
     # Channels
 
-    def list_channel_configs(self, agent_id: int) -> List[schemas.ChannelConfig]:
+    def list_channel_configs(self, agent_id: int) -> list[schemas.ChannelConfig]:
         return self._repository.list_channel_configs(agent_id)
 
     def get_channel_config(self, agent_id: int, channel: str) -> schemas.ChannelConfig:
         config = self._repository.get_channel_config(agent_id, channel.lower())
         if not config:
-            raise AgentNotFoundError(f"Channel {channel} not configured for agent {agent_id}")
+            raise AgentNotFoundError(
+                f"Channel {channel} not configured for agent {agent_id}"
+            )
         return config
 
     def upsert_channel_config(
         self, agent_id: int, channel: str, payload: schemas.ChannelConfigUpdate
     ) -> schemas.ChannelConfig:
-        return self._repository.upsert_channel_config(agent_id, channel.lower(), payload)
+        return self._repository.upsert_channel_config(
+            agent_id, channel.lower(), payload
+        )
 
     def delete_channel_config(self, agent_id: int, channel: str) -> None:
         self._repository.delete_channel_config(agent_id, channel.lower())
 
 
-
-def _simulate_model_response(name: str, rendered_prompt: str, parameters: Dict[str, Any]) -> str:
+def _simulate_model_response(
+    name: str, rendered_prompt: str, parameters: dict[str, Any]
+) -> str:
     preview = rendered_prompt.splitlines()[-1] if rendered_prompt else ""
-    return f"Agent {name} (temp={parameters.get('temperature')}) would reply to: {preview}"
+    return (
+        f"Agent {name} (temp={parameters.get('temperature')}) would reply to: {preview}"
+    )
 
 
 def _normalise_create_payload(
     payload: schemas.AgentCreate,
-    persona: Dict[str, Any],
+    persona: dict[str, Any],
     prompt_template: str,
-    response_parameters: Dict[str, Any],
+    response_parameters: dict[str, Any],
     credentials_available: bool,
 ) -> schemas.AgentCreate:
     data = _model_dump(payload, exclude={"initial_version_label"})
@@ -318,11 +368,11 @@ def _normalise_create_payload(
 
 def _normalise_update_payload(
     payload: schemas.AgentUpdate,
-    persona: Dict[str, Any],
+    persona: dict[str, Any],
     prompt_template: str,
-    response_parameters: Dict[str, Any],
-    credentials_available: Optional[bool],
-    existing_metadata: Optional[Dict[str, Any]],
+    response_parameters: dict[str, Any],
+    credentials_available: bool | None,
+    existing_metadata: dict[str, Any] | None,
 ) -> schemas.AgentUpdate:
     data = _model_dump(payload)
     if payload.persona is not None or payload.persona_type is not None:
@@ -345,7 +395,7 @@ def _normalise_update_payload(
     return schemas.AgentUpdate(**data)
 
 
-def _model_dump(model: Any, exclude: Optional[Iterable[str]] = None) -> Dict[str, Any]:
+def _model_dump(model: Any, exclude: Iterable[str] | None = None) -> dict[str, Any]:
     exclude = set(exclude or [])
     if hasattr(model, "model_dump"):
         return {
@@ -378,7 +428,7 @@ class PostgresAgentRepository:
     """PostgreSQL-backed agent repository."""
 
     def __init__(
-        self, connection: psycopg.Connection, tenant_id: Optional[UUID] = None
+        self, connection: psycopg.Connection, tenant_id: UUID | None = None
     ) -> None:
         self._conn = connection
         self._tenant_id = get_required_tenant_id(tenant_id)
@@ -390,7 +440,7 @@ class PostgresAgentRepository:
     def tenant_id(self) -> UUID:
         return self._tenant_id
 
-    def list_agents(self) -> List[schemas.Agent]:
+    def list_agents(self) -> list[schemas.Agent]:
         with self.cursor() as cur:
             cur.execute(
                 """
@@ -409,8 +459,12 @@ class PostgresAgentRepository:
         return agents
 
     def get_agent(
-        self, agent_id: int, *, include_versions: bool = False, include_tests: bool = False
-    ) -> Optional[schemas.AgentDetail]:
+        self,
+        agent_id: int,
+        *,
+        include_versions: bool = False,
+        include_tests: bool = False,
+    ) -> schemas.AgentDetail | None:
         with self.cursor() as cur:
             cur.execute(
                 """
@@ -437,7 +491,7 @@ class PostgresAgentRepository:
 
     def get_agent_by_slug(
         self, slug: str, *, include_versions: bool = False, include_tests: bool = False
-    ) -> Optional[schemas.AgentDetail]:
+    ) -> schemas.AgentDetail | None:
         with self.cursor() as cur:
             cur.execute(
                 """
@@ -507,45 +561,51 @@ class PostgresAgentRepository:
             candidate = f"{base}-{suffix}"
             suffix += 1
 
-    def update_agent(self, agent_id: int, payload: schemas.AgentUpdate) -> schemas.Agent:
-        fields: List[str] = []
-        values: List[Any] = []
+    def update_agent(
+        self, agent_id: int, payload: schemas.AgentUpdate
+    ) -> schemas.Agent:
+        assignments: list[sql.Composable] = []
+        values: list[Any] = []
         data = _model_dump(payload)
         for key, value in data.items():
             if key == "persona":
-                fields.append("persona = %s")
+                assignments.append(sql.SQL("{} = %s").format(sql.Identifier("persona")))
                 values.append(Jsonb(value))
             elif key == "response_parameters":
-                fields.append("response_params = %s")
+                assignments.append(
+                    sql.SQL("{} = %s").format(sql.Identifier("response_params"))
+                )
                 values.append(Jsonb(value))
             elif key == "deployment_metadata":
-                fields.append("deployment_metadata = %s")
+                assignments.append(
+                    sql.SQL("{} = %s").format(sql.Identifier("deployment_metadata"))
+                )
                 values.append(Jsonb(value))
             elif key == "prompt_template":
-                fields.append("prompt_template = %s")
+                assignments.append(
+                    sql.SQL("{} = %s").format(sql.Identifier("prompt_template"))
+                )
                 values.append(value)
             elif key == "tags":
-                fields.append("tags = %s")
+                assignments.append(sql.SQL("{} = %s").format(sql.Identifier("tags")))
                 values.append(value)
             elif key == "persona_type":
                 continue
             else:
-                fields.append(f"{key} = %s")
+                assignments.append(sql.SQL("{} = %s").format(sql.Identifier(key)))
                 values.append(value)
-        if not fields:
+        if not assignments:
             agent = self.get_agent(agent_id)
             if not agent:
                 raise AgentNotFoundError
             return agent
-        set_clause = ", ".join(fields)
-        query = (
-            "UPDATE agents SET "
-            f"{set_clause}, updated_at = now() "
-            "WHERE tenant_id = %s AND id = %s "
+        set_clause = sql.SQL(", ").join(assignments + [sql.SQL("updated_at = now()")])
+        query = sql.SQL(
+            "UPDATE agents SET {} WHERE tenant_id = %s AND id = %s "
             "RETURNING id, tenant_id, slug, name, description, provider, model, persona, prompt_template, "
             "response_params, deployment_metadata, tags, is_active, created_at, updated_at"
-        )
-        values.extend((self._tenant_id, agent_id))
+        ).format(set_clause)
+        values.extend([self._tenant_id, agent_id])
         with self.cursor() as cur:
             cur.execute(query, values)
             row = cur.fetchone()
@@ -560,7 +620,9 @@ class PostgresAgentRepository:
                 (self._tenant_id, agent_id),
             )
 
-    def create_version(self, agent_id: int, payload: schemas.AgentVersionCreate) -> schemas.AgentVersion:
+    def create_version(
+        self, agent_id: int, payload: schemas.AgentVersionCreate
+    ) -> schemas.AgentVersion:
         latest = self.latest_version(agent_id)
         next_version = (latest.version + 1) if latest else 1
         with self.cursor() as cur:
@@ -587,7 +649,7 @@ class PostgresAgentRepository:
         version = self._row_to_version(row)
         return version
 
-    def list_versions(self, agent_id: int) -> List[schemas.AgentVersion]:
+    def list_versions(self, agent_id: int) -> list[schemas.AgentVersion]:
         with self.cursor() as cur:
             cur.execute(
                 """
@@ -601,7 +663,7 @@ class PostgresAgentRepository:
             rows = cur.fetchall()
         return [self._row_to_version(row) for row in rows]
 
-    def latest_version(self, agent_id: int) -> Optional[schemas.AgentVersion]:
+    def latest_version(self, agent_id: int) -> schemas.AgentVersion | None:
         with self.cursor() as cur:
             cur.execute(
                 """
@@ -616,7 +678,9 @@ class PostgresAgentRepository:
             row = cur.fetchone()
         return self._row_to_version(row) if row else None
 
-    def record_test(self, payload: schemas.AgentTestRecordCreate) -> schemas.AgentTestRecord:
+    def record_test(
+        self, payload: schemas.AgentTestRecordCreate
+    ) -> schemas.AgentTestRecord:
         with self.cursor() as cur:
             cur.execute(
                 """
@@ -639,7 +703,9 @@ class PostgresAgentRepository:
             row = cur.fetchone()
         return self._row_to_test(row)
 
-    def list_tests(self, agent_id: int, limit: int = 20) -> List[schemas.AgentTestRecord]:
+    def list_tests(
+        self, agent_id: int, limit: int = 20
+    ) -> list[schemas.AgentTestRecord]:
         with self.cursor() as cur:
             cur.execute(
                 """
@@ -654,7 +720,9 @@ class PostgresAgentRepository:
             rows = cur.fetchall()
         return [self._row_to_test(row) for row in rows]
 
-    def update_deployment_metadata(self, agent_id: int, metadata: Dict[str, Any]) -> schemas.Agent:
+    def update_deployment_metadata(
+        self, agent_id: int, metadata: dict[str, Any]
+    ) -> schemas.Agent:
         with self.cursor() as cur:
             cur.execute(
                 """
@@ -673,7 +741,7 @@ class PostgresAgentRepository:
 
     # ------------------------------------------------------------------
     # Row converters
-    def list_channel_configs(self, agent_id: int) -> List[schemas.ChannelConfig]:
+    def list_channel_configs(self, agent_id: int) -> list[schemas.ChannelConfig]:
         with self.cursor() as cur:
             cur.execute(
                 """
@@ -687,7 +755,9 @@ class PostgresAgentRepository:
             rows = cur.fetchall()
         return [self._row_to_channel_config(row) for row in rows]
 
-    def get_channel_config(self, agent_id: int, channel: str) -> Optional[schemas.ChannelConfig]:
+    def get_channel_config(
+        self, agent_id: int, channel: str
+    ) -> schemas.ChannelConfig | None:
         with self.cursor() as cur:
             cur.execute(
                 """
@@ -704,10 +774,26 @@ class PostgresAgentRepository:
         self, agent_id: int, channel: str, payload: schemas.ChannelConfigUpdate
     ) -> schemas.ChannelConfig:
         existing = self.get_channel_config(agent_id, channel)
-        is_enabled = payload.is_enabled if payload.is_enabled is not None else (existing.is_enabled if existing else True)
-        webhook_secret = payload.webhook_secret if payload.webhook_secret is not None else (existing.webhook_secret if existing else None)
-        credentials = payload.credentials if payload.credentials is not None else (existing.credentials if existing else {})
-        settings = payload.settings if payload.settings is not None else (existing.settings if existing else {})
+        is_enabled = (
+            payload.is_enabled
+            if payload.is_enabled is not None
+            else (existing.is_enabled if existing else True)
+        )
+        webhook_secret = (
+            payload.webhook_secret
+            if payload.webhook_secret is not None
+            else (existing.webhook_secret if existing else None)
+        )
+        credentials = (
+            payload.credentials
+            if payload.credentials is not None
+            else (existing.credentials if existing else {})
+        )
+        settings = (
+            payload.settings
+            if payload.settings is not None
+            else (existing.settings if existing else {})
+        )
         with self.cursor() as cur:
             cur.execute(
                 """
@@ -741,8 +827,7 @@ class PostgresAgentRepository:
                 (self._tenant_id, agent_id, channel),
             )
 
-
-    def _row_to_agent(self, row: Dict[str, Any]) -> schemas.Agent:
+    def _row_to_agent(self, row: dict[str, Any]) -> schemas.Agent:
         return schemas.Agent(
             id=row["id"],
             tenant_id=row["tenant_id"],
@@ -762,7 +847,7 @@ class PostgresAgentRepository:
             latest_version=None,
         )
 
-    def _row_to_version(self, row: Dict[str, Any]) -> schemas.AgentVersion:
+    def _row_to_version(self, row: dict[str, Any]) -> schemas.AgentVersion:
         config = row.get("config") or {}
         return schemas.AgentVersion(
             id=row["id"],
@@ -784,7 +869,7 @@ class PostgresAgentRepository:
             created_at=row["created_at"],
         )
 
-    def _row_to_test(self, row: Dict[str, Any]) -> schemas.AgentTestRecord:
+    def _row_to_test(self, row: dict[str, Any]) -> schemas.AgentTestRecord:
         return schemas.AgentTestRecord(
             id=row["id"],
             tenant_id=row["tenant_id"],
@@ -798,7 +883,7 @@ class PostgresAgentRepository:
             ran_at=row["ran_at"],
         )
 
-    def _row_to_channel_config(self, row: Dict[str, Any]) -> schemas.ChannelConfig:
+    def _row_to_channel_config(self, row: dict[str, Any]) -> schemas.ChannelConfig:
         return schemas.ChannelConfig(
             tenant_id=row["tenant_id"],
             channel=row["channel"],
@@ -811,16 +896,15 @@ class PostgresAgentRepository:
         )
 
 
-
 # ---------------------------------------------------------------------------
 # In-memory repository (useful for testing and sandbox environments)
 
 
 class InMemoryAgentRepository(AgentRepository):
-    def __init__(self, tenant_id: Optional[UUID] = None) -> None:
-        self._agents: Dict[int, schemas.AgentDetail] = {}
-        self._versions: Dict[int, List[schemas.AgentVersion]] = {}
-        self._tests: Dict[int, List[schemas.AgentTestRecord]] = {}
+    def __init__(self, tenant_id: UUID | None = None) -> None:
+        self._agents: dict[int, schemas.AgentDetail] = {}
+        self._versions: dict[int, list[schemas.AgentVersion]] = {}
+        self._tests: dict[int, list[schemas.AgentTestRecord]] = {}
         self._agent_id_seq = 1
         self._version_id_seq = 1
         self._test_id_seq = 1
@@ -830,8 +914,10 @@ class InMemoryAgentRepository(AgentRepository):
     def tenant_id(self) -> UUID:
         return self._tenant_id
 
-    def list_agents(self) -> List[schemas.Agent]:
-        agents = [schemas.Agent(**agent.model_dump()) for agent in self._agents.values()]
+    def list_agents(self) -> list[schemas.Agent]:
+        agents = [
+            schemas.Agent(**agent.model_dump()) for agent in self._agents.values()
+        ]
         for agent in agents:
             versions = self._versions.get(agent.id, [])
             agent.latest_version = versions[-1] if versions else None
@@ -839,8 +925,12 @@ class InMemoryAgentRepository(AgentRepository):
         return agents
 
     def get_agent(
-        self, agent_id: int, *, include_versions: bool = False, include_tests: bool = False
-    ) -> Optional[schemas.AgentDetail]:
+        self,
+        agent_id: int,
+        *,
+        include_versions: bool = False,
+        include_tests: bool = False,
+    ) -> schemas.AgentDetail | None:
         agent = self._agents.get(agent_id)
         if not agent:
             return None
@@ -857,7 +947,7 @@ class InMemoryAgentRepository(AgentRepository):
 
     def get_agent_by_slug(
         self, slug: str, *, include_versions: bool = False, include_tests: bool = False
-    ) -> Optional[schemas.AgentDetail]:
+    ) -> schemas.AgentDetail | None:
         for agent in self._agents.values():
             if agent.slug == slug:
                 source = agent
@@ -903,7 +993,7 @@ class InMemoryAgentRepository(AgentRepository):
         self._agents[agent_id] = detail
         return schemas.Agent(**detail.model_dump())
 
-    def _make_unique_slug(self, name: str, exclude_id: Optional[int] = None) -> str:
+    def _make_unique_slug(self, name: str, exclude_id: int | None = None) -> str:
         base = _slugify(name)
         slug = base
         suffix = 1
@@ -913,7 +1003,9 @@ class InMemoryAgentRepository(AgentRepository):
             suffix += 1
         return slug
 
-    def update_agent(self, agent_id: int, payload: schemas.AgentUpdate) -> schemas.Agent:
+    def update_agent(
+        self, agent_id: int, payload: schemas.AgentUpdate
+    ) -> schemas.Agent:
         agent = self._agents.get(agent_id)
         if not agent:
             raise AgentNotFoundError
@@ -949,7 +1041,9 @@ class InMemoryAgentRepository(AgentRepository):
         self._versions.pop(agent_id, None)
         self._tests.pop(agent_id, None)
 
-    def create_version(self, agent_id: int, payload: schemas.AgentVersionCreate) -> schemas.AgentVersion:
+    def create_version(
+        self, agent_id: int, payload: schemas.AgentVersionCreate
+    ) -> schemas.AgentVersion:
         versions = self._versions.setdefault(agent_id, [])
         version_number = versions[-1].version + 1 if versions else 1
         version = schemas.AgentVersion(
@@ -972,14 +1066,16 @@ class InMemoryAgentRepository(AgentRepository):
             agent.latest_version = version
         return version
 
-    def list_versions(self, agent_id: int) -> List[schemas.AgentVersion]:
+    def list_versions(self, agent_id: int) -> list[schemas.AgentVersion]:
         return list(self._versions.get(agent_id, []))
 
-    def latest_version(self, agent_id: int) -> Optional[schemas.AgentVersion]:
+    def latest_version(self, agent_id: int) -> schemas.AgentVersion | None:
         versions = self._versions.get(agent_id, [])
         return versions[-1] if versions else None
 
-    def record_test(self, payload: schemas.AgentTestRecordCreate) -> schemas.AgentTestRecord:
+    def record_test(
+        self, payload: schemas.AgentTestRecordCreate
+    ) -> schemas.AgentTestRecord:
         record = schemas.AgentTestRecord(
             id=self._test_id_seq,
             tenant_id=self._tenant_id,
@@ -996,10 +1092,14 @@ class InMemoryAgentRepository(AgentRepository):
         self._tests.setdefault(payload.agent_id, []).insert(0, record)
         return record
 
-    def list_tests(self, agent_id: int, limit: int = 20) -> List[schemas.AgentTestRecord]:
+    def list_tests(
+        self, agent_id: int, limit: int = 20
+    ) -> list[schemas.AgentTestRecord]:
         return list(self._tests.get(agent_id, []))[:limit]
 
-    def update_deployment_metadata(self, agent_id: int, metadata: Dict[str, Any]) -> schemas.Agent:
+    def update_deployment_metadata(
+        self, agent_id: int, metadata: dict[str, Any]
+    ) -> schemas.Agent:
         agent = self._agents.get(agent_id)
         if not agent:
             raise AgentNotFoundError
@@ -1013,14 +1113,16 @@ class InMemoryAgentRepository(AgentRepository):
 
 
 def create_postgres_service(
-    connection: psycopg.Connection, *, tenant_id: Optional[UUID] = None
+    connection: psycopg.Connection, *, tenant_id: UUID | None = None
 ) -> AgentService:
     repository = PostgresAgentRepository(connection, tenant_id=tenant_id)
     return AgentService(repository, tenant_id=tenant_id)
 
 
 @contextmanager
-def service_context_from_dsn(dsn: str, *, tenant_id: Optional[UUID] = None) -> Iterator[AgentService]:
+def service_context_from_dsn(
+    dsn: str, *, tenant_id: UUID | None = None
+) -> Iterator[AgentService]:
     conn = psycopg.connect(dsn)
     try:
         service = create_postgres_service(conn, tenant_id=tenant_id)

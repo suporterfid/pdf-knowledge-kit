@@ -1,16 +1,13 @@
-import os
 import pathlib
 import uuid
 from datetime import datetime
 from threading import Event
 from uuid import uuid4
 
+import app.ingestion.service as service
 import psycopg
 import pytest
-
-import app.ingestion.service as service
 from app.ingestion.models import JobStatus
-
 
 TEST_TENANT_ID = uuid4()
 
@@ -19,9 +16,11 @@ class ImmediateRunner:
     def submit(self, job_id, fn):
         ev = Event()
         fn(ev)
+
         class DummyFuture:
             def cancel(self):
                 return False
+
         return DummyFuture()
 
     def cancel(self, job_id):
@@ -34,12 +33,16 @@ class ImmediateRunner:
 class DummyCursor:
     def __enter__(self):
         return self
+
     def __exit__(self, *exc):
         return False
+
     def execute(self, *a, **k):
         return None
+
     def fetchone(self):
         return None
+
     def fetchall(self):
         return []
 
@@ -47,12 +50,16 @@ class DummyCursor:
 class DummyConn:
     def cursor(self):
         return DummyCursor()
+
     def __enter__(self):
         return self
+
     def __exit__(self, *exc):
         return False
+
     def commit(self):
         return None
+
     def rollback(self):
         return None
 
@@ -66,10 +73,12 @@ def tenant_context(monkeypatch):
 def test_ingest_local_and_url(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(service, "_runner", ImmediateRunner())
+
     class DummyEmbedder:
         def embed(self, texts):
             for _ in texts:
                 yield [0.0]
+
     monkeypatch.setattr(service, "TextEmbedding", lambda model_name: DummyEmbedder())
     monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: DummyConn())
     monkeypatch.setattr(service, "register_vector", lambda conn: None)
@@ -143,7 +152,9 @@ def test_ingest_local_error(tmp_path, monkeypatch):
     monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: DummyConn())
     monkeypatch.setattr(service, "register_vector", lambda conn: None)
     monkeypatch.setattr(service, "ensure_schema", lambda *a, **k: None)
-    monkeypatch.setattr(service.storage, "get_or_create_source", lambda *a, **k: uuid4())
+    monkeypatch.setattr(
+        service.storage, "get_or_create_source", lambda *a, **k: uuid4()
+    )
 
     jobs: dict[uuid.UUID, service.Job] = {}
 
@@ -179,8 +190,10 @@ def test_ingest_local_error(tmp_path, monkeypatch):
     monkeypatch.setattr(service.storage, "get_job", get_job)
     path = tmp_path / "bad.md"
     path.write_text("boom", encoding="utf-8")
+
     def bad(_):
         raise ValueError("fail")
+
     monkeypatch.setattr(service, "read_md_text", bad)
     job_id = service.ingest_local(path, tenant_id=TEST_TENANT_ID)
     job = service.get_job(job_id, tenant_id=TEST_TENANT_ID)
@@ -193,7 +206,9 @@ def test_ingest_local_ocr_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(service, "_runner", ImmediateRunner())
     monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: DummyConn())
     monkeypatch.setattr(service, "register_vector", lambda conn: None)
-    monkeypatch.setattr(service.storage, "get_or_create_source", lambda *a, **k: uuid4())
+    monkeypatch.setattr(
+        service.storage, "get_or_create_source", lambda *a, **k: uuid4()
+    )
     monkeypatch.setattr(service, "ensure_schema", lambda *a, **k: None)
 
     jobs: dict[uuid.UUID, service.Job] = {}
@@ -242,7 +257,11 @@ def test_ingest_local_ocr_failure(tmp_path, monkeypatch):
         raise RuntimeError("ocr boom")
 
     monkeypatch.setattr(service, "read_pdf_text", fail_ocr)
-    monkeypatch.setattr(service, "TextEmbedding", lambda model_name: type("E", (), {"embed": lambda self, texts: []})())
+    monkeypatch.setattr(
+        service,
+        "TextEmbedding",
+        lambda model_name: type("E", (), {"embed": lambda self, texts: []})(),
+    )
 
     job_id = service.ingest_local(pdf_path, tenant_id=TEST_TENANT_ID, use_ocr=True)
     job = service.get_job(job_id, tenant_id=TEST_TENANT_ID)
@@ -367,7 +386,9 @@ def test_ingest_local_integration_persists_chunks(tmp_path, monkeypatch):
 
     monkeypatch.setattr(service, "TextEmbedding", lambda model_name: DummyEmbedder())
 
-    def ensure_schema_without_vector(conn, schema_sql_path=service.SCHEMA_PATH, migrations_dir=None):
+    def ensure_schema_without_vector(
+        conn, schema_sql_path=service.SCHEMA_PATH, migrations_dir=None
+    ):
         sql = pathlib.Path(schema_sql_path).read_text(encoding="utf-8")
         sql = sql.replace(
             "CREATE EXTENSION IF NOT EXISTS vector;",
@@ -437,8 +458,6 @@ def test_read_job_log_slicing(tmp_path, monkeypatch):
     assert slice1.content == "line1\n"
     assert slice1.next_offset == 6
     jobs[job_id].status = JobStatus.SUCCEEDED
-    slice2 = service.read_job_log(
-        job_id, tenant_id=TEST_TENANT_ID, offset=6, limit=12
-    )
+    slice2 = service.read_job_log(job_id, tenant_id=TEST_TENANT_ID, offset=6, limit=12)
     assert slice2.content == "line2\n"
     assert slice2.status == JobStatus.SUCCEEDED

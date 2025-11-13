@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-pytest.importorskip("sqlalchemy")
-jwt = pytest.importorskip("jwt")
+try:  # pragma: no cover - optional dependency guard
+    from app.core.tenant_context import get_current_tenant_id
+    from app.core.tenant_middleware import TenantContextMiddleware
+except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency guard
+    pytest.skip(f"Required dependency missing: {exc.name}", allow_module_level=True)
 
-from app.core.tenant_context import get_current_tenant_id
-from app.core.tenant_middleware import TenantContextMiddleware
+jwt = pytest.importorskip("jwt")
 
 
 @pytest.fixture(autouse=True)
@@ -34,7 +37,9 @@ class DummyConnection:
 
     statements: list[tuple[str, dict[str, Any] | None]]
 
-    def execute(self, statement: Any, params: dict[str, Any] | None = None) -> None:  # pragma: no cover - trivial
+    def execute(
+        self, statement: Any, params: dict[str, Any] | None = None
+    ) -> None:  # pragma: no cover - trivial
         self.statements.append((str(statement), params))
 
     def close(self) -> None:  # pragma: no cover - trivial
@@ -51,7 +56,9 @@ class DummyEngine:
         return self.connection
 
 
-def _create_app(monkeypatch: pytest.MonkeyPatch, connection: DummyConnection) -> FastAPI:
+def _create_app(
+    monkeypatch: pytest.MonkeyPatch, connection: DummyConnection
+) -> FastAPI:
     """Build a FastAPI application instrumented with the tenant middleware."""
 
     engine = DummyEngine(connection=connection)
@@ -76,7 +83,9 @@ def _create_app(monkeypatch: pytest.MonkeyPatch, connection: DummyConnection) ->
 
 
 @pytest.fixture
-def client_factory(monkeypatch: pytest.MonkeyPatch) -> Callable[[], tuple[TestClient, DummyConnection]]:
+def client_factory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[], tuple[TestClient, DummyConnection]]:
     """Provide a factory that yields an isolated client and dummy connection."""
 
     def _factory() -> tuple[TestClient, DummyConnection]:
@@ -142,7 +151,7 @@ def test_middleware_sets_state_and_context(
 
 
 def test_missing_token_returns_unauthorized(
-    client_factory: Callable[[], tuple[TestClient, DummyConnection]]
+    client_factory: Callable[[], tuple[TestClient, DummyConnection]],
 ) -> None:
     """Requests without credentials must fail with HTTP 401."""
 
@@ -175,4 +184,3 @@ def test_invalid_token_returns_unauthorized(
     assert get_current_tenant_id() is None
 
     client.close()
-

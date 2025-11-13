@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Callable, Awaitable
+from collections.abc import Awaitable, Callable
 
+from app.models.session import get_engine
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import Engine, text
@@ -14,8 +15,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from starlette.types import ASGIApp
-
-from app.models.session import get_engine
 
 from .auth import TenantTokenPayload, get_tenant_context
 from .tenant_context import reset_tenant_context, set_tenant_context
@@ -147,4 +146,3 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         suffix = path.removeprefix("/api/tenant/accounts").lstrip("/")
         action = suffix.split("/", 1)[0]
         return action in {"register", "login", "refresh", "accept-invite"}
-

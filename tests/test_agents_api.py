@@ -4,11 +4,10 @@ import types
 from contextlib import contextmanager
 from uuid import UUID
 
-from fastapi import HTTPException
-from fastapi.testclient import TestClient
-
 from app.agents import service as agent_service_module
 from app.core import tenant_context
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 
 def create_client(monkeypatch, tenant_auth):
@@ -24,15 +23,23 @@ def create_client(monkeypatch, tenant_auth):
     monkeypatch.setattr(pydantic_networks, "import_email_validator", lambda: None)
 
     import app.routers.agents as agents_router
+
     importlib.reload(agents_router)
 
-    provider_registry = agent_service_module.ProviderRegistry({"openai": {"api_key": "test"}})
+    provider_registry = agent_service_module.ProviderRegistry(
+        {"openai": {"api_key": "test"}}
+    )
     prompt_store = agent_service_module.PromptTemplateStore()
-    response_store = agent_service_module.ResponseParameterStore({"openai": {"temperature": 0.6}})
+    response_store = agent_service_module.ResponseParameterStore(
+        {"openai": {"temperature": 0.6}}
+    )
+
     class StrictInMemoryRepository(agent_service_module.InMemoryAgentRepository):
         def delete_agent(self, agent_id: int) -> None:  # type: ignore[override]
             if agent_id not in self._agents:
-                raise agent_service_module.AgentNotFoundError(f"Agent {agent_id} not found")
+                raise agent_service_module.AgentNotFoundError(
+                    f"Agent {agent_id} not found"
+                )
             super().delete_agent(agent_id)
 
     tenant_services: dict[str, agent_service_module.AgentService] = {}
@@ -45,9 +52,7 @@ def create_client(monkeypatch, tenant_auth):
         tenant_key = str(current_tenant)
         svc = tenant_services.get(tenant_key)
         if svc is None:
-            repository = StrictInMemoryRepository(
-                tenant_id=UUID(tenant_key)
-            )
+            repository = StrictInMemoryRepository(tenant_id=UUID(tenant_key))
             svc = agent_service_module.AgentService(
                 repository,
                 tenant_id=UUID(tenant_key),
@@ -64,8 +69,10 @@ def create_client(monkeypatch, tenant_auth):
     monkeypatch.setattr(agents_router, "_service_context", fake_context)
 
     import app.security.auth as auth
+
     importlib.reload(auth)
     import app.main as main
+
     importlib.reload(main)
 
     return TestClient(main.app), tenant_services, tenant_auth
@@ -86,7 +93,9 @@ def test_agent_crud_and_deploy_flow(monkeypatch, tenant_auth):
         "tags": ["support"],
     }
 
-    res = client.post("/api/agents", json=create_payload, headers=auth_ctx.header("operator"))
+    res = client.post(
+        "/api/agents", json=create_payload, headers=auth_ctx.header("operator")
+    )
     assert res.status_code == 201
     agent_detail = res.json()
     agent_id = agent_detail["id"]
@@ -118,7 +127,9 @@ def test_agent_crud_and_deploy_flow(monkeypatch, tenant_auth):
     assert updated["description"] == "Updated description"
     assert updated["response_parameters"]["temperature"] == 0.2
 
-    res = client.get(f"/api/agents/{agent_id}/versions", headers=auth_ctx.header("viewer"))
+    res = client.get(
+        f"/api/agents/{agent_id}/versions", headers=auth_ctx.header("viewer")
+    )
     assert res.status_code == 200
     versions = res.json()
     assert versions["total"] == 1
@@ -139,7 +150,12 @@ def test_agent_crud_and_deploy_flow(monkeypatch, tenant_auth):
     )
     assert res.status_code == 200
     deployed = res.json()
-    assert deployed["deployment_metadata"]["environments"]["staging"]["metadata"]["requested_by"] == "qa"
+    assert (
+        deployed["deployment_metadata"]["environments"]["staging"]["metadata"][
+            "requested_by"
+        ]
+        == "qa"
+    )
 
     res = client.get(f"/api/agents/{agent_id}/tests", headers=auth_ctx.header("viewer"))
     assert res.status_code == 200
@@ -172,13 +188,17 @@ def test_agents_cross_tenant_isolation(monkeypatch, tenant_auth):
         "initial_version_label": "v1",
     }
 
-    res = client.post("/api/agents", json=create_payload, headers=auth_ctx.header("operator"))
+    res = client.post(
+        "/api/agents", json=create_payload, headers=auth_ctx.header("operator")
+    )
     assert res.status_code == 201
     agent_id = res.json()["id"]
 
     other_tenant = auth_ctx.create_tenant("Other", "other")
 
-    res = client.get("/api/agents", headers=auth_ctx.header("viewer", tenant_id=other_tenant))
+    res = client.get(
+        "/api/agents", headers=auth_ctx.header("viewer", tenant_id=other_tenant)
+    )
     assert res.status_code == 200
     assert res.json()["total"] == 0
 

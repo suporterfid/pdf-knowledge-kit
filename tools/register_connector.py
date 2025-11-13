@@ -6,14 +6,20 @@ import argparse
 import json
 import sys
 import time
-from typing import Any, Dict, Iterable, Optional
+from collections.abc import Iterable
+from typing import Any, TextIO
 
 import requests
 
 DEFAULT_POLL_SECONDS = 5.0
 
 
-def _build_headers(api_key: str) -> Dict[str, str]:
+def _echo(message: str, *, stream: TextIO | None = None) -> None:
+    target = stream if stream is not None else sys.stdout
+    target.write(f"{message}\n")
+
+
+def _build_headers(api_key: str) -> dict[str, str]:
     return {"X-API-Key": api_key}
 
 
@@ -35,7 +41,7 @@ def _request(
     return resp
 
 
-def _normalise_json(data: Dict[str, Any]) -> Dict[str, Any]:
+def _normalise_json(data: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in data.items() if v is not None}
 
 
@@ -45,7 +51,7 @@ def _find_definition_id(
     *,
     api_key: str,
     name: str,
-) -> Optional[str]:
+) -> str | None:
     resp = _request(
         session,
         "GET",
@@ -65,9 +71,11 @@ def register_definition(
     host: str,
     *,
     api_key: str,
-    payload: Dict[str, Any],
-) -> Dict[str, Any]:
-    existing_id = _find_definition_id(session, host, api_key=api_key, name=payload["name"])
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    existing_id = _find_definition_id(
+        session, host, api_key=api_key, name=payload["name"]
+    )
     method = "POST" if existing_id is None else "PUT"
     path = "/api/admin/ingest/connector_definitions"
     if existing_id:
@@ -89,7 +97,7 @@ def trigger_job(
     *,
     api_key: str,
     connector_type: str,
-    job_payload: Dict[str, Any],
+    job_payload: dict[str, Any],
 ) -> str:
     path_map = {
         "database": "/api/admin/ingest/database",
@@ -115,7 +123,7 @@ def poll_job(
     api_key: str,
     job_id: str,
     poll_seconds: float,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     while True:
         resp = _request(
             session,
@@ -126,7 +134,7 @@ def poll_job(
         )
         job = resp.json()
         status = job.get("status")
-        print(f"job={job_id} status={status} updated_at={job.get('updated_at')}")
+        _echo(f"job={job_id} status={status} updated_at={job.get('updated_at')}")
         if status in {"succeeded", "failed", "canceled"}:
             return job
         time.sleep(poll_seconds)
@@ -168,7 +176,7 @@ def load_source(
     *,
     api_key: str,
     source_id: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     resp = _request(
         session,
         "GET",
@@ -183,8 +191,8 @@ def load_source(
     raise RuntimeError(f"Source {source_id} not found")
 
 
-def build_database_payload(args: argparse.Namespace) -> Dict[str, Any]:
-    queries: Iterable[Dict[str, Any]]
+def build_database_payload(args: argparse.Namespace) -> dict[str, Any]:
+    queries: Iterable[dict[str, Any]]
     if args.database_query_sql:
         queries = [
             _normalise_json(
@@ -223,8 +231,8 @@ def build_database_payload(args: argparse.Namespace) -> Dict[str, Any]:
     }
 
 
-def build_api_payload(args: argparse.Namespace) -> Dict[str, Any]:
-    headers: Dict[str, str] = {}
+def build_api_payload(args: argparse.Namespace) -> dict[str, Any]:
+    headers: dict[str, str] = {}
     for entry in args.api_header:
         if "=" not in entry:
             raise ValueError(f"Invalid header format: {entry!r}")
@@ -256,7 +264,7 @@ def build_api_payload(args: argparse.Namespace) -> Dict[str, Any]:
     }
 
 
-def build_transcription_payload(args: argparse.Namespace) -> Dict[str, Any]:
+def build_transcription_payload(args: argparse.Namespace) -> dict[str, Any]:
     params = _normalise_json(
         {
             "provider": args.provider,
@@ -281,17 +289,31 @@ def build_transcription_payload(args: argparse.Namespace) -> Dict[str, Any]:
     }
 
 
-def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host", default="http://localhost:8000", help="FastAPI base URL")
-    parser.add_argument("--operator-key", required=True, help="API key with operator role")
+    parser.add_argument(
+        "--host", default="http://localhost:8000", help="FastAPI base URL"
+    )
+    parser.add_argument(
+        "--operator-key", required=True, help="API key with operator role"
+    )
     parser.add_argument("--viewer-key", help="Viewer API key used for log polling")
     parser.add_argument("--name", required=True, help="Connector definition name")
     parser.add_argument("--description", help="Optional description for the connector")
     parser.add_argument("--label", help="Label applied to the source during job run")
-    parser.add_argument("--run-now", action="store_true", help="Trigger an ingestion job after registering")
-    parser.add_argument("--job-id", help="Monitor an existing job instead of triggering a new one")
-    parser.add_argument("--follow-logs", action="store_true", help="Stream job logs while polling status")
+    parser.add_argument(
+        "--run-now",
+        action="store_true",
+        help="Trigger an ingestion job after registering",
+    )
+    parser.add_argument(
+        "--job-id", help="Monitor an existing job instead of triggering a new one"
+    )
+    parser.add_argument(
+        "--follow-logs",
+        action="store_true",
+        help="Stream job logs while polling status",
+    )
     parser.add_argument("--poll-seconds", type=float, default=DEFAULT_POLL_SECONDS)
 
     subparsers = parser.add_subparsers(dest="connector_type", required=True)
@@ -315,7 +337,9 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     api_parser.add_argument("--api-token")
     api_parser.add_argument("--api-header", action="append", default=[])
 
-    tr_parser = subparsers.add_parser("transcription", help="Register a transcription connector")
+    tr_parser = subparsers.add_parser(
+        "transcription", help="Register a transcription connector"
+    )
     tr_parser.add_argument("--provider", default="mock")
     tr_parser.add_argument("--media-uri", required=True)
     tr_parser.add_argument("--language")
@@ -327,11 +351,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: Optional[Iterable[str]] = None) -> None:
+def main(argv: Iterable[str] | None = None) -> None:
     args = parse_args(argv)
     session = requests.Session()
 
-    base_payload: Dict[str, Any]
+    base_payload: dict[str, Any]
     if args.connector_type == "database":
         base_payload = build_database_payload(args)
     elif args.connector_type == "api":
@@ -349,9 +373,9 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         api_key=args.operator_key,
         payload=definition_payload,
     )
-    print(f"definition_id={definition.get('id')} type={definition.get('type')}")
+    _echo(f"definition_id={definition.get('id')} type={definition.get('type')}")
 
-    job_id: Optional[str] = args.job_id
+    job_id: str | None = args.job_id
     if args.run_now and not job_id:
         job_payload = {
             "connector_definition_id": definition["id"],
@@ -369,7 +393,7 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
             connector_type=args.connector_type,
             job_payload=job_payload,
         )
-        print(f"triggered job_id={job_id}")
+        _echo(f"triggered job_id={job_id}")
 
     if not job_id:
         return
@@ -394,19 +418,23 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
 
     source_id = job.get("source_id")
     if source_id:
-        source = load_source(session, args.host, api_key=viewer_key, source_id=source_id)
-        print("\nSource summary:")
-        print(json.dumps(
-            {
-                "id": source.get("id"),
-                "type": source.get("type"),
-                "label": source.get("label"),
-                "version": source.get("version"),
-                "sync_state": source.get("sync_state"),
-            },
-            indent=2,
-            default=str,
-        ))
+        source = load_source(
+            session, args.host, api_key=viewer_key, source_id=source_id
+        )
+        _echo("\nSource summary:")
+        _echo(
+            json.dumps(
+                {
+                    "id": source.get("id"),
+                    "type": source.get("type"),
+                    "label": source.get("label"),
+                    "version": source.get("version"),
+                    "sync_state": source.get("sync_state"),
+                },
+                indent=2,
+                default=str,
+            )
+        )
 
 
 if __name__ == "__main__":

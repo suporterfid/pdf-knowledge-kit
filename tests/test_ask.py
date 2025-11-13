@@ -1,3 +1,4 @@
+import pathlib
 import sys
 import types
 from unittest.mock import patch
@@ -12,17 +13,19 @@ class DummyEmbedder:
 
 
 # Stub fastembed before importing the app to avoid model downloads.
-sys.modules['fastembed'] = types.SimpleNamespace(
+sys.modules["fastembed"] = types.SimpleNamespace(
     TextEmbedding=lambda model_name: DummyEmbedder()
 )
-import pathlib
+
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
 from app.main import app
 from starlette.routing import Mount
 
 # Remove static mount to access API routes during tests
-app.router.routes = [r for r in app.router.routes if not (isinstance(r, Mount) and r.path == '')]
+app.router.routes = [
+    r for r in app.router.routes if not (isinstance(r, Mount) and r.path == "")
+]
 
 
 @pytest.fixture
@@ -38,7 +41,10 @@ def dummy_build_context(q, k, tenant_id=None):
 
 def test_ask_without_llm(client):
     headers = {"X-Debug-Tenant": "tenant-1"}
-    with patch("app.main.build_context", dummy_build_context), patch("app.main.client", None):
+    with (
+        patch("app.main.build_context", dummy_build_context),
+        patch("app.main.client", None),
+    ):
         resp = client.post("/api/ask", json={"q": "hi", "k": 1}, headers=headers)
     assert resp.status_code == 200
     data = resp.json()
@@ -54,7 +60,9 @@ def test_ask_with_llm(client):
 
     class DummyClient:
         def __init__(self):
-            self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
+            self.chat = types.SimpleNamespace(
+                completions=types.SimpleNamespace(create=self.create)
+            )
             self.messages = None
 
         def create(self, **kwargs):
@@ -63,14 +71,21 @@ def test_ask_with_llm(client):
 
     dummy_client = DummyClient()
     headers = {"X-Debug-Tenant": "tenant-1"}
-    with patch("app.main.build_context", dummy_build_context), patch("app.main.client", dummy_client), patch("app.main.detect", lambda _: "en"):
+    with (
+        patch("app.main.build_context", dummy_build_context),
+        patch("app.main.client", dummy_client),
+        patch("app.main.detect", lambda _: "en"),
+    ):
         resp = client.post("/api/ask", json={"q": "hi", "k": 1}, headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["answer"] == "llm"
     assert data["used_llm"] is True
     assert data["sources"]
-    assert dummy_client.messages[0]["content"] == "Answer the user's question using the supplied context. Reply in en."
+    assert (
+        dummy_client.messages[0]["content"]
+        == "Answer the user's question using the supplied context. Reply in en."
+    )
 
 
 def test_ask_with_custom_system_prompt(client, monkeypatch):
@@ -80,7 +95,9 @@ def test_ask_with_custom_system_prompt(client, monkeypatch):
 
     class DummyClient:
         def __init__(self):
-            self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
+            self.chat = types.SimpleNamespace(
+                completions=types.SimpleNamespace(create=self.create)
+            )
             self.messages = None
 
         def create(self, **kwargs):
@@ -90,7 +107,11 @@ def test_ask_with_custom_system_prompt(client, monkeypatch):
     dummy_client = DummyClient()
     monkeypatch.setenv("SYSTEM_PROMPT", "You are a helper.")
     headers = {"X-Debug-Tenant": "tenant-1"}
-    with patch("app.main.build_context", dummy_build_context), patch("app.main.client", dummy_client), patch("app.main.detect", lambda _: "en"):
+    with (
+        patch("app.main.build_context", dummy_build_context),
+        patch("app.main.client", dummy_client),
+        patch("app.main.detect", lambda _: "en"),
+    ):
         resp = client.post("/api/ask", json={"q": "hi", "k": 1}, headers=headers)
     assert resp.status_code == 200
     data = resp.json()

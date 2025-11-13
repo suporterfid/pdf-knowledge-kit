@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal
 from threading import Event
-from typing import Any, Dict, Iterable, List
+from typing import Any
 
 import psycopg
 from psycopg import conninfo as psycopg_conninfo
@@ -23,16 +24,19 @@ class SqlConnector:
     def __init__(self, source: Source, *, logger: logging.Logger | None = None):
         self.source = source
         self.logger = logger or logging.getLogger(__name__)
-        params: DatabaseSourceParams | Dict[str, Any] = source.params or {}
+        params: DatabaseSourceParams | dict[str, Any] = source.params or {}
         queries = list(params.get("queries") or [])
         if not queries:
             raise ValueError("database connector requires params.queries")
-        self._queries: List[DatabaseQueryConfig] = queries
+        self._queries: list[DatabaseQueryConfig] = queries
         self._conninfo = self._resolve_conninfo(params, source.credentials)
         base_state = dict(source.sync_state or {})
         queries_state = dict(base_state.get("queries") or {})
-        self.next_sync_state: Dict[str, Any] = {**base_state, "queries": dict(queries_state)}
-        self.job_metadata: Dict[str, Any] = {
+        self.next_sync_state: dict[str, Any] = {
+            **base_state,
+            "queries": dict(queries_state),
+        }
+        self.job_metadata: dict[str, Any] = {
             "queries": len(self._queries),
             "rows": 0,
             "chunks": 0,
@@ -43,11 +47,13 @@ class SqlConnector:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _resolve_conninfo(params: DatabaseSourceParams | Dict[str, Any], credentials: Any) -> str:
+    def _resolve_conninfo(
+        params: DatabaseSourceParams | dict[str, Any], credentials: Any
+    ) -> str:
         if isinstance(params, dict) and params.get("dsn"):
             return str(params["dsn"])
 
-        options: Dict[str, Any] = {}
+        options: dict[str, Any] = {}
         if isinstance(params, dict):
             if params.get("host"):
                 options["host"] = params["host"]
@@ -70,7 +76,9 @@ class SqlConnector:
 
         clean_opts = {k: v for k, v in options.items() if v is not None}
         if not clean_opts:
-            raise ValueError("database connector requires connection parameters or credentials")
+            raise ValueError(
+                "database connector requires connection parameters or credentials"
+            )
         return psycopg_conninfo.make_conninfo(**clean_opts)
 
     @staticmethod
@@ -92,14 +100,16 @@ class SqlConnector:
 
         base_state = dict(self.source.sync_state or {})
         existing_queries = dict(base_state.get("queries") or {})
-        next_queries: Dict[str, Any] = dict(existing_queries)
+        next_queries: dict[str, Any] = dict(existing_queries)
 
         with psycopg.connect(self._conninfo, row_factory=dict_row) as conn:
             for index, query_cfg in enumerate(self._queries):
                 if cancel_event and cancel_event.is_set():
                     break
 
-                query_name = query_cfg.get("name") or query_cfg.get("table") or f"query_{index}"
+                query_name = (
+                    query_cfg.get("name") or query_cfg.get("table") or f"query_{index}"
+                )
                 sql = query_cfg.get("sql")
                 if not sql:
                     raise ValueError(f"query '{query_name}' is missing required sql")
@@ -107,13 +117,17 @@ class SqlConnector:
                 text_column = query_cfg.get("text_column")
                 id_column = query_cfg.get("id_column")
                 if not text_column or not id_column:
-                    raise ValueError(f"query '{query_name}' requires text_column and id_column")
+                    raise ValueError(
+                        f"query '{query_name}' requires text_column and id_column"
+                    )
 
                 cursor_column = query_cfg.get("cursor_column")
                 cursor_param = query_cfg.get("cursor_param", "cursor")
                 query_params = dict(query_cfg.get("params") or {})
                 existing_cursor_state = existing_queries.get(query_name) or {}
-                cursor_value = existing_cursor_state.get("cursor", query_cfg.get("initial_cursor"))
+                cursor_value = existing_cursor_state.get(
+                    "cursor", query_cfg.get("initial_cursor")
+                )
                 if cursor_column and cursor_value is not None:
                     query_params.setdefault(cursor_param, cursor_value)
 
@@ -130,14 +144,16 @@ class SqlConnector:
                             continue
 
                         record_id = row.get(id_column)
-                        document_template = query_cfg.get("document_path_template") or "{table}/{id}"
+                        document_template = (
+                            query_cfg.get("document_path_template") or "{table}/{id}"
+                        )
                         document_path = document_template.format(
                             table=query_cfg.get("table") or query_name,
                             id=record_id,
                             query=query_name,
                         )
 
-                        extra_metadata: Dict[str, Any] = {
+                        extra_metadata: dict[str, Any] = {
                             "connector": "sql",
                             "query": query_name,
                             "table": query_cfg.get("table") or query_name,
@@ -150,7 +166,9 @@ class SqlConnector:
 
                         if cursor_column and cursor_column in row:
                             latest_cursor = row[cursor_column]
-                            extra_metadata[cursor_column] = self._json_safe(latest_cursor)
+                            extra_metadata[cursor_column] = self._json_safe(
+                                latest_cursor
+                            )
 
                         text_str = str(text_value)
                         chunks = chunk_text(
@@ -167,7 +185,7 @@ class SqlConnector:
                         self.job_metadata["rows"] += 1
                         self.job_metadata["chunks"] += len(chunks)
 
-                        document_state: Dict[str, Any] | None = None
+                        document_state: dict[str, Any] | None = None
                         if cursor_column and latest_cursor is not None:
                             document_state = {
                                 "query": query_name,
@@ -198,4 +216,3 @@ class SqlConnector:
 
 
 __all__ = ["SqlConnector"]
-

@@ -1,8 +1,10 @@
 """Base abstractions for chat channel adapters."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Iterable, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from ..conversations.models import NormalizedMessage
 
@@ -39,7 +41,9 @@ class ChannelAdapter(ABC):
 
         return True
 
-    def build_outgoing_payload(self, message: Dict[str, Any], config: Mapping[str, Any]) -> Dict[str, Any]:
+    def build_outgoing_payload(
+        self, message: dict[str, Any], config: Mapping[str, Any]
+    ) -> dict[str, Any]:
         """Prepare an outbound payload for the channel API.
 
         The default implementation simply returns the message unchanged.

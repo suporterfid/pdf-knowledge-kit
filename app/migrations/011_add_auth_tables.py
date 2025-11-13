@@ -6,7 +6,6 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-
 revision = "011_add_auth_tables"
 down_revision = "004_create_multi_tenant_tables"
 branch_labels = None

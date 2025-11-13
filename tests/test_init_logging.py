@@ -1,9 +1,8 @@
 import logging
 from logging.handlers import TimedRotatingFileHandler
 
-from fastapi import FastAPI
-
 from app.app_logging import init_logging
+from fastapi import FastAPI
 
 
 def _clear_handlers(name: str) -> logging.Logger:
@@ -20,12 +19,8 @@ def test_init_logging_adds_handlers(monkeypatch, tmp_path):
     app = FastAPI()
     init_logging(app)
 
-    assert any(
-        isinstance(h, TimedRotatingFileHandler) for h in app_logger.handlers
-    )
-    assert any(
-        isinstance(h, TimedRotatingFileHandler) for h in access_logger.handlers
-    )
+    assert any(isinstance(h, TimedRotatingFileHandler) for h in app_logger.handlers)
+    assert any(isinstance(h, TimedRotatingFileHandler) for h in access_logger.handlers)
 
     app_logger.handlers.clear()
     access_logger.handlers.clear()
@@ -41,7 +36,5 @@ def test_init_logging_replaces_existing_access_handlers(monkeypatch, tmp_path):
     init_logging()
 
     assert stream_handler not in access_logger.handlers
-    assert any(
-        isinstance(h, TimedRotatingFileHandler) for h in access_logger.handlers
-    )
+    assert any(isinstance(h, TimedRotatingFileHandler) for h in access_logger.handlers)
     access_logger.handlers.clear()

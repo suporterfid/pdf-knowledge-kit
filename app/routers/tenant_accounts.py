@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import secrets
 import uuid
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
@@ -27,6 +27,11 @@ from app.security import (
 from app.security.auth import get_db_session
 
 router = APIRouter(prefix="/api/tenant/accounts", tags=["tenant-accounts"])
+
+SessionDep = Annotated[Session, Depends(get_db_session)]
+UserDep = Annotated[User, Depends(get_current_user)]
+AdminRoleDep = Annotated[str, Depends(require_role("admin"))]
+AUTH_SCHEME_BEARER = "bearer"
 
 _ROLE_CHOICES: tuple[Literal["viewer", "operator", "admin"], ...] = (
     "viewer",
@@ -52,7 +57,7 @@ class UserPayload(BaseModel):
 class TokenEnvelope(BaseModel):
     access_token: str
     refresh_token: str
-    token_type: Literal["bearer"] = "bearer"
+    token_type: Literal["bearer"] = AUTH_SCHEME_BEARER
     expires_in: int = Field(..., description="Seconds until the access token expires")
     refresh_expires_in: int = Field(
         ..., description="Seconds until the refresh token expires"
@@ -163,11 +168,15 @@ def _organization_payload(org: Organization) -> OrganizationPayload:
     )
 
 
-@router.post("/register", response_model=AuthenticatedResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=AuthenticatedResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def register_organization(
     payload: RegisterOrganizationRequest,
     request: Request,
-    session: Session = Depends(get_db_session),
+    session: SessionDep,
 ) -> AuthenticatedResponse:
     """Create a tenant organization with an administrator user."""
 
@@ -178,11 +187,17 @@ def register_organization(
         select(Organization).where(Organization.subdomain == subdomain)
     ).scalar_one_or_none()
     if existing_org:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Subdomain already in use.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Subdomain already in use."
+        )
 
-    existing_user = session.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    existing_user = session.execute(
+        select(User).where(User.email == email)
+    ).scalar_one_or_none()
     if existing_user:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="User already exists."
+        )
 
     organization = Organization(name=payload.organization_name, subdomain=subdomain)
     session.add(organization)
@@ -223,17 +238,21 @@ def register_organization(
 def login(
     payload: LoginRequest,
     request: Request,
-    session: Session = Depends(get_db_session),
+    session: SessionDep,
 ) -> AuthenticatedResponse:
     """Authenticate a user via e-mail and password."""
 
     email = _normalize_email(payload.email)
     user = session.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if not user or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials."
+        )
 
     if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive."
+        )
 
     organization = user.organization
     user_agent = request.headers.get("User-Agent")
@@ -260,14 +279,16 @@ def login(
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
     payload: LogoutRequest,
-    session: Session = Depends(get_db_session),
-    current_user: User = Depends(get_current_user),
+    session: SessionDep,
+    current_user: UserDep,
 ) -> Response:
     """Revoke a single refresh token for the authenticated user."""
 
     token = verify_refresh_token(session, payload.refresh_token)
     if token is None or token.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid refresh token.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid refresh token."
+        )
 
     revoke_refresh_token(token)
     session.commit()
@@ -278,17 +299,21 @@ def logout(
 def refresh(
     payload: RefreshRequest,
     request: Request,
-    session: Session = Depends(get_db_session),
+    session: SessionDep,
 ) -> AuthenticatedResponse:
     """Exchange a refresh token for a new access/refresh pair."""
 
     token = verify_refresh_token(session, payload.refresh_token)
     if token is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token."
+        )
 
     user = session.get(User, token.user_id)
     if user is None or not user.is_active:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive."
+        )
 
     organization = user.organization
     revoke_refresh_token(token)
@@ -314,22 +339,30 @@ def refresh(
     )
 
 
-@router.post("/invite", response_model=InviteResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/invite", response_model=InviteResponse, status_code=status.HTTP_201_CREATED
+)
 def invite_user(
     payload: InviteUserRequest,
-    session: Session = Depends(get_db_session),
-    current_user: User = Depends(get_current_user),
-    _: str = Depends(require_role("admin")),
+    session: SessionDep,
+    current_user: UserDep,
+    _: AdminRoleDep,
 ) -> InviteResponse:
     """Issue an invitation for another user to join the organization."""
 
     email = _normalize_email(payload.email)
     if payload.role not in _ROLE_CHOICES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role."
+        )
 
-    existing_user = session.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    existing_user = session.execute(
+        select(User).where(User.email == email)
+    ).scalar_one_or_none()
     if existing_user:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="User already exists."
+        )
 
     existing_invite = session.execute(
         select(UserInvite).where(
@@ -355,27 +388,39 @@ def invite_user(
     session.add(invite)
     session.commit()
 
-    return InviteResponse(token=invite_token, email=email, role=payload.role, expires_at=expires_at)
+    return InviteResponse(
+        token=invite_token, email=email, role=payload.role, expires_at=expires_at
+    )
 
 
 @router.post("/accept-invite", response_model=AuthenticatedResponse)
 def accept_invite(
     payload: AcceptInviteRequest,
     request: Request,
-    session: Session = Depends(get_db_session),
+    session: SessionDep,
 ) -> AuthenticatedResponse:
     """Convert an invitation token into an active user account."""
 
     invite = session.execute(
         select(UserInvite).where(UserInvite.token == payload.token)
     ).scalar_one_or_none()
-    if invite is None or invite.accepted_at is not None or _as_utc(invite.expires_at) <= _utcnow():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired invite.")
+    if (
+        invite is None
+        or invite.accepted_at is not None
+        or _as_utc(invite.expires_at) <= _utcnow()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired invite."
+        )
 
     email = _normalize_email(invite.email)
-    existing_user = session.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    existing_user = session.execute(
+        select(User).where(User.email == email)
+    ).scalar_one_or_none()
     if existing_user:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="User already exists."
+        )
 
     user = User(
         organization_id=invite.organization_id,
@@ -390,7 +435,9 @@ def accept_invite(
 
     organization = session.get(Organization, invite.organization_id)
     if organization is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found."
+        )
 
     user_agent = request.headers.get("User-Agent")
     refresh_token, refresh_record = create_refresh_token(
@@ -417,14 +464,16 @@ def accept_invite(
 def rotate_credentials(
     payload: RotateCredentialsRequest,
     request: Request,
-    session: Session = Depends(get_db_session),
-    current_user: User = Depends(get_current_user),
+    session: SessionDep,
+    current_user: UserDep,
 ) -> AuthenticatedResponse:
     """Invalidate all existing refresh tokens and issue a fresh pair."""
 
     token = verify_refresh_token(session, payload.refresh_token)
     if token is None or token.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token."
+        )
 
     revoke_all_refresh_tokens(session, current_user)
 

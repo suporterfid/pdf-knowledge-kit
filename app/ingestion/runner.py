@@ -1,9 +1,10 @@
 """Threaded ingestion runner with cancel support."""
+
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Event
-from typing import Callable, Dict, Iterable, Optional
 from uuid import UUID
 
 
@@ -18,8 +19,8 @@ class IngestionRunner:
 
     def __init__(self, max_workers: int = 4):
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
-        self._events: Dict[UUID, Event] = {}
-        self._futures: Dict[UUID, Future] = {}
+        self._events: dict[UUID, Event] = {}
+        self._futures: dict[UUID, Future] = {}
 
     # Worker function signature
     Worker = Callable[[Event], None]
@@ -46,7 +47,7 @@ class IngestionRunner:
         self._events.pop(job_id, None)
         self._futures.pop(job_id, None)
 
-    def get(self, job_id: UUID) -> Optional[Future]:
+    def get(self, job_id: UUID) -> Future | None:
         return self._futures.get(job_id)
 
     def list(self) -> Iterable[UUID]:

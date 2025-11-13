@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import logging
 import os
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 import psycopg
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
 from psycopg.types.json import Jsonb
+from pydantic import BaseModel
+
 from ..ingestion.service import ensure_schema
 
-
 router = APIRouter(prefix="/api", tags=["feedback"])
+
+logger = logging.getLogger(__name__)
 
 _DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -41,10 +44,10 @@ def _resolve_request_tenant(request: Request) -> str:
 
 class FeedbackIn(BaseModel):
     helpful: bool
-    question: Optional[str] = None
-    answer: Optional[str] = None
-    sessionId: Optional[str] = None
-    sources: Optional[Any] = None
+    question: str | None = None
+    answer: str | None = None
+    sessionId: str | None = None
+    sources: Any | None = None
 
 
 class FeedbackCreated(BaseModel):
@@ -60,8 +63,8 @@ def submit_feedback(payload: FeedbackIn, request: Request) -> FeedbackCreated:
         # Ensure schema/migrations are applied (creates feedbacks table if missing)
         try:
             ensure_schema(conn)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to ensure feedback schema: %s", exc)
         with conn.cursor() as cur:
             cur.execute(
                 """

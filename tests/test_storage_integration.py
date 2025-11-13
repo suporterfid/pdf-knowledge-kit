@@ -3,9 +3,9 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+# ruff: noqa: S101
 import psycopg
 import pytest
-
 from app.ingestion import service, storage
 from app.ingestion.models import JobStatus, SourceType
 
@@ -16,7 +16,9 @@ def _set_tenant(conn: psycopg.Connection, tenant_id):
 
 
 def _get_conn(*, tenant_id=None):
-    url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+    url = os.getenv(
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
+    )
     try:
         conn = psycopg.connect(url)
     except Exception:
@@ -34,12 +36,22 @@ def test_storage_sources_and_jobs(tmp_path):
     with conn.cursor() as cur:
         cur.execute("ALTER TABLE sources ADD COLUMN IF NOT EXISTS path TEXT")
         cur.execute("ALTER TABLE sources ADD COLUMN IF NOT EXISTS url TEXT")
-        cur.execute("ALTER TABLE sources ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ")
+        cur.execute(
+            "ALTER TABLE sources ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"
+        )
         cur.execute("ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS log_path TEXT")
-        cur.execute("ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ")
-        cur.execute("ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ")
-        cur.execute("ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
-        cur.execute("ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ")
+        cur.execute(
+            "ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ"
+        )
+        cur.execute(
+            "ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ"
+        )
+        cur.execute(
+            "ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()"
+        )
+        cur.execute(
+            "ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ"
+        )
     conn.commit()
 
     _set_tenant(conn, tenant_a)
@@ -70,9 +82,9 @@ def test_storage_sources_and_jobs(tmp_path):
     assert {s.id for s in sources} == {src_id, src_id2}
 
     storage.update_source(conn, src_id, tenant_id=tenant_a, label="first")
-    updated = list(
-        storage.list_sources(conn, tenant_id=tenant_a, type=SourceType.URL)
-    )[0]
+    updated = list(storage.list_sources(conn, tenant_id=tenant_a, type=SourceType.URL))[
+        0
+    ]
     assert updated.label == "first"
 
     job_id = storage.create_job(conn, tenant_id=tenant_a, source_id=src_id)

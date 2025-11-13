@@ -10,15 +10,13 @@ from __future__ import annotations
 
 from sqlalchemy.orm import DeclarativeBase
 
-
-class Base(DeclarativeBase):
-    """Base class for all SQLAlchemy declarative models."""
-
-
 # Re-export core tenant models for convenience so callers can import them via
 # ``from app.models import Organization`` instead of touching private modules.
 from .tenant import Organization, RefreshToken, User, UserInvite
 
+
+class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy declarative models."""
 
 __all__ = [
     "Base",
