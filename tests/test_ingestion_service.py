@@ -12,6 +12,9 @@ import app.ingestion.service as service
 from app.ingestion.models import JobStatus
 
 
+TEST_TENANT_ID = uuid4()
+
+
 class ImmediateRunner:
     def submit(self, job_id, fn):
         ev = Event()
@@ -37,6 +40,8 @@ class DummyCursor:
         return None
     def fetchone(self):
         return None
+    def fetchall(self):
+        return []
 
 
 class DummyConn:
@@ -48,6 +53,14 @@ class DummyConn:
         return False
     def commit(self):
         return None
+    def rollback(self):
+        return None
+
+
+@pytest.fixture(autouse=True)
+def tenant_context(monkeypatch):
+    monkeypatch.setattr(service, "get_current_tenant_id", lambda: str(TEST_TENANT_ID))
+    monkeypatch.setattr(service, "apply_tenant_settings", lambda conn, tenant: None)
 
 
 def test_ingest_local_and_url(tmp_path, monkeypatch):
@@ -60,22 +73,31 @@ def test_ingest_local_and_url(tmp_path, monkeypatch):
     monkeypatch.setattr(service, "TextEmbedding", lambda model_name: DummyEmbedder())
     monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: DummyConn())
     monkeypatch.setattr(service, "register_vector", lambda conn: None)
+    monkeypatch.setattr(service, "ensure_schema", lambda *a, **k: None)
     src_id = uuid4()
     monkeypatch.setattr(service.storage, "get_or_create_source", lambda *a, **k: src_id)
 
     jobs: dict[uuid.UUID, service.Job] = {}
 
-    def create_job(conn, source_id, status=JobStatus.QUEUED, params=None):
+    def create_job(
+        conn,
+        *,
+        tenant_id,
+        source_id,
+        status=JobStatus.QUEUED,
+        params=None,
+    ):
         jid = uuid4()
         jobs[jid] = service.Job(
             id=jid,
+            tenant_id=tenant_id,
             source_id=source_id,
             status=status,
             created_at=datetime.utcnow(),
         )
         return jid
 
-    def update_job_status(conn, job_id, status, **kwargs):
+    def update_job_status(conn, job_id, *, tenant_id, status, **kwargs):
         job = jobs[job_id]
         job.status = status
         if "error" in kwargs:
@@ -83,7 +105,7 @@ def test_ingest_local_and_url(tmp_path, monkeypatch):
         if "log_path" in kwargs:
             job.log_path = kwargs["log_path"]
 
-    def get_job(conn, job_id):
+    def get_job(conn, job_id, *, tenant_id):
         return jobs.get(job_id)
 
     monkeypatch.setattr(service.storage, "create_job", create_job)
@@ -93,8 +115,8 @@ def test_ingest_local_and_url(tmp_path, monkeypatch):
     monkeypatch.setattr(service, "insert_chunks", lambda *a, **k: None)
     path = tmp_path / "doc.md"
     path.write_text("hello", encoding="utf-8")
-    job_id = service.ingest_local(path)
-    job = service.get_job(job_id)
+    job_id = service.ingest_local(path, tenant_id=TEST_TENANT_ID)
+    job = service.get_job(job_id, tenant_id=TEST_TENANT_ID)
     assert job and job.status == JobStatus.SUCCEEDED
     log_path = pathlib.Path("logs") / "jobs" / f"{job_id}.log"
     assert log_path.exists()
@@ -102,12 +124,16 @@ def test_ingest_local_and_url(tmp_path, monkeypatch):
     dummy_job = uuid4()
     jobs[dummy_job] = service.Job(
         id=dummy_job,
+        tenant_id=TEST_TENANT_ID,
         source_id=uuid4(),
         status=JobStatus.SUCCEEDED,
         created_at=datetime.utcnow(),
     )
-    monkeypatch.setattr(service, "ingest_url", lambda url: dummy_job)
-    job2 = service.get_job(service.ingest_url("http://example.com"))
+    monkeypatch.setattr(service, "ingest_url", lambda url, **kwargs: dummy_job)
+    job2 = service.get_job(
+        service.ingest_url("http://example.com", tenant_id=TEST_TENANT_ID),
+        tenant_id=TEST_TENANT_ID,
+    )
     assert job2 and job2.status == JobStatus.SUCCEEDED
 
 
@@ -116,27 +142,36 @@ def test_ingest_local_error(tmp_path, monkeypatch):
     monkeypatch.setattr(service, "_runner", ImmediateRunner())
     monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: DummyConn())
     monkeypatch.setattr(service, "register_vector", lambda conn: None)
+    monkeypatch.setattr(service, "ensure_schema", lambda *a, **k: None)
     monkeypatch.setattr(service.storage, "get_or_create_source", lambda *a, **k: uuid4())
 
     jobs: dict[uuid.UUID, service.Job] = {}
 
-    def create_job(conn, source_id, status=JobStatus.QUEUED, params=None):
+    def create_job(
+        conn,
+        *,
+        tenant_id,
+        source_id,
+        status=JobStatus.QUEUED,
+        params=None,
+    ):
         jid = uuid4()
         jobs[jid] = service.Job(
             id=jid,
+            tenant_id=tenant_id,
             source_id=source_id,
             status=status,
             created_at=datetime.utcnow(),
         )
         return jid
 
-    def update_job_status(conn, job_id, status, **kwargs):
+    def update_job_status(conn, job_id, *, tenant_id, status, **kwargs):
         job = jobs[job_id]
         job.status = status
         if "error" in kwargs:
             job.error = kwargs["error"]
 
-    def get_job(conn, job_id):
+    def get_job(conn, job_id, *, tenant_id):
         return jobs.get(job_id)
 
     monkeypatch.setattr(service.storage, "create_job", create_job)
@@ -147,8 +182,8 @@ def test_ingest_local_error(tmp_path, monkeypatch):
     def bad(_):
         raise ValueError("fail")
     monkeypatch.setattr(service, "read_md_text", bad)
-    job_id = service.ingest_local(path)
-    job = service.get_job(job_id)
+    job_id = service.ingest_local(path, tenant_id=TEST_TENANT_ID)
+    job = service.get_job(job_id, tenant_id=TEST_TENANT_ID)
     assert job and job.status == JobStatus.FAILED
     assert job.error
 
@@ -159,20 +194,29 @@ def test_ingest_local_ocr_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: DummyConn())
     monkeypatch.setattr(service, "register_vector", lambda conn: None)
     monkeypatch.setattr(service.storage, "get_or_create_source", lambda *a, **k: uuid4())
+    monkeypatch.setattr(service, "ensure_schema", lambda *a, **k: None)
 
     jobs: dict[uuid.UUID, service.Job] = {}
 
-    def create_job(conn, source_id, status=JobStatus.QUEUED, params=None):
+    def create_job(
+        conn,
+        *,
+        tenant_id,
+        source_id,
+        status=JobStatus.QUEUED,
+        params=None,
+    ):
         jid = uuid4()
         jobs[jid] = service.Job(
             id=jid,
+            tenant_id=tenant_id,
             source_id=source_id,
             status=status,
             created_at=datetime.utcnow(),
         )
         return jid
 
-    def update_job_status(conn, job_id, status, **kwargs):
+    def update_job_status(conn, job_id, *, tenant_id, status, **kwargs):
         job = jobs[job_id]
         job.status = status
         if "error" in kwargs:
@@ -180,7 +224,7 @@ def test_ingest_local_ocr_failure(tmp_path, monkeypatch):
         if "log_path" in kwargs:
             job.log_path = kwargs["log_path"]
 
-    def get_job(conn, job_id):
+    def get_job(conn, job_id, *, tenant_id):
         return jobs.get(job_id)
 
     monkeypatch.setattr(service.storage, "create_job", create_job)
@@ -200,8 +244,8 @@ def test_ingest_local_ocr_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(service, "read_pdf_text", fail_ocr)
     monkeypatch.setattr(service, "TextEmbedding", lambda model_name: type("E", (), {"embed": lambda self, texts: []})())
 
-    job_id = service.ingest_local(pdf_path, use_ocr=True)
-    job = service.get_job(job_id)
+    job_id = service.ingest_local(pdf_path, tenant_id=TEST_TENANT_ID, use_ocr=True)
+    job = service.get_job(job_id, tenant_id=TEST_TENANT_ID)
     assert job and job.status == JobStatus.FAILED
     assert job.error and "ocr boom" in job.error
 
@@ -222,6 +266,9 @@ def test_reindex_source_reingests(monkeypatch):
             # Return a LOCAL_DIR source pointing to a file
             return ("local_dir", "/tmp/doc.md", None)
 
+        def fetchall(self):
+            return []
+
         def __enter__(self):
             return self
 
@@ -244,17 +291,21 @@ def test_reindex_source_reingests(monkeypatch):
         def commit(self):
             pass
 
+        def rollback(self):
+            pass
+
     conn = DummyConn()
     monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: conn)
     monkeypatch.setattr(service, "register_vector", lambda conn: None)
+    monkeypatch.setattr(service, "ensure_schema", lambda *a, **k: None)
 
-    def fake_ingest(path):
+    def fake_ingest(path, *, tenant_id=None, **kwargs):
         called["path"] = path
         return dummy_job
 
     monkeypatch.setattr(service, "ingest_local", fake_ingest)
 
-    job_id = service.reindex_source(source_id)
+    job_id = service.reindex_source(source_id, tenant_id=TEST_TENANT_ID)
 
     assert job_id == dummy_job
     assert called["path"] == pathlib.Path("/tmp/doc.md")
@@ -267,55 +318,35 @@ def test_rerun_job_calls_reindex(monkeypatch):
     new_job_id = uuid4()
     called: dict[str, uuid.UUID] = {}
 
-    class DummyCursor:
-        def __init__(self):
-            self.queries: list[tuple[str, tuple | None]] = []
-
-        def execute(self, sql, params=None):
-            self.queries.append((sql, params))
-
-        def fetchone(self):
-            return (source_id,)
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-    class DummyConn:
-        def __init__(self):
-            self.cur = DummyCursor()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-        def cursor(self):
-            return self.cur
-
-        def commit(self):
-            pass
-
-    conn = DummyConn()
-    monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: conn)
+    monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: DummyConn())
     monkeypatch.setattr(service, "register_vector", lambda conn: None)
     monkeypatch.setattr(service, "ensure_schema", lambda *a, **k: None)
-    def fake_reindex(sid):
+
+    def fake_get_job(conn, jid, *, tenant_id):
+        called["tenant"] = tenant_id
+        return service.Job(
+            id=jid,
+            tenant_id=tenant_id,
+            source_id=source_id,
+            status=JobStatus.SUCCEEDED,
+            created_at=datetime.utcnow(),
+        )
+
+    monkeypatch.setattr(service.storage, "get_job", fake_get_job)
+
+    def fake_reindex(sid, *, tenant_id=None):
         called["sid"] = sid
+        called["reindex_tenant"] = tenant_id
         return new_job_id
 
     monkeypatch.setattr(service, "reindex_source", fake_reindex)
 
-    result = service.rerun_job(job_id)
+    result = service.rerun_job(job_id, tenant_id=TEST_TENANT_ID)
 
     assert result == new_job_id
     assert called["sid"] == source_id
-    assert any(
-        "SELECT source_id FROM ingestion_jobs" in q[0] for q in conn.cur.queries
-    )
+    assert called["tenant"] == TEST_TENANT_ID
+    assert called["reindex_tenant"] == TEST_TENANT_ID
 
 
 @pytest.mark.integration
@@ -354,12 +385,16 @@ def test_ingest_local_integration_persists_chunks(tmp_path, monkeypatch):
     note_path.write_text("integration test content", encoding="utf-8")
 
     try:
-        job_id = service.ingest_local(note_path)
-        job = service.get_job(job_id)
+        job_id = service.ingest_local(note_path, tenant_id=TEST_TENANT_ID)
+        job = service.get_job(job_id, tenant_id=TEST_TENANT_ID)
         assert job and job.status == JobStatus.SUCCEEDED
 
         with psycopg.connect(pg.url()) as conn:
             with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT set_config('app.tenant_id', %s, false)",
+                    (str(TEST_TENANT_ID),),
+                )
                 cur.execute("SELECT content, metadata, embedding FROM chunks")
                 row = cur.fetchone()
                 assert row is not None
@@ -384,6 +419,7 @@ def test_read_job_log_slicing(tmp_path, monkeypatch):
     jobs: dict[uuid.UUID, service.Job] = {
         job_id: service.Job(
             id=job_id,
+            tenant_id=TEST_TENANT_ID,
             source_id=uuid4(),
             status=JobStatus.RUNNING,
             created_at=datetime.utcnow(),
@@ -393,14 +429,16 @@ def test_read_job_log_slicing(tmp_path, monkeypatch):
 
     monkeypatch.setattr(service.psycopg, "connect", lambda *a, **k: DummyConn())
 
-    def get_job(conn, jid):
+    def get_job(conn, jid, *, tenant_id):
         return jobs.get(jid)
 
     monkeypatch.setattr(service.storage, "get_job", get_job)
-    slice1 = service.read_job_log(job_id, 0, 6)
+    slice1 = service.read_job_log(job_id, tenant_id=TEST_TENANT_ID, offset=0, limit=6)
     assert slice1.content == "line1\n"
     assert slice1.next_offset == 6
     jobs[job_id].status = JobStatus.SUCCEEDED
-    slice2 = service.read_job_log(job_id, 6, 12)
+    slice2 = service.read_job_log(
+        job_id, tenant_id=TEST_TENANT_ID, offset=6, limit=12
+    )
     assert slice2.content == "line2\n"
     assert slice2.status == JobStatus.SUCCEEDED

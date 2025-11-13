@@ -20,8 +20,12 @@ def create_client(monkeypatch, tenant_auth):
 def test_role_enforcement(monkeypatch, tenant_auth):
     client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     dummy_job_id = uuid4()
-    monkeypatch.setattr(admin_api.service, "ingest_url", lambda url: dummy_job_id)
-    monkeypatch.setattr(admin_api.service, "list_jobs", lambda: [])
+    monkeypatch.setattr(
+        admin_api.service,
+        "ingest_url",
+        lambda url, *, tenant_id: dummy_job_id,
+    )
+    monkeypatch.setattr(admin_api.service, "list_jobs", lambda *, tenant_id: [])
 
     # viewer can list jobs
     res = client.get("/api/admin/ingest/jobs", headers=auth_ctx.header("viewer"))

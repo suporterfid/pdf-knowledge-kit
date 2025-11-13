@@ -68,17 +68,31 @@ def main(argv: list[str] | None = None) -> None:
         default=os.getenv("OCR_LANG"),
         help="Languages for Tesseract OCR (e.g., eng+por)",
     )
+    parser.add_argument(
+        "--tenant-id",
+        default=os.getenv("TENANT_ID"),
+        help="Tenant identifier (UUID)",
+    )
 
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     log = logging.getLogger("ingest")
 
+    tenant_id = args.tenant_id
+    if not tenant_id:
+        parser.error("--tenant-id is required (or set TENANT_ID)")
+
     if args.docs:
         doc_dir = Path(args.docs)
         for doc in _iter_docs(doc_dir):
             log.info("ingesting %s", doc)
-            job_id = _service.ingest_local(doc, use_ocr=args.ocr, ocr_lang=args.ocr_lang)
+            job_id = _service.ingest_local(
+                doc,
+                tenant_id=tenant_id,
+                use_ocr=args.ocr,
+                ocr_lang=args.ocr_lang,
+            )
             _service.wait_for_job(job_id)
 
     urls: list[str] = list(args.urls)
@@ -92,7 +106,7 @@ def main(argv: list[str] | None = None) -> None:
                         urls.append(line)
     if urls:
         log.info("ingesting %d url(s)", len(urls))
-        job_id = _service.ingest_urls(urls)
+        job_id = _service.ingest_urls(urls, tenant_id=tenant_id)
         _service.wait_for_job(job_id)
 
     if args.reindex:
@@ -101,7 +115,7 @@ def main(argv: list[str] | None = None) -> None:
         except ValueError:
             log.error("--reindex requires a valid UUID")
         else:
-            job_id = _service.reindex_source(source_id)
+            job_id = _service.reindex_source(source_id, tenant_id=tenant_id)
             _service.wait_for_job(job_id)
 
 

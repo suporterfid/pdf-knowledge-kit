@@ -60,7 +60,11 @@ def test_start_local_job_auth_validation(monkeypatch, tenant_auth):
 def test_start_urls_job_validation(monkeypatch, tenant_auth):
     client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     dummy_id = uuid4()
-    monkeypatch.setattr(admin_api.service, "ingest_urls", lambda urls: dummy_id)
+    monkeypatch.setattr(
+        admin_api.service,
+        "ingest_urls",
+        lambda urls, *, tenant_id: dummy_id,
+    )
 
     # validation error for body
     res = client.post("/api/admin/ingest/urls", headers=auth_ctx.header("operator"))
@@ -91,6 +95,7 @@ def test_sources_crud_and_reindex(monkeypatch, tenant_auth):
         sid = uuid4()
         sources[sid] = Source(
             id=sid,
+            tenant_id=kwargs.get("tenant_id") or auth_ctx.organization_id,
             type=kwargs.get("type"),
             path=kwargs.get("path"),
             url=kwargs.get("url"),
@@ -100,8 +105,12 @@ def test_sources_crud_and_reindex(monkeypatch, tenant_auth):
 
     monkeypatch.setattr(admin_api.storage, "get_or_create_source", get_or_create)
 
-    def list_sources(conn, **kwargs):
-        return sources.values()
+    def list_sources(conn, tenant_id=None, **kwargs):
+        items = list(sources.values())
+        if tenant_id is not None:
+            assert tenant_id == auth_ctx.organization_id
+            items = [s for s in items if s.tenant_id == tenant_id]
+        return items
 
     monkeypatch.setattr(admin_api.storage, "list_sources", list_sources)
 
@@ -113,19 +122,26 @@ def test_sources_crud_and_reindex(monkeypatch, tenant_auth):
 
     monkeypatch.setattr(admin_api.storage, "update_source", update)
     monkeypatch.setattr(
-        admin_api.storage, "soft_delete_source", lambda conn, sid: sources.pop(sid, None)
+        admin_api.storage,
+        "soft_delete_source",
+        lambda conn, sid, **kwargs: sources.pop(sid, None),
     )
     called = {}
-    monkeypatch.setattr(
-        admin_api.service,
-        "reindex_source",
-        lambda sid: called.setdefault("rid", sid),
-    )
+    def fake_reindex(sid, *, tenant_id):
+        called["rid"] = sid
+        called["rid_tenant"] = tenant_id
+        return sid
+
+    monkeypatch.setattr(admin_api.service, "reindex_source", fake_reindex)
 
     # create
     res = client.post(
         "/api/admin/ingest/sources",
-        json={"type": "local_dir", "path": "/a"},
+        json={
+            "tenant_id": str(auth_ctx.organization_id),
+            "type": "local_dir",
+            "path": "/a",
+        },
         headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
@@ -139,7 +155,7 @@ def test_sources_crud_and_reindex(monkeypatch, tenant_auth):
     # update
     res = client.put(
         f"/api/admin/ingest/sources/{sid}",
-        json={"path": "/b"},
+        json={"tenant_id": str(auth_ctx.organization_id), "path": "/b"},
         headers=auth_ctx.header("operator"),
     )
     assert res.status_code == 200
@@ -151,6 +167,7 @@ def test_sources_crud_and_reindex(monkeypatch, tenant_auth):
     )
     assert res.status_code == 200
     assert called["rid"] == sid
+    assert called["rid_tenant"] == auth_ctx.organization_id
 
     # delete
     res = client.delete(
@@ -173,23 +190,28 @@ def test_job_lifecycle_and_logs(monkeypatch, tenant_auth):
     ]
     call = {"i": 0}
 
-    def ingest_url(url):
+    def ingest_url(url, *, tenant_id):
+        assert tenant_id == auth_ctx.organization_id
         job_id = uuid4()
         jobs[job_id] = Job(
             id=job_id,
+            tenant_id=tenant_id,
             source_id=uuid4(),
             status=JobStatus.QUEUED,
             created_at=datetime.utcnow(),
         )
         return job_id
 
-    def list_jobs():
+    def list_jobs(*, tenant_id):
+        assert tenant_id == auth_ctx.organization_id
         return list(jobs.values())
 
-    def cancel_job(job_id):
+    def cancel_job(job_id, *, tenant_id):
+        assert tenant_id == auth_ctx.organization_id
         jobs[job_id].status = JobStatus.CANCELED
 
-    def read_job_log(job_id, offset=0, limit=16_384):
+    def read_job_log(job_id, *, tenant_id, offset=0, limit=16_384):
+        assert tenant_id == auth_ctx.organization_id
         i = call["i"]
         call["i"] = min(i + 1, len(slices) - 1)
         return slices[i]
@@ -198,7 +220,11 @@ def test_job_lifecycle_and_logs(monkeypatch, tenant_auth):
     monkeypatch.setattr(admin_api.service, "list_jobs", list_jobs)
     monkeypatch.setattr(admin_api.service, "cancel_job", cancel_job)
     monkeypatch.setattr(admin_api.service, "read_job_log", read_job_log)
-    monkeypatch.setattr(admin_api.service, "get_job", lambda jid: jobs.get(jid))
+    monkeypatch.setattr(
+        admin_api.service,
+        "get_job",
+        lambda jid, *, tenant_id: jobs.get(jid),
+    )
 
     res = client.post(
         "/api/admin/ingest/url",
@@ -240,7 +266,11 @@ def test_rerun_job_endpoint(monkeypatch, tenant_auth):
     client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     orig = uuid4()
     new_id = uuid4()
-    monkeypatch.setattr(admin_api.service, "rerun_job", lambda jid: new_id)
+    def fake_rerun(jid, *, tenant_id):
+        assert tenant_id == auth_ctx.organization_id
+        return new_id
+
+    monkeypatch.setattr(admin_api.service, "rerun_job", fake_rerun)
 
     res = client.post(
         f"/api/admin/ingest/jobs/{orig}/rerun", headers=auth_ctx.header("operator")
@@ -252,12 +282,34 @@ def test_rerun_job_endpoint(monkeypatch, tenant_auth):
 def test_jobs_pagination_filters(monkeypatch, tenant_auth):
     client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     jobs = [
-        Job(id=uuid4(), source_id=uuid4(), status=JobStatus.QUEUED, created_at=datetime.utcnow()),
-        Job(id=uuid4(), source_id=uuid4(), status=JobStatus.SUCCEEDED, created_at=datetime.utcnow()),
-        Job(id=uuid4(), source_id=uuid4(), status=JobStatus.QUEUED, created_at=datetime.utcnow()),
+        Job(
+            id=uuid4(),
+            tenant_id=auth_ctx.organization_id,
+            source_id=uuid4(),
+            status=JobStatus.QUEUED,
+            created_at=datetime.utcnow(),
+        ),
+        Job(
+            id=uuid4(),
+            tenant_id=auth_ctx.organization_id,
+            source_id=uuid4(),
+            status=JobStatus.SUCCEEDED,
+            created_at=datetime.utcnow(),
+        ),
+        Job(
+            id=uuid4(),
+            tenant_id=auth_ctx.organization_id,
+            source_id=uuid4(),
+            status=JobStatus.QUEUED,
+            created_at=datetime.utcnow(),
+        ),
     ]
 
-    monkeypatch.setattr(admin_api.service, "list_jobs", lambda: jobs)
+    def list_jobs(*, tenant_id):
+        assert tenant_id == auth_ctx.organization_id
+        return jobs
+
+    monkeypatch.setattr(admin_api.service, "list_jobs", list_jobs)
 
     res = client.get(
         "/api/admin/ingest/jobs",
@@ -273,9 +325,33 @@ def test_jobs_pagination_filters(monkeypatch, tenant_auth):
 def test_sources_pagination_filters(monkeypatch, tenant_auth):
     client, admin_api, auth_ctx = create_client(monkeypatch, tenant_auth)
     sources = [
-        Source(id=uuid4(), type=SourceType.URL, url="http://a", path=None, created_at=datetime.utcnow(), active=True),
-        Source(id=uuid4(), type=SourceType.URL, url="http://b", path=None, created_at=datetime.utcnow(), active=True),
-        Source(id=uuid4(), type=SourceType.URL, url="http://c", path=None, created_at=datetime.utcnow(), active=False),
+        Source(
+            id=uuid4(),
+            tenant_id=auth_ctx.organization_id,
+            type=SourceType.URL,
+            url="http://a",
+            path=None,
+            created_at=datetime.utcnow(),
+            active=True,
+        ),
+        Source(
+            id=uuid4(),
+            tenant_id=auth_ctx.organization_id,
+            type=SourceType.URL,
+            url="http://b",
+            path=None,
+            created_at=datetime.utcnow(),
+            active=True,
+        ),
+        Source(
+            id=uuid4(),
+            tenant_id=auth_ctx.organization_id,
+            type=SourceType.URL,
+            url="http://c",
+            path=None,
+            created_at=datetime.utcnow(),
+            active=False,
+        ),
     ]
 
     class DummyConn:
@@ -284,7 +360,9 @@ def test_sources_pagination_filters(monkeypatch, tenant_auth):
         def __exit__(self, *exc):
             return False
 
-    def list_sources(conn, active=True, type=None, **kwargs):
+    def list_sources(conn, *, tenant_id=None, active=True, type=None, **kwargs):
+        if tenant_id is not None:
+            assert tenant_id == auth_ctx.organization_id
         items = sources
         if active is not None:
             items = [s for s in items if s.active == active]

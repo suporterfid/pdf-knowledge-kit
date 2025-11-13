@@ -9,6 +9,7 @@ from __future__ import annotations
 """Admin ingestion API using Pydantic models."""
 
 import os
+import uuid
 from pathlib import Path
 from typing import Dict, List
 from uuid import UUID
@@ -16,6 +17,8 @@ from uuid import UUID
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from ..core.db import apply_tenant_settings
+from ..core.tenant_context import get_current_tenant_id
 from ..ingestion import service, storage
 from ..ingestion.models import (
     ApiConnectorJobRequest,
@@ -44,18 +47,35 @@ router = APIRouter(prefix="/api/admin/ingest", tags=["admin-ingest"])
 _DATABASE_URL = os.getenv("DATABASE_URL")
 
 
+def _require_tenant_id() -> UUID:
+    tenant = get_current_tenant_id()
+    if tenant is None:
+        raise HTTPException(status_code=403, detail="Tenant context missing")
+    try:
+        return UUID(str(tenant))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid tenant id") from exc
+
+
 def _get_conn() -> psycopg.Connection:
     """Return a new database connection or raise HTTP 500."""
     if not _DATABASE_URL:
         raise HTTPException(status_code=500, detail="DATABASE_URL not configured")
     try:
-        return psycopg.connect(_DATABASE_URL)
+        conn = psycopg.connect(_DATABASE_URL)
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    tenant_id = _require_tenant_id()
+    try:
+        apply_tenant_settings(conn, tenant_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        conn.close()
+        raise HTTPException(status_code=500, detail="Failed to configure tenant") from exc
+    return conn
 
 
-def _fetch_source(conn: psycopg.Connection, source_id: UUID) -> Source:
-    for src in storage.list_sources(conn, active=None):
+def _fetch_source(conn: psycopg.Connection, tenant_id: UUID, source_id: UUID) -> Source:
+    for src in storage.list_sources(conn, tenant_id=tenant_id, active=None):
         if src.id == source_id:
             return src
     raise HTTPException(status_code=404, detail="Source not found")
@@ -63,12 +83,14 @@ def _fetch_source(conn: psycopg.Connection, source_id: UUID) -> Source:
 
 def _ensure_connector_definition(
     conn: psycopg.Connection,
+    tenant_id: UUID,
     definition_id: UUID,
     expected_type: SourceType | set[SourceType],
 ) -> ConnectorDefinition:
     definition = storage.get_connector_definition(
         conn,
         definition_id,
+        tenant_id=tenant_id,
         include_credentials=True,
     )
     if not definition:
@@ -136,6 +158,7 @@ def _ensure_params_for_type(source_type: SourceType, params: Dict[str, Any] | No
 def _upsert_source_for_connector(
     conn: psycopg.Connection,
     *,
+    tenant_id: UUID,
     source_id: UUID | None,
     source_type: SourceType,
     params: Dict[str, Any],
@@ -148,7 +171,7 @@ def _upsert_source_for_connector(
     sync_state: Dict[str, Any] | None,
 ) -> UUID:
     if source_id:
-        existing = storage.get_source(conn, source_id)
+        existing = storage.get_source(conn, source_id, tenant_id=tenant_id)
         if not existing:
             raise HTTPException(status_code=404, detail="Source not found")
         if existing.type != source_type:
@@ -156,6 +179,7 @@ def _upsert_source_for_connector(
         storage.update_source(
             conn,
             source_id,
+            tenant_id=tenant_id,
             label=label,
             location=location,
             params=params,
@@ -169,6 +193,7 @@ def _upsert_source_for_connector(
 
     return storage.get_or_create_source(
         conn,
+        tenant_id=tenant_id,
         type=source_type,
         label=label,
         location=location,
@@ -186,8 +211,12 @@ def start_local_job(
     req: LocalIngestRequest,
     role: str = Depends(require_role("operator")),
 ) -> JobCreated:
+    tenant_id = _require_tenant_id()
     job_id = service.ingest_local(
-        Path(req.path), use_ocr=req.use_ocr, ocr_lang=req.ocr_lang
+        Path(req.path),
+        tenant_id=tenant_id,
+        use_ocr=req.use_ocr,
+        ocr_lang=req.ocr_lang,
     )
     return JobCreated(job_id=job_id)
 
@@ -195,11 +224,12 @@ def start_local_job(
 @router.post("/reindex_all", response_model=ListResponse[JobCreated])
 def reindex_all_sources(role: str = Depends(require_role("operator"))) -> ListResponse[JobCreated]:
     """Reindex all active sources, returning the created job IDs."""
+    tenant_id = _require_tenant_id()
     with _get_conn() as conn:
-        sources = list(storage.list_sources(conn, active=True))
+        sources = list(storage.list_sources(conn, tenant_id=tenant_id, active=True))
     job_ids: list[JobCreated] = []
     for src in sources:
-        job_id = service.reindex_source(src.id)
+        job_id = service.reindex_source(src.id, tenant_id=tenant_id)
         if job_id:
             job_ids.append(JobCreated(job_id=job_id))
     return ListResponse[JobCreated](items=job_ids, total=len(job_ids))
@@ -210,7 +240,8 @@ def start_url_job(
     req: UrlIngestRequest,
     role: str = Depends(require_role("operator")),
 ) -> JobCreated:
-    job_id = service.ingest_url(str(req.url))
+    tenant_id = _require_tenant_id()
+    job_id = service.ingest_url(str(req.url), tenant_id=tenant_id)
     return JobCreated(job_id=job_id)
 
 
@@ -219,7 +250,8 @@ def start_urls_job(
     req: UrlsIngestRequest,
     role: str = Depends(require_role("operator")),
 ) -> JobCreated:
-    job_id = service.ingest_urls([str(u) for u in req.urls])
+    tenant_id = _require_tenant_id()
+    job_id = service.ingest_urls([str(u) for u in req.urls], tenant_id=tenant_id)
     return JobCreated(job_id=job_id)
 
 
@@ -228,9 +260,12 @@ def start_database_connector_job(
     req: DatabaseConnectorJobRequest,
     role: str = Depends(require_role("operator")),
 ) -> JobCreated:
+    tenant_id = _require_tenant_id()
     with _get_conn() as conn:
         definition = (
-            _ensure_connector_definition(conn, req.connector_definition_id, SourceType.DATABASE)
+            _ensure_connector_definition(
+                conn, tenant_id, req.connector_definition_id, SourceType.DATABASE
+            )
             if req.connector_definition_id
             else None
         )
@@ -250,6 +285,7 @@ def start_database_connector_job(
             location = metadata.get("location")
         source_id = _upsert_source_for_connector(
             conn,
+            tenant_id=tenant_id,
             source_id=req.source_id,
             source_type=SourceType.DATABASE,
             params=params,
@@ -261,7 +297,7 @@ def start_database_connector_job(
             location=location,
             sync_state=req.sync_state,
         )
-    job_id = service.ingest_source(source_id)
+    job_id = service.ingest_source(source_id, tenant_id=tenant_id)
     return JobCreated(job_id=job_id)
 
 
@@ -270,9 +306,12 @@ def start_api_connector_job(
     req: ApiConnectorJobRequest,
     role: str = Depends(require_role("operator")),
 ) -> JobCreated:
+    tenant_id = _require_tenant_id()
     with _get_conn() as conn:
         definition = (
-            _ensure_connector_definition(conn, req.connector_definition_id, SourceType.API)
+            _ensure_connector_definition(
+                conn, tenant_id, req.connector_definition_id, SourceType.API
+            )
             if req.connector_definition_id
             else None
         )
@@ -292,6 +331,7 @@ def start_api_connector_job(
             location = metadata.get("location")
         source_id = _upsert_source_for_connector(
             conn,
+            tenant_id=tenant_id,
             source_id=req.source_id,
             source_type=SourceType.API,
             params=params,
@@ -303,7 +343,7 @@ def start_api_connector_job(
             location=location,
             sync_state=req.sync_state,
         )
-    job_id = service.ingest_source(source_id)
+    job_id = service.ingest_source(source_id, tenant_id=tenant_id)
     return JobCreated(job_id=job_id)
 
 
@@ -312,10 +352,12 @@ def start_transcription_connector_job(
     req: TranscriptionConnectorJobRequest,
     role: str = Depends(require_role("operator")),
 ) -> JobCreated:
+    tenant_id = _require_tenant_id()
     with _get_conn() as conn:
         if req.connector_definition_id:
             definition = _ensure_connector_definition(
                 conn,
+                tenant_id,
                 req.connector_definition_id,
                 {SourceType.AUDIO_TRANSCRIPT, SourceType.VIDEO_TRANSCRIPT},
             )
@@ -341,6 +383,7 @@ def start_transcription_connector_job(
             location = metadata.get("location")
         source_id = _upsert_source_for_connector(
             conn,
+            tenant_id=tenant_id,
             source_id=req.source_id,
             source_type=expected_type,
             params=params,
@@ -352,7 +395,7 @@ def start_transcription_connector_job(
             location=location,
             sync_state=req.sync_state,
         )
-    job_id = service.ingest_source(source_id)
+    job_id = service.ingest_source(source_id, tenant_id=tenant_id)
     return JobCreated(job_id=job_id)
 
 
@@ -363,10 +406,12 @@ def list_connector_definitions(
     offset: int = Query(default=0, ge=0),
     role: str = Depends(require_role("viewer")),
 ) -> ListResponse[ConnectorDefinition]:
+    tenant_id = _require_tenant_id()
     with _get_conn() as conn:
         all_defs = list(
             storage.list_connector_definitions(
                 conn,
+                tenant_id=tenant_id,
                 type=type,
                 include_credentials=False,
             )
@@ -383,9 +428,13 @@ def create_connector_definition_endpoint(
     req: ConnectorDefinitionCreate,
     role: str = Depends(require_role("operator")),
 ) -> ConnectorDefinition:
+    tenant_id = _require_tenant_id()
+    if req.tenant_id and req.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
     with _get_conn() as conn:
         definition_id = storage.create_connector_definition(
             conn,
+            tenant_id=tenant_id,
             name=req.name,
             type=req.type,
             description=req.description,
@@ -396,6 +445,7 @@ def create_connector_definition_endpoint(
         created = storage.get_connector_definition(
             conn,
             definition_id,
+            tenant_id=tenant_id,
             include_credentials=False,
         )
     if not created:
@@ -408,10 +458,12 @@ def get_connector_definition_endpoint(
     definition_id: UUID,
     role: str = Depends(require_role("viewer")),
 ) -> ConnectorDefinition:
+    tenant_id = _require_tenant_id()
     with _get_conn() as conn:
         definition = storage.get_connector_definition(
             conn,
             definition_id,
+            tenant_id=tenant_id,
             include_credentials=False,
         )
     if not definition:
@@ -425,10 +477,12 @@ def update_connector_definition_endpoint(
     req: ConnectorDefinitionUpdate,
     role: str = Depends(require_role("operator")),
 ) -> ConnectorDefinition:
+    tenant_id = _require_tenant_id()
     with _get_conn() as conn:
         existing = storage.get_connector_definition(
             conn,
             definition_id,
+            tenant_id=tenant_id,
             include_credentials=True,
         )
         if not existing:
@@ -441,6 +495,7 @@ def update_connector_definition_endpoint(
         storage.update_connector_definition(
             conn,
             definition_id,
+            tenant_id=tenant_id,
             name=req.name,
             description=req.description,
             params=req.params,
@@ -450,6 +505,7 @@ def update_connector_definition_endpoint(
         updated = storage.get_connector_definition(
             conn,
             definition_id,
+            tenant_id=tenant_id,
             include_credentials=False,
         )
     if not updated:
@@ -462,15 +518,17 @@ def delete_connector_definition_endpoint(
     definition_id: UUID,
     role: str = Depends(require_role("operator")),
 ) -> ConnectorDefinition:
+    tenant_id = _require_tenant_id()
     with _get_conn() as conn:
         definition = storage.get_connector_definition(
             conn,
             definition_id,
+            tenant_id=tenant_id,
             include_credentials=False,
         )
         if not definition:
             raise HTTPException(status_code=404, detail="Connector definition not found")
-        storage.delete_connector_definition(conn, definition_id)
+        storage.delete_connector_definition(conn, definition_id, tenant_id=tenant_id)
     return definition
 
 
@@ -481,7 +539,8 @@ def list_jobs(
     offset: int = Query(default=0, ge=0),
     role: str = Depends(require_role("viewer")),
 ) -> ListResponse[Job]:
-    jobs = service.list_jobs()
+    tenant_id = _require_tenant_id()
+    jobs = service.list_jobs(tenant_id=tenant_id)
     if status is not None:
         jobs = [j for j in jobs if j.status == status]
     total = len(jobs)
@@ -496,7 +555,8 @@ def list_jobs(
 def get_job(
     job_id: UUID, role: str = Depends(require_role("viewer"))
 ) -> Job:
-    job = service.get_job(job_id)
+    tenant_id = _require_tenant_id()
+    job = service.get_job(job_id, tenant_id=tenant_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
@@ -506,8 +566,9 @@ def get_job(
 def cancel_job(
     job_id: UUID, role: str = Depends(require_role("operator"))
 ) -> Job:
-    service.cancel_job(job_id)
-    job = service.get_job(job_id)
+    tenant_id = _require_tenant_id()
+    service.cancel_job(job_id, tenant_id=tenant_id)
+    job = service.get_job(job_id, tenant_id=tenant_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
@@ -517,7 +578,8 @@ def cancel_job(
 def rerun_job_endpoint(
     job_id: UUID, role: str = Depends(require_role("operator"))
 ) -> JobCreated:
-    new_job_id = service.rerun_job(job_id)
+    tenant_id = _require_tenant_id()
+    new_job_id = service.rerun_job(job_id, tenant_id=tenant_id)
     if not new_job_id:
         raise HTTPException(status_code=404, detail="Job not found")
     return JobCreated(job_id=new_job_id)
@@ -531,7 +593,10 @@ def get_job_logs(
     role: str = Depends(require_role("viewer")),
 ) -> JobLogSlice:
     """Return a slice of the job log starting at ``offset``."""
-    return service.read_job_log(job_id, offset=offset, limit=limit)
+    tenant_id = _require_tenant_id()
+    return service.read_job_log(
+        job_id, tenant_id=tenant_id, offset=offset, limit=limit
+    )
 
 
 @router.get("/sources", response_model=ListResponse[Source])
@@ -542,9 +607,10 @@ def list_sources(
     offset: int = Query(default=0, ge=0),
     role: str = Depends(require_role("viewer")),
 ) -> ListResponse[Source]:
+    tenant_id = _require_tenant_id()
     with _get_conn() as conn:
         all_items = list(
-            storage.list_sources(conn, active=active, type=type)
+            storage.list_sources(conn, tenant_id=tenant_id, active=active, type=type)
         )
         total = len(all_items)
         items = all_items[offset:]
@@ -557,9 +623,13 @@ def list_sources(
 def create_source(
     req: SourceCreate, role: str = Depends(require_role("operator"))
 ) -> Source:
+    tenant_id = _require_tenant_id()
+    if req.tenant_id and req.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
     with _get_conn() as conn:
         source_id = storage.get_or_create_source(
             conn,
+            tenant_id=tenant_id,
             type=req.type,
             path=req.path,
             url=str(req.url) if req.url else None,
@@ -574,7 +644,7 @@ def create_source(
             sync_state=req.sync_state,
             version=req.version,
         )
-        return _fetch_source(conn, source_id)
+        return _fetch_source(conn, tenant_id, source_id)
 
 
 @router.put("/sources/{source_id}", response_model=Source)
@@ -583,10 +653,14 @@ def update_source(
     req: SourceUpdate,
     role: str = Depends(require_role("operator")),
 ) -> Source:
+    tenant_id = _require_tenant_id()
+    if req.tenant_id and req.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
     with _get_conn() as conn:
         storage.update_source(
             conn,
             source_id,
+            tenant_id=tenant_id,
             path=req.path,
             url=str(req.url) if req.url else None,
             label=req.label,
@@ -600,16 +674,17 @@ def update_source(
             sync_state=req.sync_state,
             version=req.version,
         )
-        return _fetch_source(conn, source_id)
+        return _fetch_source(conn, tenant_id, source_id)
 
 
 @router.delete("/sources/{source_id}", response_model=Source)
 def delete_source(
     source_id: UUID, role: str = Depends(require_role("operator"))
 ) -> Source:
+    tenant_id = _require_tenant_id()
     with _get_conn() as conn:
-        src = _fetch_source(conn, source_id)
-        storage.soft_delete_source(conn, source_id)
+        src = _fetch_source(conn, tenant_id, source_id)
+        storage.soft_delete_source(conn, source_id, tenant_id=tenant_id)
         src.active = False
         return src
 
@@ -618,7 +693,8 @@ def delete_source(
 def reindex_source_endpoint(
     source_id: UUID, role: str = Depends(require_role("operator"))
 ) -> JobCreated:
-    job_id = service.reindex_source(source_id)
+    tenant_id = _require_tenant_id()
+    job_id = service.reindex_source(source_id, tenant_id=tenant_id)
     if not job_id:
         raise HTTPException(status_code=404, detail="Source not found")
     return JobCreated(job_id=job_id)
