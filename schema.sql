@@ -9,6 +9,17 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto; -- for gen_random_uuid
 CREATE EXTENSION IF NOT EXISTS vector;
 
+CREATE SCHEMA IF NOT EXISTS app;
+
+CREATE OR REPLACE FUNCTION app.current_tenant_id()
+RETURNS UUID
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid;
+$$;
+
 -- Multi-tenant core ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS organizations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -81,6 +92,26 @@ CREATE TABLE IF NOT EXISTS connector_definitions (
 
 CREATE INDEX IF NOT EXISTS idx_connector_definitions_tenant_type
   ON connector_definitions (tenant_id, type);
+CREATE INDEX IF NOT EXISTS idx_connector_definitions_tenant_id
+  ON connector_definitions (tenant_id);
+
+ALTER TABLE connector_definitions ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'connector_definitions'
+      AND policyname = 'connector_definitions_tenant_isolation'
+  ) THEN
+    CREATE POLICY connector_definitions_tenant_isolation ON connector_definitions
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 
 -- Ingestion sources ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS sources (
@@ -112,6 +143,26 @@ CREATE INDEX IF NOT EXISTS idx_sources_tenant_path_active
 CREATE INDEX IF NOT EXISTS idx_sources_tenant_url_active
   ON sources (tenant_id, url)
   WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_sources_tenant_id
+  ON sources (tenant_id);
+
+ALTER TABLE sources ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'sources'
+      AND policyname = 'sources_tenant_isolation'
+  ) THEN
+    CREATE POLICY sources_tenant_isolation ON sources
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 
 -- Ingestion jobs ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS ingestion_jobs (
@@ -132,6 +183,26 @@ CREATE INDEX IF NOT EXISTS idx_ingestion_jobs_tenant_status
   ON ingestion_jobs (tenant_id, status);
 CREATE INDEX IF NOT EXISTS idx_ingestion_jobs_tenant_source
   ON ingestion_jobs (tenant_id, source_id);
+CREATE INDEX IF NOT EXISTS idx_ingestion_jobs_tenant_id
+  ON ingestion_jobs (tenant_id);
+
+ALTER TABLE ingestion_jobs ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'ingestion_jobs'
+      AND policyname = 'ingestion_jobs_tenant_isolation'
+  ) THEN
+    CREATE POLICY ingestion_jobs_tenant_isolation ON ingestion_jobs
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 
 -- Documents -----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS documents (
@@ -152,6 +223,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_documents_tenant_path
   ON documents (tenant_id, path);
 CREATE INDEX IF NOT EXISTS idx_documents_tenant_source
   ON documents (tenant_id, source_id);
+CREATE INDEX IF NOT EXISTS idx_documents_tenant_id
+  ON documents (tenant_id);
+
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'documents'
+      AND policyname = 'documents_tenant_isolation'
+  ) THEN
+    CREATE POLICY documents_tenant_isolation ON documents
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 
 -- Document history ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS document_versions (
@@ -171,6 +262,26 @@ CREATE TABLE IF NOT EXISTS document_versions (
 
 CREATE INDEX IF NOT EXISTS idx_document_versions_tenant_document
   ON document_versions (tenant_id, document_id);
+CREATE INDEX IF NOT EXISTS idx_document_versions_tenant_id
+  ON document_versions (tenant_id);
+
+ALTER TABLE document_versions ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'document_versions'
+      AND policyname = 'document_versions_tenant_isolation'
+  ) THEN
+    CREATE POLICY document_versions_tenant_isolation ON document_versions
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 
 -- Chunks --------------------------------------------------------------------
 -- Dimensão 384 para o modelo 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
@@ -188,6 +299,26 @@ CREATE TABLE IF NOT EXISTS chunks (
 
 CREATE INDEX IF NOT EXISTS idx_chunks_tenant_doc
   ON chunks (tenant_id, doc_id, chunk_index);
+CREATE INDEX IF NOT EXISTS idx_chunks_tenant_id
+  ON chunks (tenant_id);
+
+ALTER TABLE chunks ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'chunks'
+      AND policyname = 'chunks_tenant_isolation'
+  ) THEN
+    CREATE POLICY chunks_tenant_isolation ON chunks
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 -- CREATE INDEX IF NOT EXISTS idx_chunks_embedding ON chunks USING ivfflat (embedding vector_l2_ops) WITH (lists = 100);
 
 -- User feedback -------------------------------------------------------------
@@ -206,6 +337,26 @@ CREATE INDEX IF NOT EXISTS idx_feedbacks_tenant_created_at
   ON feedbacks (tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_feedbacks_tenant_helpful
   ON feedbacks (tenant_id, helpful);
+CREATE INDEX IF NOT EXISTS idx_feedbacks_tenant_id
+  ON feedbacks (tenant_id);
+
+ALTER TABLE feedbacks ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'feedbacks'
+      AND policyname = 'feedbacks_tenant_isolation'
+  ) THEN
+    CREATE POLICY feedbacks_tenant_isolation ON feedbacks
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 
 -- Agent registry ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS agents (
@@ -230,6 +381,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_agents_tenant_slug
   ON agents (tenant_id, slug);
 CREATE INDEX IF NOT EXISTS idx_agents_tenant_active
   ON agents (tenant_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_agents_tenant_id
+  ON agents (tenant_id);
+
+ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'agents'
+      AND policyname = 'agents_tenant_isolation'
+  ) THEN
+    CREATE POLICY agents_tenant_isolation ON agents
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION set_agents_updated_at()
 RETURNS TRIGGER AS $$
@@ -262,6 +433,26 @@ CREATE TABLE IF NOT EXISTS agent_versions (
 
 CREATE INDEX IF NOT EXISTS idx_agent_versions_tenant_agent
   ON agent_versions(tenant_id, agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_versions_tenant_id
+  ON agent_versions(tenant_id);
+
+ALTER TABLE agent_versions ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'agent_versions'
+      AND policyname = 'agent_versions_tenant_isolation'
+  ) THEN
+    CREATE POLICY agent_versions_tenant_isolation ON agent_versions
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS agent_tests (
   id BIGSERIAL PRIMARY KEY,
@@ -281,6 +472,26 @@ CREATE INDEX IF NOT EXISTS idx_agent_tests_tenant_agent
   ON agent_tests(tenant_id, agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_tests_tenant_agent_version
   ON agent_tests(tenant_id, agent_version_id);
+CREATE INDEX IF NOT EXISTS idx_agent_tests_tenant_id
+  ON agent_tests(tenant_id);
+
+ALTER TABLE agent_tests ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'agent_tests'
+      AND policyname = 'agent_tests_tenant_isolation'
+  ) THEN
+    CREATE POLICY agent_tests_tenant_isolation ON agent_tests
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 
 -- Agent channel configuration ------------------------------------------------
 CREATE TABLE IF NOT EXISTS agent_channel_configs (
@@ -299,6 +510,26 @@ CREATE TABLE IF NOT EXISTS agent_channel_configs (
 
 CREATE INDEX IF NOT EXISTS idx_agent_channel_configs_tenant_agent
   ON agent_channel_configs(tenant_id, agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_channel_configs_tenant_id
+  ON agent_channel_configs(tenant_id);
+
+ALTER TABLE agent_channel_configs ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'agent_channel_configs'
+      AND policyname = 'agent_channel_configs_tenant_isolation'
+  ) THEN
+    CREATE POLICY agent_channel_configs_tenant_isolation ON agent_channel_configs
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION set_agent_channel_configs_updated_at()
 RETURNS TRIGGER AS $$
@@ -342,6 +573,26 @@ CREATE INDEX IF NOT EXISTS idx_conversations_tenant_follow_up
 CREATE INDEX IF NOT EXISTS idx_conversations_tenant_escalated
   ON conversations(tenant_id, is_escalated)
   WHERE is_escalated;
+CREATE INDEX IF NOT EXISTS idx_conversations_tenant_id
+  ON conversations(tenant_id);
+
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'conversations'
+      AND policyname = 'conversations_tenant_isolation'
+  ) THEN
+    CREATE POLICY conversations_tenant_isolation ON conversations
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION set_conversations_updated_at()
 RETURNS TRIGGER AS $$
@@ -372,6 +623,26 @@ CREATE INDEX IF NOT EXISTS idx_conversation_participants_tenant_conversation
   ON conversation_participants(tenant_id, conversation_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_participants_tenant_role
   ON conversation_participants(tenant_id, conversation_id, role);
+CREATE INDEX IF NOT EXISTS idx_conversation_participants_tenant_id
+  ON conversation_participants(tenant_id);
+
+ALTER TABLE conversation_participants ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'conversation_participants'
+      AND policyname = 'conversation_participants_tenant_isolation'
+  ) THEN
+    CREATE POLICY conversation_participants_tenant_isolation ON conversation_participants
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS conversation_messages (
   id BIGSERIAL PRIMARY KEY,
@@ -387,3 +658,23 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
 
 CREATE INDEX IF NOT EXISTS idx_conversation_messages_tenant_conversation
   ON conversation_messages(tenant_id, conversation_id, sent_at);
+CREATE INDEX IF NOT EXISTS idx_conversation_messages_tenant_id
+  ON conversation_messages(tenant_id);
+
+ALTER TABLE conversation_messages ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'conversation_messages'
+      AND policyname = 'conversation_messages_tenant_isolation'
+  ) THEN
+    CREATE POLICY conversation_messages_tenant_isolation ON conversation_messages
+      FOR ALL
+      USING (tenant_id = app.current_tenant_id())
+      WITH CHECK (tenant_id = app.current_tenant_id());
+  END IF;
+END;
+$$;

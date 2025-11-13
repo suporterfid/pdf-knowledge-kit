@@ -10,6 +10,24 @@ from sqlalchemy.engine import make_url
 from app.ingestion.service import SCHEMA_PATH, ensure_schema
 
 
+MULTI_TENANT_TABLES = [
+    ("connector_definitions", "connector_definitions_tenant_isolation"),
+    ("sources", "sources_tenant_isolation"),
+    ("ingestion_jobs", "ingestion_jobs_tenant_isolation"),
+    ("documents", "documents_tenant_isolation"),
+    ("document_versions", "document_versions_tenant_isolation"),
+    ("chunks", "chunks_tenant_isolation"),
+    ("feedbacks", "feedbacks_tenant_isolation"),
+    ("agents", "agents_tenant_isolation"),
+    ("agent_versions", "agent_versions_tenant_isolation"),
+    ("agent_tests", "agent_tests_tenant_isolation"),
+    ("agent_channel_configs", "agent_channel_configs_tenant_isolation"),
+    ("conversations", "conversations_tenant_isolation"),
+    ("conversation_participants", "conversation_participants_tenant_isolation"),
+    ("conversation_messages", "conversation_messages_tenant_isolation"),
+]
+
+
 def _schema_without_vector(tmp_path: pathlib.Path) -> pathlib.Path:
     schema_text = SCHEMA_PATH.read_text(encoding="utf-8")
     schema_text = schema_text.replace(
@@ -76,6 +94,18 @@ def test_multi_tenant_migration_creates_tables(tmp_path: pathlib.Path) -> None:
 
                 fks = inspector.get_foreign_keys("users")
                 assert any(fk["referred_table"] == "organizations" for fk in fks)
+
+                # Every multi-tenant table must expose at least one index with tenant_id
+                for table_name, _ in MULTI_TENANT_TABLES:
+                    if table_name not in tables:
+                        continue
+
+                    indexes = inspector.get_indexes(table_name)
+                    assert any(
+                        idx.get("column_names")
+                        and idx["column_names"][0] == "tenant_id"
+                        for idx in indexes
+                    ), f"missing tenant_id index for {table_name}"
         finally:
             engine.dispose()
 
@@ -86,5 +116,58 @@ def test_multi_tenant_migration_creates_tables(tmp_path: pathlib.Path) -> None:
                     ("004_create_multi_tenant_tables",),
                 )
                 assert cur.fetchone()
+
+                # Helper function must exist and run without tenant context
+                cur.execute("SELECT app.current_tenant_id()")
+                (tenant_id,) = cur.fetchone()
+                assert tenant_id is None
+
+                # Function should be SECURITY DEFINER to avoid permission surprises
+                cur.execute(
+                    """
+                    SELECT p.prosecdef
+                    FROM pg_proc AS p
+                    JOIN pg_namespace AS n ON n.oid = p.pronamespace
+                    WHERE n.nspname = 'app'
+                      AND p.proname = 'current_tenant_id'
+                    """
+                )
+                (is_security_definer,) = cur.fetchone()
+                assert is_security_definer is True
+
+                # Ensure RLS is enabled with matching USING / WITH CHECK policies
+                for table_name, policy_name in MULTI_TENANT_TABLES:
+                    cur.execute(
+                        """
+                        SELECT c.relrowsecurity
+                        FROM pg_class AS c
+                        JOIN pg_namespace AS n ON n.oid = c.relnamespace
+                        WHERE n.nspname = 'public'
+                          AND c.relname = %s
+                        """,
+                        (table_name,),
+                    )
+                    result = cur.fetchone()
+                    if result is None:
+                        continue  # table not present in this schema snapshot
+                    (rls_enabled,) = result
+                    assert rls_enabled is True, f"RLS not enabled for {table_name}"
+
+                    cur.execute(
+                        """
+                        SELECT pol.qual, pol.with_check
+                        FROM pg_policies AS pol
+                        WHERE pol.schemaname = 'public'
+                          AND pol.tablename = %s
+                          AND pol.policyname = %s
+                        """,
+                        (table_name, policy_name),
+                    )
+                    policy_row = cur.fetchone()
+                    assert policy_row is not None, f"Missing RLS policy for {table_name}"
+                    qual, with_check = policy_row
+                    expected = "((tenant_id = app.current_tenant_id()))"
+                    assert qual == expected
+                    assert with_check == expected
     finally:
         pg.stop()
