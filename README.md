@@ -73,6 +73,7 @@ git clone https://github.com/<sua-org>/pdf-knowledge-kit.git
 cd pdf-knowledge-kit
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt  # ou use requirements.lock para versões travadas
+pip install -r requirements-dev.txt  # ferramentas de lint, formatação e análise estática
 ```
 
 - Prefira `requirements.lock` para ambientes reproduzíveis; `requirements.txt` mantém flexibilidade com intervalos `>=`.
@@ -121,6 +122,21 @@ cd ..
 ```bash
 pytest
 ```
+
+### Qualidade de código (lint e segurança)
+
+Para garantir o estilo e segurança antes do commit/push:
+
+```bash
+pip install -r requirements-dev.txt  # instale uma vez no ambiente virtual
+ruff check .
+black --check .
+mypy --config-file pyproject.toml
+bandit -c pyproject.toml -r app/
+```
+
+Use `ruff format` ou `black` sem a flag `--check` para aplicar correções automáticas quando necessário.
+
 
 ## Como Executar
 
