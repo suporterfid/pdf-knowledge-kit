@@ -65,7 +65,28 @@ docker compose exec app pytest
 
 Alternatively, install dependencies on the host (`pip install -r requirements.txt`) and run `pytest`. This mirrors the CI setup described in [Section 5](#5-continuous-integration--delivery).
 
-### 3.3 Frontend development outside Docker
+### 3.3 Python linting and security checks
+
+When iterating locally without containers:
+
+1. Create or activate your virtual environment and install the development helpers:
+
+   ```bash
+   pip install -r requirements-dev.txt
+   ```
+
+2. Run the standard quality gates before committing:
+
+   ```bash
+   ruff check .
+   black --check .
+   mypy --config-file pyproject.toml
+   bandit -c pyproject.toml -r app/
+   ```
+
+Use `ruff format` or `black` (sem `--check`) to apply formatting fixes automatically. These are the same commands executed in CI so keeping a clean local run prevents pipeline failures.
+
+### 3.4 Frontend development outside Docker
 
 If you prefer to run the frontend locally without containers:
 
