@@ -14,6 +14,7 @@ from ..agents.service import (
     AgentService,
     PostgresAgentRepository,
 )
+from ..core.db import apply_tenant_settings, get_required_tenant_id
 from ..security.auth import require_role
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
@@ -33,8 +34,17 @@ def _get_conn() -> psycopg.Connection:
 @contextmanager
 def _service_context() -> Iterator[AgentService]:
     conn = _get_conn()
-    repo = PostgresAgentRepository(conn)
-    service = AgentService(repo)
+    try:
+        tenant_id = get_required_tenant_id()
+        apply_tenant_settings(conn, tenant_id)
+    except RuntimeError as exc:
+        conn.close()
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - defensive
+        conn.close()
+        raise HTTPException(status_code=500, detail="Failed to configure tenant") from exc
+    repo = PostgresAgentRepository(conn, tenant_id=tenant_id)
+    service = AgentService(repo, tenant_id=tenant_id)
     try:
         yield service
         conn.commit()

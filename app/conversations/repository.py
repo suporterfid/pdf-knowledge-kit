@@ -3,10 +3,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol
+from uuid import UUID
 
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+
+from app.core.db import get_required_tenant_id
 
 from . import schemas
 
@@ -89,12 +92,19 @@ class ConversationRepository(Protocol):
 class PostgresConversationRepository:
     """PostgreSQL implementation of :class:`ConversationRepository`."""
 
-    def __init__(self, conn: psycopg.Connection):
+    def __init__(
+        self, conn: psycopg.Connection, tenant_id: Optional[UUID] = None
+    ) -> None:
         self._conn = conn
+        self._tenant_id = get_required_tenant_id(tenant_id)
 
     # Utility -----------------------------------------------------------------
     def _cursor(self):
         return self._conn.cursor(row_factory=dict_row)
+
+    @property
+    def tenant_id(self) -> UUID:
+        return self._tenant_id
 
     # Conversation operations --------------------------------------------------
     def get_by_external(
@@ -104,9 +114,9 @@ class PostgresConversationRepository:
             cur.execute(
                 """
                 SELECT * FROM conversations
-                WHERE agent_id = %s AND channel = %s AND external_conversation_id = %s
+                WHERE tenant_id = %s AND agent_id = %s AND channel = %s AND external_conversation_id = %s
                 """,
-                (agent_id, channel, external_conversation_id),
+                (self._tenant_id, agent_id, channel, external_conversation_id),
             )
             row = cur.fetchone()
         if not row:
@@ -123,11 +133,11 @@ class PostgresConversationRepository:
         with self._cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO conversations (agent_id, channel, external_conversation_id, metadata)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO conversations (tenant_id, agent_id, channel, external_conversation_id, metadata)
+                VALUES (%s, %s, %s, %s, %s)
                 RETURNING *
                 """,
-                (agent_id, channel, external_conversation_id, Jsonb(metadata or {})),
+                (self._tenant_id, agent_id, channel, external_conversation_id, Jsonb(metadata or {})),
             )
             row = cur.fetchone()
         return self._hydrate_conversation(row)
@@ -144,11 +154,11 @@ class PostgresConversationRepository:
             cur.execute(
                 """
                 INSERT INTO conversation_participants
-                    (conversation_id, role, external_id, display_name, metadata)
-                VALUES (%s, %s, %s, %s, %s)
+                    (tenant_id, conversation_id, role, external_id, display_name, metadata)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
-                (conversation_id, role, external_id, display_name, Jsonb(metadata or {})),
+                (self._tenant_id, conversation_id, role, external_id, display_name, Jsonb(metadata or {})),
             )
             row = cur.fetchone()
         return schemas.ConversationParticipant(**row)
@@ -163,11 +173,12 @@ class PostgresConversationRepository:
             cur.execute(
                 """
                 SELECT * FROM conversation_participants
-                WHERE conversation_id = %s AND role = %s AND coalesce(external_id, '') = coalesce(%s, '')
+                WHERE tenant_id = %s AND conversation_id = %s AND role = %s
+                  AND coalesce(external_id, '') = coalesce(%s, '')
                 ORDER BY created_at ASC
                 LIMIT 1
                 """,
-                (conversation_id, role, external_id),
+                (self._tenant_id, conversation_id, role, external_id),
             )
             row = cur.fetchone()
         if not row:
@@ -187,11 +198,12 @@ class PostgresConversationRepository:
             cur.execute(
                 """
                 INSERT INTO conversation_messages
-                    (conversation_id, participant_id, direction, body, nlp, sent_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                    (tenant_id, conversation_id, participant_id, direction, body, nlp, sent_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
+                    self._tenant_id,
                     conversation_id,
                     participant_id,
                     direction,
@@ -219,8 +231,12 @@ class PostgresConversationRepository:
         if metadata is not None:
             fields.append("metadata = %s")
             values.append(Jsonb(metadata))
-        values.append(conversation_id)
-        query = f"UPDATE conversations SET {', '.join(fields)}, updated_at = now() WHERE id = %s"
+        values.extend((self._tenant_id, conversation_id))
+        query = (
+            "UPDATE conversations SET "
+            f"{', '.join(fields)}, updated_at = now() "
+            "WHERE tenant_id = %s AND id = %s"
+        )
         with self._cursor() as cur:
             cur.execute(query, values)
 
@@ -231,33 +247,40 @@ class PostgresConversationRepository:
                 SELECT id, agent_id, channel, external_conversation_id, status, is_escalated,
                        escalation_reason, follow_up_at, follow_up_note, last_message_at, metadata
                 FROM conversations
-                WHERE agent_id = %s
+                WHERE tenant_id = %s AND agent_id = %s
                 ORDER BY last_message_at DESC NULLS LAST, created_at DESC
                 LIMIT %s
                 """,
-                (agent_id, limit),
+                (self._tenant_id, agent_id, limit),
             )
             rows = cur.fetchall()
         return [schemas.ConversationSummary(**row) for row in rows]
 
     def get_conversation(self, conversation_id: int) -> Optional[schemas.ConversationDetail]:
         with self._cursor() as cur:
-            cur.execute("SELECT * FROM conversations WHERE id = %s", (conversation_id,))
+            cur.execute(
+                "SELECT * FROM conversations WHERE tenant_id = %s AND id = %s",
+                (self._tenant_id, conversation_id),
+            )
             convo = cur.fetchone()
             if not convo:
                 return None
             cur.execute(
-                "SELECT * FROM conversation_participants WHERE conversation_id = %s ORDER BY created_at",
-                (conversation_id,),
+                """
+                SELECT * FROM conversation_participants
+                WHERE tenant_id = %s AND conversation_id = %s
+                ORDER BY created_at
+                """,
+                (self._tenant_id, conversation_id),
             )
             participants = [schemas.ConversationParticipant(**row) for row in cur.fetchall()]
             cur.execute(
                 """
                 SELECT * FROM conversation_messages
-                WHERE conversation_id = %s
+                WHERE tenant_id = %s AND conversation_id = %s
                 ORDER BY sent_at ASC
                 """,
-                (conversation_id,),
+                (self._tenant_id, conversation_id),
             )
             messages = [schemas.ConversationMessage(**row) for row in cur.fetchall()]
         detail = self._hydrate_conversation(convo)
@@ -276,9 +299,9 @@ class PostgresConversationRepository:
                 """
                 UPDATE conversations
                 SET follow_up_at = %s, follow_up_note = %s, updated_at = now()
-                WHERE id = %s
+                WHERE tenant_id = %s AND id = %s
                 """,
-                (follow_up_at, note, conversation_id),
+                (follow_up_at, note, self._tenant_id, conversation_id),
             )
 
     def mark_escalated(
@@ -297,8 +320,12 @@ class PostgresConversationRepository:
         if metadata_updates:
             set_clause.append("metadata = metadata || %s")
             params.append(Jsonb(metadata_updates))
-        params.append(conversation_id)
-        query = f"UPDATE conversations SET {', '.join(set_clause)}, escalated_at = now(), updated_at = now() WHERE id = %s"
+        params.extend((self._tenant_id, conversation_id))
+        query = (
+            "UPDATE conversations SET "
+            f"{', '.join(set_clause)}, escalated_at = now(), updated_at = now() "
+            "WHERE tenant_id = %s AND id = %s"
+        )
         with self._cursor() as cur:
             cur.execute(query, params)
 
@@ -311,9 +338,9 @@ class PostgresConversationRepository:
                     COUNT(*) FILTER (WHERE is_escalated) AS escalated,
                     COUNT(*) FILTER (WHERE follow_up_at IS NOT NULL AND follow_up_at > now()) AS follow_ups
                 FROM conversations
-                WHERE agent_id = %s
+                WHERE tenant_id = %s AND agent_id = %s
                 """,
-                (agent_id,),
+                (self._tenant_id, agent_id),
             )
             row = cur.fetchone() or {"open": 0, "escalated": 0, "follow_ups": 0}
         return schemas.ConversationAnalytics(
@@ -331,11 +358,11 @@ class PostgresConversationRepository:
                        COUNT(*) FILTER (WHERE is_escalated) AS escalations,
                        MAX(last_message_at) AS last_activity
                 FROM conversations
-                WHERE agent_id = %s
+                WHERE tenant_id = %s AND agent_id = %s
                 GROUP BY channel
                 ORDER BY channel
                 """,
-                (agent_id,),
+                (self._tenant_id, agent_id),
             )
             rows = cur.fetchall()
         return [schemas.ChannelConfigAnalytics(**row) for row in rows]

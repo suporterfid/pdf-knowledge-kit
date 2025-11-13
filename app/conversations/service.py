@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, Optional
+from uuid import UUID
 
 from ..agents import schemas as agent_schemas
 from ..nlp import NlpPipeline
@@ -17,9 +18,12 @@ class ConversationService:
     def __init__(
         self,
         repository: ConversationRepository,
+        *,
+        tenant_id: Optional[UUID] = None,
         nlp_pipeline: Optional[NlpPipeline] = None,
     ) -> None:
         self._repository = repository
+        self._tenant_id = tenant_id or getattr(repository, "tenant_id", None)
         self._nlp = nlp_pipeline or NlpPipeline()
 
     # ------------------------------------------------------------------
@@ -32,6 +36,9 @@ class ConversationService:
         channel_config: Optional[Dict[str, Any]] = None,
     ) -> schemas.MessageIngestResponse:
         """Persist a message and update the conversation state."""
+
+        tenant_id = normalized.tenant_id or self._tenant_id or agent.tenant_id
+        normalized.tenant_id = tenant_id
 
         conversation = self._repository.get_by_external(
             agent.id, normalized.channel, normalized.external_conversation_id

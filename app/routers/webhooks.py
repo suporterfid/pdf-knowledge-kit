@@ -5,6 +5,7 @@ import json
 import os
 from contextlib import contextmanager
 from typing import Iterator, Tuple
+from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, HTTPException, Request, Response, status
@@ -18,6 +19,7 @@ from ..channels import get_adapter
 from ..conversations.repository import PostgresConversationRepository
 from ..conversations.service import ConversationService
 from ..conversations import schemas as convo_schemas
+from ..core.db import apply_tenant_settings, get_required_tenant_id
 
 router = APIRouter(tags=["webhooks"])
 
@@ -34,12 +36,17 @@ def _get_conn() -> psycopg.Connection:
 
 
 @contextmanager
-def _service_context() -> Iterator[Tuple[AgentService, ConversationService]]:
+def _service_context(tenant_id: UUID) -> Iterator[Tuple[AgentService, ConversationService]]:
     conn = _get_conn()
-    agent_repo = PostgresAgentRepository(conn)
-    convo_repo = PostgresConversationRepository(conn)
-    agent_service = AgentService(agent_repo)
-    convo_service = ConversationService(convo_repo)
+    try:
+        apply_tenant_settings(conn, tenant_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        conn.close()
+        raise HTTPException(status_code=500, detail="Failed to configure tenant") from exc
+    agent_repo = PostgresAgentRepository(conn, tenant_id=tenant_id)
+    convo_repo = PostgresConversationRepository(conn, tenant_id=tenant_id)
+    agent_service = AgentService(agent_repo, tenant_id=tenant_id)
+    convo_service = ConversationService(convo_repo, tenant_id=tenant_id)
     try:
         yield agent_service, convo_service
         conn.commit()
@@ -56,6 +63,16 @@ def _service_context() -> Iterator[Tuple[AgentService, ConversationService]]:
         conn.close()
 
 
+def _resolve_tenant_id(request: Request) -> UUID:
+    header = request.headers.get("x-tenant-id") or request.headers.get("x-chatvolt-tenant")
+    candidate = header or request.query_params.get("tenant_id")
+    try:
+        return get_required_tenant_id(candidate)
+    except RuntimeError as exc:
+        status_code = 400 if candidate else 403
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
+
 @router.post("/api/webhooks/{agent_slug}/{channel}")
 async def ingest_webhook(agent_slug: str, channel: str, request: Request) -> Response:
     body_bytes = await request.body()
@@ -70,7 +87,9 @@ async def ingest_webhook(agent_slug: str, channel: str, request: Request) -> Res
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    with _service_context() as (agents, conversations):
+    tenant_id = _resolve_tenant_id(request)
+
+    with _service_context(tenant_id) as (agents, conversations):
         agent = agents.get_agent_by_slug(agent_slug)
         try:
             channel_config = agents.get_channel_config(agent.id, channel_name)
@@ -89,6 +108,7 @@ async def ingest_webhook(agent_slug: str, channel: str, request: Request) -> Res
             # Ensure normalized message carries correct agent/channel context
             normalized.agent_id = agent.id
             normalized.channel = channel_name
+            normalized.tenant_id = tenant_id
             result = conversations.process_incoming_message(agent, normalized, config_dict)
             processed += 1
             last_response = result
