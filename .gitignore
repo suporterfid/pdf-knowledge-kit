@@ -1,6 +1,7 @@
 __pycache__/
 tmp/uploads/*
 !tmp/uploads/.gitkeep
+logs/
 
 # frontend
 frontend/node_modules/
