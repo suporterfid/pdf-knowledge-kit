@@ -1,6 +1,7 @@
+import json
 import logging
 import os
-from pprint import pprint
+import sys
 
 
 def get_log_config():
@@ -22,7 +23,7 @@ def get_log_config():
 
 
 def main():
-    pprint(get_log_config())
+    sys.stdout.write(json.dumps(get_log_config(), indent=2) + "\n")
 
 
 if __name__ == "__main__":

@@ -109,8 +109,8 @@ def decode_tenant_token(token: str) -> TenantTokenPayload:
         raise TenantTokenValidationError(
             "Tenant token payload must include 'tenant_id' and 'user_id'.",
         )
-    token_type = payload.get("type")
-    if token_type and token_type != "access":
+    type_claim = payload.get("type")
+    if type_claim and type_claim != "access":
         raise TenantTokenValidationError("Tenant token must be an access token.")
 
     return cast(TenantTokenPayload, payload)

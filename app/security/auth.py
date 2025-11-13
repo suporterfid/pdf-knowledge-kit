@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterator
-from typing import Callable
+from collections.abc import Callable, Iterator
+from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session, sessionmaker
@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.auth import TenantTokenPayload, get_tenant_context
 from app.models import User
 from app.models.session import get_sessionmaker
-
 
 _ROLE_LEVELS = {"viewer": 0, "operator": 1, "admin": 2}
 _SESSION_FACTORY: sessionmaker[Session] | None = None
@@ -35,12 +34,15 @@ def get_db_session() -> Iterator[Session]:
         session.close()
 
 
+SessionDep = Annotated[Session, Depends(get_db_session)]
+
+
 async def get_current_token_payload(request: Request) -> TenantTokenPayload:
     """Decode and validate the bearer token from ``request``."""
 
     payload = await get_tenant_context(request)
-    token_type = payload.get("type")
-    if token_type and token_type != "access":
+    type_claim = payload.get("type")
+    if type_claim and type_claim != "access":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Access token required.",
@@ -48,9 +50,12 @@ async def get_current_token_payload(request: Request) -> TenantTokenPayload:
     return payload
 
 
+TokenPayloadDep = Annotated[TenantTokenPayload, Depends(get_current_token_payload)]
+
+
 async def get_current_user(
-    payload: TenantTokenPayload = Depends(get_current_token_payload),
-    session: Session = Depends(get_db_session),
+    payload: TokenPayloadDep,
+    session: SessionDep,
 ) -> User:
     """Resolve the authenticated :class:`~app.models.User` from the token payload."""
 
@@ -79,7 +84,9 @@ async def get_current_user(
 
 
 def _highest_role(roles: list[str]) -> str | None:
-    ranked = sorted({role for role in roles if role in _ROLE_LEVELS}, key=_ROLE_LEVELS.get)
+    ranked = sorted(
+        {role for role in roles if role in _ROLE_LEVELS}, key=_ROLE_LEVELS.get
+    )
     return ranked[-1] if ranked else None
 
 
@@ -90,8 +97,8 @@ def require_role(min_role: str) -> Callable[..., str]:
         raise ValueError(f"Unknown role: {min_role}")
 
     async def dependency(
-        user: User = Depends(get_current_user),
-        payload: TenantTokenPayload = Depends(get_current_token_payload),
+        user: Annotated[User, Depends(get_current_user)],
+        payload: TokenPayloadDep,
     ) -> str:
         roles = payload.get("roles") or []
         if isinstance(roles, str):  # pragma: no cover - defensive

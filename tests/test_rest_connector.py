@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 from uuid import uuid4
 
 import pytest
-
 from app.ingestion.connectors.rest import RestConnector
 from app.ingestion.models import Source, SourceType
 from app.ingestion.parsers import Chunk
 
 
 class _FakeResponse:
-    def __init__(self, payload: Dict[str, Any], status_code: int = 200):
+    def __init__(self, payload: dict[str, Any], status_code: int = 200):
         self._payload = payload
         self.status_code = status_code
 
@@ -20,14 +19,14 @@ class _FakeResponse:
         if self.status_code >= 400:
             raise AssertionError("unexpected HTTP status")
 
-    def json(self) -> Dict[str, Any]:
+    def json(self) -> dict[str, Any]:
         return self._payload
 
 
 class _FakeSession:
-    def __init__(self, responses: List[_FakeResponse]):
+    def __init__(self, responses: list[_FakeResponse]):
         self._responses = responses
-        self.requests: List[Dict[str, Any]] = []
+        self.requests: list[dict[str, Any]] = []
 
     def request(self, method: str, url: str, **kwargs: Any) -> _FakeResponse:
         self.requests.append({"method": method, "url": url, **kwargs})
@@ -38,7 +37,7 @@ class _FakeSession:
 
 @pytest.fixture()
 def fake_chunk(monkeypatch):
-    captured: List[Dict[str, Any]] = []
+    captured: list[dict[str, Any]] = []
 
     def _chunk(text: str, **kwargs: Any):
         extra = kwargs.get("extra_metadata") or {}
@@ -70,7 +69,11 @@ def _make_source(**overrides: Any) -> Source:
             "id_field": "id",
             "text_fields": ["content"],
             "timestamp_field": "timestamp",
-            "pagination": {"type": "cursor", "cursor_param": "cursor", "next_cursor_path": "next"},
+            "pagination": {
+                "type": "cursor",
+                "cursor_param": "cursor",
+                "next_cursor_path": "next",
+            },
         },
         "credentials": {"token": "secret-token"},
     }
@@ -80,18 +83,22 @@ def _make_source(**overrides: Any) -> Source:
 
 def test_rest_connector_cursor_pagination(monkeypatch, fake_chunk):
     responses = [
-        _FakeResponse({
-            "data": [
-                {"id": 1, "content": "First", "timestamp": "2024-01-01T00:00:00Z"},
-            ],
-            "next": "cursor-2",
-        }),
-        _FakeResponse({
-            "data": [
-                {"id": 2, "content": "Second", "timestamp": "2024-01-01T00:01:00Z"},
-            ],
-            "next": None,
-        }),
+        _FakeResponse(
+            {
+                "data": [
+                    {"id": 1, "content": "First", "timestamp": "2024-01-01T00:00:00Z"},
+                ],
+                "next": "cursor-2",
+            }
+        ),
+        _FakeResponse(
+            {
+                "data": [
+                    {"id": 2, "content": "Second", "timestamp": "2024-01-01T00:01:00Z"},
+                ],
+                "next": None,
+            }
+        ),
     ]
     session = _FakeSession(responses)
     source = _make_source()
@@ -114,22 +121,29 @@ def test_rest_connector_cursor_pagination(monkeypatch, fake_chunk):
         "timestamp": "2024-01-01T00:00:00Z",
     }
     assert records[0].document_path.endswith("messages/1")
-    assert records[0].document_sync_state == {"record_id": 1, "timestamp": "2024-01-01T00:00:00Z"}
+    assert records[0].document_sync_state == {
+        "record_id": 1,
+        "timestamp": "2024-01-01T00:00:00Z",
+    }
 
 
 def test_rest_connector_page_pagination(monkeypatch, fake_chunk):
     responses = [
-        _FakeResponse({
-            "results": [
-                {"id": "a", "content": "Alpha"},
-                {"id": "b", "content": "Beta"},
-            ]
-        }),
-        _FakeResponse({
-            "results": [
-                {"id": "c", "content": "Gamma"},
-            ]
-        }),
+        _FakeResponse(
+            {
+                "results": [
+                    {"id": "a", "content": "Alpha"},
+                    {"id": "b", "content": "Beta"},
+                ]
+            }
+        ),
+        _FakeResponse(
+            {
+                "results": [
+                    {"id": "c", "content": "Gamma"},
+                ]
+            }
+        ),
     ]
     session = _FakeSession(responses)
     source = _make_source(

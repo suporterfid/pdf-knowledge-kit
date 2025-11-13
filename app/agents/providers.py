@@ -1,9 +1,10 @@
 """Provider credential helpers supporting multiple LLM vendors."""
+
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Dict, Mapping, Optional
 
 
 @dataclass(frozen=True)
@@ -11,13 +12,13 @@ class ProviderCredentials:
     """Container for credentials resolved for a provider."""
 
     provider: str
-    api_key: Optional[str]
-    extras: Dict[str, str]
+    api_key: str | None
+    extras: dict[str, str]
 
-    def as_headers(self) -> Dict[str, str]:
+    def as_headers(self) -> dict[str, str]:
         """Return HTTP headers suitable for calling the provider API."""
 
-        headers: Dict[str, str] = {}
+        headers: dict[str, str] = {}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         for key, value in self.extras.items():
@@ -36,7 +37,7 @@ class ProviderRegistry:
         "azure": "AZURE_OPENAI_API_KEY",
     }
 
-    def __init__(self, overrides: Optional[Mapping[str, Mapping[str, str]]] = None):
+    def __init__(self, overrides: Mapping[str, Mapping[str, str]] | None = None):
         self._overrides = {
             (k.lower() if isinstance(k, str) else k): dict(v)
             for k, v in (overrides or {}).items()
@@ -60,14 +61,14 @@ class ProviderRegistry:
             )
         env_var = self._DEFAULT_ENV_MAP.get(key)
         api_key = os.getenv(env_var) if env_var else None
-        extras: Dict[str, str] = {}
+        extras: dict[str, str] = {}
         if key == "azure":
             endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
             if endpoint:
                 extras["X-API-Endpoint"] = endpoint
         return ProviderCredentials(provider=provider, api_key=api_key, extras=extras)
 
-    def list_supported_providers(self) -> Dict[str, Optional[str]]:
+    def list_supported_providers(self) -> dict[str, str | None]:
         """Return a mapping of supported providers to resolved API keys."""
 
         providers = set(self._DEFAULT_ENV_MAP.keys()) | set(self._overrides.keys())

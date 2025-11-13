@@ -4,22 +4,19 @@ This module wraps common SQL operations for sources, ingestion jobs,
 documents and chunks. It keeps ingestion code focused on I/O and
 embedding while centralizing persistence logic here.
 """
+
 from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime
-from typing import Any, Callable, Iterable, Optional, Sequence
+from typing import Any
 from uuid import UUID, uuid4
 
 import psycopg
 from psycopg import sql
 from psycopg.types.json import Jsonb
-
-logger = logging.getLogger(__name__)
-
-_MISSING = object()
-
 
 from .models import (
     ChunkMetadata,
@@ -30,6 +27,11 @@ from .models import (
     Source,
     SourceType,
 )
+
+logger = logging.getLogger(__name__)
+
+_MISSING = object()
+
 
 def _encode_credentials(
     credentials: Any | None,
@@ -169,15 +171,15 @@ def get_or_create_source(
                 lookup_params += (("url", url),)
 
             for column, value in lookup_params:
-                cur.execute(
-                    f"""
+                query = sql.SQL(
+                    """
                     SELECT id FROM sources
                     WHERE tenant_id = %s
-                      AND {column} = %s
+                      AND {} = %s
                       AND deleted_at IS NULL
-                    """,
-                    (tenant_id, value),
-                )
+                    """
+                ).format(sql.Identifier(column))
+                cur.execute(query, (tenant_id, value))
                 row = cur.fetchone()
                 if row:
                     source_id = row[0]
@@ -226,7 +228,11 @@ def get_or_create_source(
                     Jsonb(params) if params is not None else None,
                     connector_type,
                     connector_definition_id,
-                    Jsonb(connector_metadata) if connector_metadata is not None else None,
+                    (
+                        Jsonb(connector_metadata)
+                        if connector_metadata is not None
+                        else None
+                    ),
                     _encode_credentials(credentials, encrypt=encrypt_credentials),
                     _jsonb_or_none(sync_state),
                     version or 1,
@@ -239,7 +245,7 @@ def list_sources(
     conn: psycopg.Connection,
     *,
     tenant_id: UUID,
-    active: Optional[bool] = True,
+    active: bool | None = True,
     type: SourceType | None = None,
     limit: int | None = None,
     offset: int = 0,
@@ -256,19 +262,21 @@ def list_sources(
         conditions.append("type = %s")
         params.append(type.value if isinstance(type, SourceType) else type)
 
-    query = (
-        "SELECT id, tenant_id, type, label, location, path, url, active, params, "
-        "connector_type, connector_definition_id, connector_metadata, credentials, sync_state, version, created_at "
-        "FROM sources WHERE "
-        + " AND ".join(conditions)
-        + " ORDER BY created_at DESC"
-    )
+    condition_sql = sql.SQL(" AND ").join(sql.SQL(cond) for cond in conditions)
+    query_parts: list[sql.Composable] = [
+        sql.SQL(
+            "SELECT id, tenant_id, type, label, location, path, url, active, params, "
+            "connector_type, connector_definition_id, connector_metadata, credentials, sync_state, version, created_at "
+            "FROM sources WHERE {} ORDER BY created_at DESC"
+        ).format(condition_sql)
+    ]
     if limit is not None:
-        query += " LIMIT %s"
+        query_parts.append(sql.SQL(" LIMIT %s"))
         params.append(limit)
     if offset:
-        query += " OFFSET %s"
+        query_parts.append(sql.SQL(" OFFSET %s"))
         params.append(offset)
+    query = sql.Composed(query_parts)
 
     with conn.cursor() as cur:
         cur.execute(query, params)
@@ -589,12 +597,12 @@ def update_job_status(
     status: JobStatus,
     error: str | None = None,
     log_path: str | None = None,
-    started_at: Optional[datetime] = None,
-    finished_at: Optional[datetime] = None,
+    started_at: datetime | None = None,
+    finished_at: datetime | None = None,
 ) -> None:
     """Update job state and optional metadata."""
 
-    fields = [sql.SQL("status = %s"), sql.SQL("updated_at = now()")] 
+    fields = [sql.SQL("status = %s"), sql.SQL("updated_at = now()")]
     values: list = [status.value]
     if error is not None:
         fields.append(sql.SQL("error = %s"))
@@ -651,9 +659,7 @@ def update_job_params(
                 raise ValueError("Job not found for tenant")
 
 
-def get_job(
-    conn: psycopg.Connection, job_id: UUID, *, tenant_id: UUID
-) -> Optional[Job]:
+def get_job(conn: psycopg.Connection, job_id: UUID, *, tenant_id: UUID) -> Job | None:
     """Return a single job by id or ``None`` if not found."""
     with conn.cursor() as cur:
         cur.execute(
@@ -798,9 +804,9 @@ def update_source(
         return
 
     fields.append(sql.SQL("updated_at = now()"))
-    query = sql.SQL("UPDATE sources SET {fields} WHERE id = %s AND tenant_id = %s").format(
-        fields=sql.SQL(", ").join(fields)
-    )
+    query = sql.SQL(
+        "UPDATE sources SET {fields} WHERE id = %s AND tenant_id = %s"
+    ).format(fields=sql.SQL(", ").join(fields))
     values.extend([source_id, tenant_id])
     with conn.transaction():
         with conn.cursor() as cur:
@@ -880,16 +886,26 @@ def upsert_document(
                     existing_page_count,
                 ) = row
                 new_version = (current_version or 0) + 1
-                next_source_id = source_id if source_id is not None else existing_source_id
+                next_source_id = (
+                    source_id if source_id is not None else existing_source_id
+                )
                 next_connector_type = (
-                    connector_type if connector_type is not None else existing_connector_type
+                    connector_type
+                    if connector_type is not None
+                    else existing_connector_type
                 )
                 next_credentials = (
-                    encoded_credentials if credentials is not None else _as_bytes(existing_credentials)
+                    encoded_credentials
+                    if credentials is not None
+                    else _as_bytes(existing_credentials)
                 )
-                next_sync_state = sync_state if sync_state is not None else existing_sync_state
+                next_sync_state = (
+                    sync_state if sync_state is not None else existing_sync_state
+                )
                 next_bytes = bytes_len if bytes_len is not None else existing_bytes
-                next_page_count = page_count if page_count is not None else existing_page_count
+                next_page_count = (
+                    page_count if page_count is not None else existing_page_count
+                )
 
                 if next_connector_type is None and next_source_id is not None:
                     cur.execute(
@@ -1047,13 +1063,12 @@ def insert_chunks(
     embeddings: Sequence[Sequence[float]],
     metadatas: Sequence[ChunkMetadata],
 ) -> None:
-    """Insert chunk rows ensuring metadata is persisted as JSONB.
-    """
+    """Insert chunk rows ensuring metadata is persisted as JSONB."""
 
     with conn.transaction():
         with conn.cursor() as cur:
             for index, (content, embedding, metadata) in enumerate(
-                zip(chunks, embeddings, metadatas)
+                zip(chunks, embeddings, metadatas, strict=False)
             ):
                 cur.execute(
                     """
@@ -1162,4 +1177,3 @@ def get_latest_versions_for_connector(
                 sync_state=_normalize_sync_state(row[8]),
                 created_at=row[9],
             )
-

@@ -4,13 +4,14 @@ from uuid import uuid4
 
 import psycopg
 import pytest
-from pgvector.psycopg import register_vector
-
 import query
+from pgvector.psycopg import register_vector
 
 
 def _get_conn():
-    url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+    url = os.getenv(
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
+    )
     try:
         conn = psycopg.connect(url)
     except Exception:

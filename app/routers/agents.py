@@ -1,9 +1,10 @@
 """Agent management API router."""
+
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -42,7 +43,9 @@ def _service_context() -> Iterator[AgentService]:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - defensive
         conn.close()
-        raise HTTPException(status_code=500, detail="Failed to configure tenant") from exc
+        raise HTTPException(
+            status_code=500, detail="Failed to configure tenant"
+        ) from exc
     repo = PostgresAgentRepository(conn, tenant_id=tenant_id)
     service = AgentService(repo, tenant_id=tenant_id)
     try:
@@ -69,12 +72,16 @@ def list_agents(role: str = Depends(require_role("viewer"))) -> schemas.AgentLis
 
 
 @router.get("/providers", response_model=dict[str, str | None])
-def list_providers(role: str = Depends(require_role("viewer"))) -> dict[str, str | None]:
+def list_providers(
+    role: str = Depends(require_role("viewer")),
+) -> dict[str, str | None]:
     with _service_context() as svc:
         return svc.list_supported_providers()
 
 
-@router.post("", response_model=schemas.AgentDetail, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=schemas.AgentDetail, status_code=status.HTTP_201_CREATED
+)
 def create_agent(
     payload: schemas.AgentCreate,
     role: str = Depends(require_role("operator")),
@@ -84,7 +91,9 @@ def create_agent(
 
 
 @router.get("/{agent_id}", response_model=schemas.AgentDetail)
-def get_agent(agent_id: int, role: str = Depends(require_role("viewer"))) -> schemas.AgentDetail:
+def get_agent(
+    agent_id: int, role: str = Depends(require_role("viewer"))
+) -> schemas.AgentDetail:
     with _service_context() as svc:
         return svc.get_agent(agent_id)
 
@@ -100,20 +109,28 @@ def update_agent(
 
 
 @router.delete("/{agent_id}", response_model=schemas.Message)
-def delete_agent(agent_id: int, role: str = Depends(require_role("operator"))) -> schemas.Message:
+def delete_agent(
+    agent_id: int, role: str = Depends(require_role("operator"))
+) -> schemas.Message:
     with _service_context() as svc:
         svc.delete_agent(agent_id)
     return schemas.Message(message="deleted")
 
 
 @router.get("/{agent_id}/versions", response_model=schemas.AgentVersionList)
-def list_versions(agent_id: int, role: str = Depends(require_role("viewer"))) -> schemas.AgentVersionList:
+def list_versions(
+    agent_id: int, role: str = Depends(require_role("viewer"))
+) -> schemas.AgentVersionList:
     with _service_context() as svc:
         versions = svc.list_versions(agent_id)
     return schemas.AgentVersionList(items=versions, total=len(versions))
 
 
-@router.post("/{agent_id}/versions", response_model=schemas.AgentVersion, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{agent_id}/versions",
+    response_model=schemas.AgentVersion,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_version(
     agent_id: int,
     payload: schemas.AgentVersionCreate,
@@ -139,17 +156,19 @@ def list_tests(agent_id: int, role: str = Depends(require_role("viewer"))):
         return svc.list_tests(agent_id)
 
 
-
-
 @router.get("/{agent_id}/channels", response_model=schemas.ChannelConfigList)
-def list_channel_configs(agent_id: int, role: str = Depends(require_role("viewer"))) -> schemas.ChannelConfigList:
+def list_channel_configs(
+    agent_id: int, role: str = Depends(require_role("viewer"))
+) -> schemas.ChannelConfigList:
     with _service_context() as svc:
         configs = svc.list_channel_configs(agent_id)
     return schemas.ChannelConfigList(items=configs, total=len(configs))
 
 
 @router.get("/{agent_id}/channels/{channel}", response_model=schemas.ChannelConfig)
-def get_channel_config(agent_id: int, channel: str, role: str = Depends(require_role("viewer"))) -> schemas.ChannelConfig:
+def get_channel_config(
+    agent_id: int, channel: str, role: str = Depends(require_role("viewer"))
+) -> schemas.ChannelConfig:
     with _service_context() as svc:
         return svc.get_channel_config(agent_id, channel)
 
@@ -166,7 +185,9 @@ def upsert_channel_config(
 
 
 @router.delete("/{agent_id}/channels/{channel}", response_model=schemas.Message)
-def delete_channel_config(agent_id: int, channel: str, role: str = Depends(require_role("operator"))) -> schemas.Message:
+def delete_channel_config(
+    agent_id: int, channel: str, role: str = Depends(require_role("operator"))
+) -> schemas.Message:
     with _service_context() as svc:
         svc.delete_channel_config(agent_id, channel)
     return schemas.Message(message="deleted")

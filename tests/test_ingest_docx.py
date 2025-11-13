@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-
 from app.ingestion.parsers.documents import read_csv_text, read_docx_text
 
 

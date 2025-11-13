@@ -1,9 +1,8 @@
 import importlib
 
-from fastapi.testclient import TestClient
-
 import app.main as main
 import app.security.auth as security_auth
+from fastapi.testclient import TestClient
 
 
 def _create_client() -> TestClient:

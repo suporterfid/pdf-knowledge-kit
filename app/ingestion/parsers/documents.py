@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
-
-from csv import reader as csv_reader
+import logging
+from collections.abc import Iterable
 from csv import Sniffer
+from csv import reader as csv_reader
+from pathlib import Path
 
 try:  # pragma: no cover - optional dependency import
     from docx import Document  # type: ignore
@@ -16,19 +16,22 @@ try:  # pragma: no cover - optional dependency import
 except ImportError:  # pragma: no cover - optional dependency import
     load_workbook = None  # type: ignore
 
-ParsedSegment = Tuple[str, Dict[str, object]]
+logger = logging.getLogger(__name__)
+
+ParsedSegment = tuple[str, dict[str, object]]
 
 
 def _read_text_with_fallbacks(path: Path, encodings: Iterable[str]) -> str:
     for enc in encodings:
         try:
             return path.read_text(encoding=enc)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to read %s with encoding %s: %s", path, enc, exc)
             continue
     return path.read_bytes().decode("utf-8", errors="ignore")
 
 
-def read_txt_text(path: Path) -> List[ParsedSegment]:
+def read_txt_text(path: Path) -> list[ParsedSegment]:
     """Read a plain text file returning a single segment with metadata."""
 
     text = _read_text_with_fallbacks(path, ("utf-8", "utf-8-sig", "latin-1"))
@@ -43,14 +46,14 @@ def read_txt_text(path: Path) -> List[ParsedSegment]:
     ]
 
 
-def read_docx_text(path: Path) -> List[ParsedSegment]:
+def read_docx_text(path: Path) -> list[ParsedSegment]:
     """Extract text from a DOCX file including paragraphs and tables."""
 
     if Document is None:
         raise RuntimeError("python-docx is required to read DOCX files")
 
     document = Document(str(path))
-    parts: List[str] = []
+    parts: list[str] = []
 
     for paragraph in document.paragraphs:
         text = paragraph.text.strip()
@@ -59,7 +62,11 @@ def read_docx_text(path: Path) -> List[ParsedSegment]:
 
     for table in document.tables:
         for row in table.rows:
-            cells = [cell.text.strip() for cell in row.cells if cell.text and cell.text.strip()]
+            cells = [
+                cell.text.strip()
+                for cell in row.cells
+                if cell.text and cell.text.strip()
+            ]
             if cells:
                 parts.append(" | ".join(cells))
 
@@ -75,7 +82,7 @@ def read_docx_text(path: Path) -> List[ParsedSegment]:
     ]
 
 
-def read_csv_text(path: Path) -> List[ParsedSegment]:
+def read_csv_text(path: Path) -> list[ParsedSegment]:
     """Read a CSV file and return one segment per row."""
 
     raw = _read_text_with_fallbacks(path, ("utf-8", "utf-8-sig", "latin-1"))
@@ -89,7 +96,7 @@ def read_csv_text(path: Path) -> List[ParsedSegment]:
     except Exception:
         dialect = None
 
-    segments: List[ParsedSegment] = []
+    segments: list[ParsedSegment] = []
     for idx, row in enumerate(
         csv_reader(lines, dialect=dialect) if dialect else csv_reader(lines),
         start=1,
@@ -115,18 +122,22 @@ def read_csv_text(path: Path) -> List[ParsedSegment]:
     ]
 
 
-def read_xlsx_text(path: Path) -> List[ParsedSegment]:
+def read_xlsx_text(path: Path) -> list[ParsedSegment]:
     """Read an XLSX workbook, returning segments per sheet row."""
 
     if load_workbook is None:
         raise RuntimeError("openpyxl is required to read XLSX files")
 
     workbook = load_workbook(filename=str(path), data_only=True, read_only=True)
-    segments: List[ParsedSegment] = []
+    segments: list[ParsedSegment] = []
 
     for sheet in workbook.worksheets:
         for idx, row in enumerate(sheet.iter_rows(values_only=True), start=1):
-            cells = [str(cell).strip() for cell in row if cell is not None and str(cell).strip()]
+            cells = [
+                str(cell).strip()
+                for cell in row
+                if cell is not None and str(cell).strip()
+            ]
             if cells:
                 segments.append(
                     (

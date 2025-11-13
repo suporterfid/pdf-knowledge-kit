@@ -1,8 +1,9 @@
 """Pydantic schemas for conversation management APIs."""
+
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -11,19 +12,19 @@ class ConversationParticipant(BaseModel):
     id: int
     conversation_id: int
     role: str
-    external_id: Optional[str] = None
-    display_name: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    external_id: str | None = None
+    display_name: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
 
 
 class ConversationMessage(BaseModel):
     id: int
     conversation_id: int
-    participant_id: Optional[int] = None
+    participant_id: int | None = None
     direction: str
-    body: Dict[str, Any] = Field(default_factory=dict)
-    nlp: Dict[str, Any] = Field(default_factory=dict)
+    body: dict[str, Any] = Field(default_factory=dict)
+    nlp: dict[str, Any] = Field(default_factory=dict)
     sent_at: datetime
 
 
@@ -34,32 +35,32 @@ class ConversationSummary(BaseModel):
     external_conversation_id: str
     status: str
     is_escalated: bool
-    escalation_reason: Optional[str] = None
-    follow_up_at: Optional[datetime] = None
-    follow_up_note: Optional[str] = None
-    last_message_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    escalation_reason: str | None = None
+    follow_up_at: datetime | None = None
+    follow_up_note: str | None = None
+    last_message_at: datetime | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ConversationDetail(ConversationSummary):
-    participants: List[ConversationParticipant] = Field(default_factory=list)
-    messages: List[ConversationMessage] = Field(default_factory=list)
+    participants: list[ConversationParticipant] = Field(default_factory=list)
+    messages: list[ConversationMessage] = Field(default_factory=list)
 
 
 class ConversationList(BaseModel):
-    items: List[ConversationSummary]
+    items: list[ConversationSummary]
     total: int
 
 
 class FollowUpRequest(BaseModel):
-    follow_up_at: Optional[datetime] = None
-    note: Optional[str] = None
+    follow_up_at: datetime | None = None
+    note: str | None = None
 
 
 class EscalationRequest(BaseModel):
-    reason: Optional[str] = None
-    escalate_to: Optional[str] = None
-    note: Optional[str] = None
+    reason: str | None = None
+    escalate_to: str | None = None
+    note: str | None = None
 
 
 class FollowUpResponse(ConversationDetail):
@@ -85,10 +86,10 @@ class ChannelConfigAnalytics(BaseModel):
     channel: str
     conversations: int
     escalations: int
-    last_activity: Optional[datetime] = None
+    last_activity: datetime | None = None
 
 
 class ConversationDashboardPayload(BaseModel):
     summary: ConversationAnalytics
-    channels: List[ChannelConfigAnalytics]
-    recent_conversations: List[ConversationSummary]
+    channels: list[ChannelConfigAnalytics]
+    recent_conversations: list[ConversationSummary]

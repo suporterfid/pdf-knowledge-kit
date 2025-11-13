@@ -2,10 +2,8 @@ import os
 import uuid
 from pathlib import Path
 
-import os
 import psycopg
 import pytest
-
 from app.ingestion import service, storage
 from app.ingestion.models import JobStatus, SourceType
 
@@ -16,7 +14,9 @@ def _set_tenant(conn: psycopg.Connection, tenant_id):
 
 
 def _require_conn(*, tenant_id=None):
-    url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+    url = os.getenv(
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
+    )
     try:
         conn = psycopg.connect(url)
     except Exception:
@@ -33,12 +33,22 @@ def test_migration_persistence_and_soft_delete(tmp_path):
     with conn.cursor() as cur:
         cur.execute("ALTER TABLE sources ADD COLUMN IF NOT EXISTS path TEXT")
         cur.execute("ALTER TABLE sources ADD COLUMN IF NOT EXISTS url TEXT")
-        cur.execute("ALTER TABLE sources ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ")
+        cur.execute(
+            "ALTER TABLE sources ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"
+        )
         cur.execute("ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS log_path TEXT")
-        cur.execute("ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ")
-        cur.execute("ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ")
-        cur.execute("ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
-        cur.execute("ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ")
+        cur.execute(
+            "ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ"
+        )
+        cur.execute(
+            "ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ"
+        )
+        cur.execute(
+            "ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()"
+        )
+        cur.execute(
+            "ALTER TABLE ingestion_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ"
+        )
     conn.commit()
     src_id = storage.get_or_create_source(
         conn,

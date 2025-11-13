@@ -1,21 +1,20 @@
 """Channel adapter registry for multi-channel messaging support."""
-from __future__ import annotations
 
-from typing import Dict, Type
+from __future__ import annotations
 
 from .base import ChannelAdapter
 from .telegram import TelegramAdapter
 from .whatsapp import WhatsAppAdapter
 
-_REGISTRY: Dict[str, Type[ChannelAdapter]] = {}
+_REGISTRY: dict[str, type[ChannelAdapter]] = {}
 
 
-def register_adapter(adapter: Type[ChannelAdapter]) -> None:
+def register_adapter(adapter: type[ChannelAdapter]) -> None:
     """Register a channel adapter class in the global registry."""
     _REGISTRY[adapter.channel_name] = adapter
 
 
-def get_adapter(name: str) -> Type[ChannelAdapter]:
+def get_adapter(name: str) -> type[ChannelAdapter]:
     """Retrieve an adapter class for ``name`` or raise ``KeyError``."""
     normalized = name.lower()
     if normalized not in _REGISTRY:

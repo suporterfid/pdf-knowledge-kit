@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
-from typing import List
 
 from sqlalchemy import DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -56,12 +55,12 @@ class Organization(Base):
         server_default=text("'free'"),
     )
 
-    users: Mapped[List["User"]] = relationship(
+    users: Mapped[list[User]] = relationship(
         back_populates="organization",
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
-    invites: Mapped[List["UserInvite"]] = relationship(
+    invites: Mapped[list[UserInvite]] = relationship(
         back_populates="organization",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -127,7 +126,7 @@ class User(Base):
         back_populates="users",
         lazy="joined",
     )
-    refresh_tokens: Mapped[List["RefreshToken"]] = relationship(
+    refresh_tokens: Mapped[list[RefreshToken]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -158,7 +157,9 @@ class UserInvite(Base):
     role: Mapped[str] = mapped_column(String(length=32), nullable=False)
     token: Mapped[str] = mapped_column(String(length=255), nullable=False)
     message: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     accepted_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -198,7 +199,9 @@ class RefreshToken(Base):
         nullable=False,
         default=_utcnow,
     )
-    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     user_agent: Mapped[str | None] = mapped_column(String(length=255))
 

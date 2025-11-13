@@ -1,7 +1,6 @@
 import types
 
 import pytest
-
 from app.routers import feedback_api
 
 
@@ -48,10 +47,14 @@ def test_submit_feedback_sets_tenant(monkeypatch):
     dummy_conn = DummyConn()
 
     monkeypatch.setattr(feedback_api, "_DATABASE_URL", "postgresql://test")
-    monkeypatch.setattr(feedback_api, "psycopg", types.SimpleNamespace(connect=lambda url: dummy_conn))
+    monkeypatch.setattr(
+        feedback_api, "psycopg", types.SimpleNamespace(connect=lambda url: dummy_conn)
+    )
     monkeypatch.setattr(feedback_api, "ensure_schema", lambda conn: None)
 
-    payload = feedback_api.FeedbackIn(helpful=True, question="q", answer=None, sessionId="s1", sources=None)
+    payload = feedback_api.FeedbackIn(
+        helpful=True, question="q", answer=None, sessionId="s1", sources=None
+    )
 
     result = feedback_api.submit_feedback(payload, _dummy_request())
 
@@ -68,7 +71,9 @@ def test_submit_feedback_requires_tenant(monkeypatch):
     with pytest.raises(feedback_api.HTTPException) as exc:
         feedback_api.submit_feedback(
             feedback_api.FeedbackIn(helpful=True),
-            types.SimpleNamespace(state=types.SimpleNamespace(tenant_id=None), headers={}),
+            types.SimpleNamespace(
+                state=types.SimpleNamespace(tenant_id=None), headers={}
+            ),
         )
     assert exc.value.status_code == 400
     assert "Tenant" in exc.value.detail

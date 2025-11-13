@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 @dataclass
@@ -11,15 +11,15 @@ class Chunk:
     content: str
     source_path: str
     mime_type: str
-    page_number: Optional[int] = None
-    sheet_name: Optional[str] = None
-    row_number: Optional[int] = None
-    extra: Dict[str, Any] = field(default_factory=dict)
+    page_number: int | None = None
+    sheet_name: str | None = None
+    row_number: int | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
 
-    def to_metadata(self) -> Dict[str, Any]:
+    def to_metadata(self) -> dict[str, Any]:
         """Return a metadata dictionary suitable for persistence."""
 
-        metadata: Dict[str, Any] = {
+        metadata: dict[str, Any] = {
             "source_path": self.source_path,
             "mime_type": self.mime_type,
             "page_number": self.page_number,

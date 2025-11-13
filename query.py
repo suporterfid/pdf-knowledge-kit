@@ -1,15 +1,20 @@
-import os
 import argparse
-from pathlib import Path
+import logging
+import os
+import sys
 
-from dotenv import load_dotenv
 import psycopg
+from dotenv import load_dotenv
+from fastembed import TextEmbedding
+from langdetect import detect
 from pgvector.psycopg import register_vector
 
-from fastembed import TextEmbedding
-import embedding  # registers custom CLS-pooled model
+logger = logging.getLogger(__name__)
 
-from langdetect import detect
+
+def _echo(message: str) -> None:
+    sys.stdout.write(f"{message}\n")
+
 
 try:  # pragma: no cover - openai optional
     from openai import OpenAI
@@ -30,11 +35,15 @@ def _answer_with_context(question: str, context: str) -> str:
                 except Exception:  # pragma: no cover - detection optional
                     lang = None
             lang_instruction = (
-                f"Reply in {lang}." if lang else "Reply in the same language as the question."
+                f"Reply in {lang}."
+                if lang
+                else "Reply in the same language as the question."
             )
             base_prompt = "Answer the user's question using the supplied context."
             custom_prompt = os.getenv("SYSTEM_PROMPT")
-            system_prompt = f"{custom_prompt} {base_prompt}" if custom_prompt else base_prompt
+            system_prompt = (
+                f"{custom_prompt} {base_prompt}" if custom_prompt else base_prompt
+            )
             system_prompt = f"{system_prompt} {lang_instruction}"
             completion = client.chat.completions.create(
                 model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
@@ -50,9 +59,10 @@ def _answer_with_context(question: str, context: str) -> str:
                 ],
             )
             return completion.choices[0].message["content"].strip()
-        except Exception:  # pragma: no cover - openai optional
-            pass
+        except Exception as exc:  # pragma: no cover - openai optional
+            logger.warning("OpenAI chat completion failed: %s", exc)
     return context or f"You asked: {question}"
+
 
 def main():
     load_dotenv()
@@ -78,7 +88,7 @@ def main():
 
     # Use a supported multilingual embedding model
     embedder = TextEmbedding(model_name="paraphrase-multilingual-MiniLM-L12-v2-cls")
-    qvec = list(embedder.embed([f'query: {args.q}']))[0]  # E5 prefix para consulta
+    qvec = list(embedder.embed([f"query: {args.q}"]))[0]  # E5 prefix para consulta
 
     sql = """
     SELECT d.path, c.chunk_index, c.content, (c.embedding <-> %s) AS distance
@@ -96,19 +106,20 @@ def main():
     context = "\n\n".join(content for _, _, content, _ in rows)
     answer = _answer_with_context(args.q, context)
 
-    print("=" * 80)
-    print("Resposta:")
-    print(answer)
-    print("=" * 80)
-    print(f"Top {args.k} trechos mais similares para: {args.q!r}\n")
+    _echo("=" * 80)
+    _echo("Resposta:")
+    _echo(answer)
+    _echo("=" * 80)
+    _echo(f"Top {args.k} trechos mais similares para: {args.q!r}\n")
     for i, (path, idx, content, dist) in enumerate(rows, 1):
-        print(f"[{i}] {path}  #chunk {idx}  (dist={dist:.4f})")
+        _echo(f"[{i}] {path}  #chunk {idx}  (dist={dist:.4f})")
         preview = content.strip().replace("\n", " ")
         preview = (preview[:600] + "…") if len(preview) > 600 else preview
-        print(preview)
-        print("-" * 80)
+        _echo(preview)
+        _echo("-" * 80)
 
     conn.close()
+
 
 if __name__ == "__main__":
     main()

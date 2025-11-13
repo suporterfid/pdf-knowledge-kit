@@ -35,7 +35,9 @@ _tenant_context: ContextVar[TenantRuntimeContext | None] = ContextVar(
 )
 
 
-def set_tenant_context(tenant_id: str, user_id: str) -> Token[TenantRuntimeContext | None]:
+def set_tenant_context(
+    tenant_id: str, user_id: str
+) -> Token[TenantRuntimeContext | None]:
     """Persist the tenant metadata in the request-scoped context variable.
 
     Args:
@@ -74,4 +76,3 @@ def get_current_tenant_id() -> str | None:
     if context is None:
         return None
     return context["tenant_id"]
-

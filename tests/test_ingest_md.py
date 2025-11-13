@@ -1,13 +1,12 @@
 import pathlib
+
 import app.ingestion.service as ingest
+import pytest
 
 
 class DummyEmbedder:
     def embed(self, texts):
         return [[0.0] * 384 for _ in texts]
-
-
-import pytest
 
 
 @pytest.mark.parametrize("fname", ["sample_en.md", "sample_pt.md", "sample_es.md"])

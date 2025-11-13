@@ -4,14 +4,12 @@ This router exposes endpoints for operators to start ingestion jobs, inspect
 their progress, (re)index sources and read job logs. Access is controlled via
 JWT bearer tokens emitidos pelo módulo de segurança (`app.security`).
 """
+
 from __future__ import annotations
 
-"""Admin ingestion API using Pydantic models."""
-
 import os
-import uuid
 from pathlib import Path
-from typing import Dict, List
+from typing import Annotated, Any
 from uuid import UUID
 
 import psycopg
@@ -44,6 +42,16 @@ from ..security.auth import require_role
 
 router = APIRouter(prefix="/api/admin/ingest", tags=["admin-ingest"])
 
+
+OperatorRole = Annotated[str, Depends(require_role("operator"))]
+ViewerRole = Annotated[str, Depends(require_role("viewer"))]
+OptionalSourceType = Annotated[SourceType | None, Query(default=None)]
+OptionalJobStatus = Annotated[JobStatus | None, Query(default=None)]
+OptionalLimit = Annotated[int | None, Query(default=None, ge=1)]
+OffsetParam = Annotated[int, Query(default=0, ge=0)]
+ActiveParam = Annotated[bool | None, Query(default=True)]
+LogLimit = Annotated[int, Query(default=16_384, ge=1)]
+
 _DATABASE_URL = os.getenv("DATABASE_URL")
 
 
@@ -70,7 +78,9 @@ def _get_conn() -> psycopg.Connection:
         apply_tenant_settings(conn, tenant_id)
     except Exception as exc:  # pragma: no cover - defensive
         conn.close()
-        raise HTTPException(status_code=500, detail="Failed to configure tenant") from exc
+        raise HTTPException(
+            status_code=500, detail="Failed to configure tenant"
+        ) from exc
     return conn
 
 
@@ -96,9 +106,7 @@ def _ensure_connector_definition(
     if not definition:
         raise HTTPException(status_code=404, detail="Connector definition not found")
     allowed_types = (
-        {expected_type}
-        if isinstance(expected_type, SourceType)
-        else set(expected_type)
+        {expected_type} if isinstance(expected_type, SourceType) else set(expected_type)
     )
     if definition.type not in allowed_types:
         raise HTTPException(
@@ -127,11 +135,15 @@ def _resolve_credentials(
             ),
         )
     if required and credentials is None:
-        raise HTTPException(status_code=400, detail="Credentials are required for this connector")
+        raise HTTPException(
+            status_code=400, detail="Credentials are required for this connector"
+        )
     return credentials
 
 
-def _ensure_params_for_type(source_type: SourceType, params: Dict[str, Any] | None) -> Dict[str, Any]:
+def _ensure_params_for_type(
+    source_type: SourceType, params: dict[str, Any] | None
+) -> dict[str, Any]:
     if not params:
         raise HTTPException(
             status_code=400,
@@ -142,12 +154,17 @@ def _ensure_params_for_type(source_type: SourceType, params: Dict[str, Any] | No
             status_code=400,
             detail="Database connector requires at least one query",
         )
-    if source_type == SourceType.API and not (params.get("endpoint") or params.get("base_url")):
+    if source_type == SourceType.API and not (
+        params.get("endpoint") or params.get("base_url")
+    ):
         raise HTTPException(
             status_code=400,
             detail="API connector requires an endpoint or base_url",
         )
-    if source_type in {SourceType.AUDIO_TRANSCRIPT, SourceType.VIDEO_TRANSCRIPT} and not params.get("provider"):
+    if source_type in {
+        SourceType.AUDIO_TRANSCRIPT,
+        SourceType.VIDEO_TRANSCRIPT,
+    } and not params.get("provider"):
         raise HTTPException(
             status_code=400,
             detail="Transcription connector requires a provider",
@@ -161,14 +178,14 @@ def _upsert_source_for_connector(
     tenant_id: UUID,
     source_id: UUID | None,
     source_type: SourceType,
-    params: Dict[str, Any],
+    params: dict[str, Any],
     connector_type: str,
     connector_definition_id: UUID | None,
-    connector_metadata: Dict[str, Any] | None,
+    connector_metadata: dict[str, Any] | None,
     credentials: object | None,
     label: str | None,
     location: str | None,
-    sync_state: Dict[str, Any] | None,
+    sync_state: dict[str, Any] | None,
 ) -> UUID:
     if source_id:
         existing = storage.get_source(conn, source_id, tenant_id=tenant_id)
@@ -209,7 +226,7 @@ def _upsert_source_for_connector(
 @router.post("/local", response_model=JobCreated)
 def start_local_job(
     req: LocalIngestRequest,
-    role: str = Depends(require_role("operator")),
+    role: OperatorRole,
 ) -> JobCreated:
     tenant_id = _require_tenant_id()
     job_id = service.ingest_local(
@@ -222,7 +239,9 @@ def start_local_job(
 
 
 @router.post("/reindex_all", response_model=ListResponse[JobCreated])
-def reindex_all_sources(role: str = Depends(require_role("operator"))) -> ListResponse[JobCreated]:
+def reindex_all_sources(
+    role: OperatorRole,
+) -> ListResponse[JobCreated]:
     """Reindex all active sources, returning the created job IDs."""
     tenant_id = _require_tenant_id()
     with _get_conn() as conn:
@@ -238,7 +257,7 @@ def reindex_all_sources(role: str = Depends(require_role("operator"))) -> ListRe
 @router.post("/url", response_model=JobCreated)
 def start_url_job(
     req: UrlIngestRequest,
-    role: str = Depends(require_role("operator")),
+    role: OperatorRole,
 ) -> JobCreated:
     tenant_id = _require_tenant_id()
     job_id = service.ingest_url(str(req.url), tenant_id=tenant_id)
@@ -248,7 +267,7 @@ def start_url_job(
 @router.post("/urls", response_model=JobCreated)
 def start_urls_job(
     req: UrlsIngestRequest,
-    role: str = Depends(require_role("operator")),
+    role: OperatorRole,
 ) -> JobCreated:
     tenant_id = _require_tenant_id()
     job_id = service.ingest_urls([str(u) for u in req.urls], tenant_id=tenant_id)
@@ -258,7 +277,7 @@ def start_urls_job(
 @router.post("/database", response_model=JobCreated)
 def start_database_connector_job(
     req: DatabaseConnectorJobRequest,
-    role: str = Depends(require_role("operator")),
+    role: OperatorRole,
 ) -> JobCreated:
     tenant_id = _require_tenant_id()
     with _get_conn() as conn:
@@ -304,7 +323,7 @@ def start_database_connector_job(
 @router.post("/api", response_model=JobCreated)
 def start_api_connector_job(
     req: ApiConnectorJobRequest,
-    role: str = Depends(require_role("operator")),
+    role: OperatorRole,
 ) -> JobCreated:
     tenant_id = _require_tenant_id()
     with _get_conn() as conn:
@@ -350,7 +369,7 @@ def start_api_connector_job(
 @router.post("/transcription", response_model=JobCreated)
 def start_transcription_connector_job(
     req: TranscriptionConnectorJobRequest,
-    role: str = Depends(require_role("operator")),
+    role: OperatorRole,
 ) -> JobCreated:
     tenant_id = _require_tenant_id()
     with _get_conn() as conn:
@@ -365,7 +384,10 @@ def start_transcription_connector_job(
         else:
             definition = None
             expected_type = SourceType.AUDIO_TRANSCRIPT
-            if req.connector_metadata and req.connector_metadata.get("media_type") == "video":
+            if (
+                req.connector_metadata
+                and req.connector_metadata.get("media_type") == "video"
+            ):
                 expected_type = SourceType.VIDEO_TRANSCRIPT
         params_source = req.params or (definition.params if definition else None)
         params = _ensure_params_for_type(expected_type, params_source)
@@ -401,10 +423,10 @@ def start_transcription_connector_job(
 
 @router.get("/connector_definitions", response_model=ListResponse[ConnectorDefinition])
 def list_connector_definitions(
-    type: SourceType | None = Query(default=None),
-    limit: int | None = Query(default=None, ge=1),
-    offset: int = Query(default=0, ge=0),
-    role: str = Depends(require_role("viewer")),
+    type: OptionalSourceType,
+    limit: OptionalLimit,
+    offset: OffsetParam,
+    role: ViewerRole,
 ) -> ListResponse[ConnectorDefinition]:
     tenant_id = _require_tenant_id()
     with _get_conn() as conn:
@@ -426,7 +448,7 @@ def list_connector_definitions(
 @router.post("/connector_definitions", response_model=ConnectorDefinition)
 def create_connector_definition_endpoint(
     req: ConnectorDefinitionCreate,
-    role: str = Depends(require_role("operator")),
+    role: OperatorRole,
 ) -> ConnectorDefinition:
     tenant_id = _require_tenant_id()
     if req.tenant_id and req.tenant_id != tenant_id:
@@ -449,14 +471,18 @@ def create_connector_definition_endpoint(
             include_credentials=False,
         )
     if not created:
-        raise HTTPException(status_code=500, detail="Failed to create connector definition")
+        raise HTTPException(
+            status_code=500, detail="Failed to create connector definition"
+        )
     return created
 
 
-@router.get("/connector_definitions/{definition_id}", response_model=ConnectorDefinition)
+@router.get(
+    "/connector_definitions/{definition_id}", response_model=ConnectorDefinition
+)
 def get_connector_definition_endpoint(
     definition_id: UUID,
-    role: str = Depends(require_role("viewer")),
+    role: ViewerRole,
 ) -> ConnectorDefinition:
     tenant_id = _require_tenant_id()
     with _get_conn() as conn:
@@ -471,11 +497,13 @@ def get_connector_definition_endpoint(
     return definition
 
 
-@router.put("/connector_definitions/{definition_id}", response_model=ConnectorDefinition)
+@router.put(
+    "/connector_definitions/{definition_id}", response_model=ConnectorDefinition
+)
 def update_connector_definition_endpoint(
     definition_id: UUID,
     req: ConnectorDefinitionUpdate,
-    role: str = Depends(require_role("operator")),
+    role: OperatorRole,
 ) -> ConnectorDefinition:
     tenant_id = _require_tenant_id()
     with _get_conn() as conn:
@@ -486,12 +514,14 @@ def update_connector_definition_endpoint(
             include_credentials=True,
         )
         if not existing:
-            raise HTTPException(status_code=404, detail="Connector definition not found")
+            raise HTTPException(
+                status_code=404, detail="Connector definition not found"
+            )
         credentials_param: object
         if "credentials" in req.model_fields_set:
             credentials_param = req.credentials
         else:
-            credentials_param = getattr(storage, "_MISSING")
+            credentials_param = storage._MISSING
         storage.update_connector_definition(
             conn,
             definition_id,
@@ -509,14 +539,18 @@ def update_connector_definition_endpoint(
             include_credentials=False,
         )
     if not updated:
-        raise HTTPException(status_code=500, detail="Failed to update connector definition")
+        raise HTTPException(
+            status_code=500, detail="Failed to update connector definition"
+        )
     return updated
 
 
-@router.delete("/connector_definitions/{definition_id}", response_model=ConnectorDefinition)
+@router.delete(
+    "/connector_definitions/{definition_id}", response_model=ConnectorDefinition
+)
 def delete_connector_definition_endpoint(
     definition_id: UUID,
-    role: str = Depends(require_role("operator")),
+    role: OperatorRole,
 ) -> ConnectorDefinition:
     tenant_id = _require_tenant_id()
     with _get_conn() as conn:
@@ -527,17 +561,19 @@ def delete_connector_definition_endpoint(
             include_credentials=False,
         )
         if not definition:
-            raise HTTPException(status_code=404, detail="Connector definition not found")
+            raise HTTPException(
+                status_code=404, detail="Connector definition not found"
+            )
         storage.delete_connector_definition(conn, definition_id, tenant_id=tenant_id)
     return definition
 
 
 @router.get("/jobs", response_model=ListResponse[Job])
 def list_jobs(
-    status: JobStatus | None = Query(default=None),
-    limit: int | None = Query(default=None, ge=1),
-    offset: int = Query(default=0, ge=0),
-    role: str = Depends(require_role("viewer")),
+    status: OptionalJobStatus,
+    limit: OptionalLimit,
+    offset: OffsetParam,
+    role: ViewerRole,
 ) -> ListResponse[Job]:
     tenant_id = _require_tenant_id()
     jobs = service.list_jobs(tenant_id=tenant_id)
@@ -552,9 +588,7 @@ def list_jobs(
 
 
 @router.get("/jobs/{job_id}", response_model=Job)
-def get_job(
-    job_id: UUID, role: str = Depends(require_role("viewer"))
-) -> Job:
+def get_job(job_id: UUID, role: ViewerRole) -> Job:
     tenant_id = _require_tenant_id()
     job = service.get_job(job_id, tenant_id=tenant_id)
     if not job:
@@ -563,9 +597,7 @@ def get_job(
 
 
 @router.post("/jobs/{job_id}/cancel", response_model=Job)
-def cancel_job(
-    job_id: UUID, role: str = Depends(require_role("operator"))
-) -> Job:
+def cancel_job(job_id: UUID, role: OperatorRole) -> Job:
     tenant_id = _require_tenant_id()
     service.cancel_job(job_id, tenant_id=tenant_id)
     job = service.get_job(job_id, tenant_id=tenant_id)
@@ -575,9 +607,7 @@ def cancel_job(
 
 
 @router.post("/jobs/{job_id}/rerun", response_model=JobCreated)
-def rerun_job_endpoint(
-    job_id: UUID, role: str = Depends(require_role("operator"))
-) -> JobCreated:
+def rerun_job_endpoint(job_id: UUID, role: OperatorRole) -> JobCreated:
     tenant_id = _require_tenant_id()
     new_job_id = service.rerun_job(job_id, tenant_id=tenant_id)
     if not new_job_id:
@@ -588,24 +618,22 @@ def rerun_job_endpoint(
 @router.get("/jobs/{job_id}/logs", response_model=JobLogSlice)
 def get_job_logs(
     job_id: UUID,
-    offset: int = Query(default=0, ge=0),
-    limit: int = Query(default=16_384, ge=1),
-    role: str = Depends(require_role("viewer")),
+    offset: OffsetParam,
+    limit: LogLimit,
+    role: ViewerRole,
 ) -> JobLogSlice:
     """Return a slice of the job log starting at ``offset``."""
     tenant_id = _require_tenant_id()
-    return service.read_job_log(
-        job_id, tenant_id=tenant_id, offset=offset, limit=limit
-    )
+    return service.read_job_log(job_id, tenant_id=tenant_id, offset=offset, limit=limit)
 
 
 @router.get("/sources", response_model=ListResponse[Source])
 def list_sources(
-    active: bool | None = Query(default=True),
-    type: SourceType | None = Query(default=None),
-    limit: int | None = Query(default=None, ge=1),
-    offset: int = Query(default=0, ge=0),
-    role: str = Depends(require_role("viewer")),
+    active: ActiveParam,
+    type: OptionalSourceType,
+    limit: OptionalLimit,
+    offset: OffsetParam,
+    role: ViewerRole,
 ) -> ListResponse[Source]:
     tenant_id = _require_tenant_id()
     with _get_conn() as conn:
@@ -620,9 +648,7 @@ def list_sources(
 
 
 @router.post("/sources", response_model=Source)
-def create_source(
-    req: SourceCreate, role: str = Depends(require_role("operator"))
-) -> Source:
+def create_source(req: SourceCreate, role: OperatorRole) -> Source:
     tenant_id = _require_tenant_id()
     if req.tenant_id and req.tenant_id != tenant_id:
         raise HTTPException(status_code=403, detail="Tenant mismatch")
@@ -651,7 +677,7 @@ def create_source(
 def update_source(
     source_id: UUID,
     req: SourceUpdate,
-    role: str = Depends(require_role("operator")),
+    role: OperatorRole,
 ) -> Source:
     tenant_id = _require_tenant_id()
     if req.tenant_id and req.tenant_id != tenant_id:
@@ -678,9 +704,7 @@ def update_source(
 
 
 @router.delete("/sources/{source_id}", response_model=Source)
-def delete_source(
-    source_id: UUID, role: str = Depends(require_role("operator"))
-) -> Source:
+def delete_source(source_id: UUID, role: OperatorRole) -> Source:
     tenant_id = _require_tenant_id()
     with _get_conn() as conn:
         src = _fetch_source(conn, tenant_id, source_id)
@@ -690,9 +714,7 @@ def delete_source(
 
 
 @router.post("/sources/{source_id}/reindex", response_model=JobCreated)
-def reindex_source_endpoint(
-    source_id: UUID, role: str = Depends(require_role("operator"))
-) -> JobCreated:
+def reindex_source_endpoint(source_id: UUID, role: OperatorRole) -> JobCreated:
     tenant_id = _require_tenant_id()
     job_id = service.reindex_source(source_id, tenant_id=tenant_id)
     if not job_id:

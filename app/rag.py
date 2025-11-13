@@ -14,21 +14,19 @@ structured list of sources for transparency and UI display.
 """
 
 import os
-import psycopg
-from pgvector.psycopg import register_vector
-from fastembed import TextEmbedding
+
 # Attempt to register a CLS-pooled variant when supported by the installed
 # fastembed version. When unsupported, this import is a no-op and we fall back
 # to the base mean-pooled model (see embedder creation below).
-import embedding  # attempts to register custom CLS-pooled model (no-op if unsupported)
-from typing import Iterable
+import psycopg
+from fastembed import TextEmbedding
+from pgvector.psycopg import register_vector
 
 try:
     # Lightweight lexical reranker
     from rank_bm25 import BM25Okapi  # type: ignore
 except Exception:  # pragma: no cover - optional dep
     BM25Okapi = None  # type: ignore
-from typing import List, Tuple, Dict
 
 # Prefer a CLS-pooled custom model if available; otherwise, fall back to the
 # widely used mean-pooled base model from Sentence-Transformers. The fallback
@@ -91,16 +89,14 @@ def get_conn(*, tenant_id: str | None = None) -> psycopg.Connection:
     return conn
 
 
-def _tokenize(text: str) -> List[str]:
+def _tokenize(text: str) -> list[str]:
     """Very small tokenizer for BM25: lowercase and keep only alpha-numerics."""
     return [
-        t.lower()
-        for t in ''.join(c if c.isalnum() else ' ' for c in text).split()
-        if t
+        t.lower() for t in "".join(c if c.isalnum() else " " for c in text).split() if t
     ]
 
 
-def _bm25_rerank(query: str, sources: List[Dict]) -> List[Dict]:
+def _bm25_rerank(query: str, sources: list[dict]) -> list[dict]:
     """Apply BM25 lexical reranking over vector-retrieved candidates.
 
     If the optional dependency ``rank-bm25`` isn't installed, this becomes a
@@ -112,13 +108,15 @@ def _bm25_rerank(query: str, sources: List[Dict]) -> List[Dict]:
     tokenized_corpus = [_tokenize(c) for c in corpus]
     bm25 = BM25Okapi(tokenized_corpus)
     scores = bm25.get_scores(_tokenize(query))
-    ranked = sorted(zip(scores, sources), key=lambda x: x[0], reverse=True)
+    ranked = sorted(
+        zip(scores, sources, strict=False), key=lambda x: x[0], reverse=True
+    )
     return [s for _, s in ranked]
 
 
 def build_context(
     question: str, k: int, *, tenant_id: str | None = None
-) -> Tuple[str, List[Dict]]:
+) -> tuple[str, list[dict]]:
     """Retrieve top-k chunks and build a context string for the LLM.
 
     Steps

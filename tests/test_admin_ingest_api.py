@@ -5,9 +5,8 @@ from collections import defaultdict
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from fastapi.testclient import TestClient
-
 from app.ingestion.models import Source, SourceType
+from fastapi.testclient import TestClient
 
 
 def create_client(monkeypatch, tenant_auth):
@@ -24,10 +23,13 @@ def create_client(monkeypatch, tenant_auth):
     monkeypatch.setattr(pydantic_networks, "import_email_validator", lambda: None)
 
     import app.security.auth as auth
+
     importlib.reload(auth)
     import app.routers.admin_ingest_api as admin_api
+
     importlib.reload(admin_api)
     import app.main as main
+
     importlib.reload(main)
 
     client = TestClient(main.app)

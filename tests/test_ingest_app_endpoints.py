@@ -5,9 +5,10 @@ import sys
 import types
 from uuid import uuid4
 
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
-import psycopg
+
 
 # Stub fastembed and prometheus instrumentator before importing application modules
 class DummyEmbedder:
@@ -23,26 +24,27 @@ class DummyInstrumentator:
         return None
 
 
-sys.modules['fastembed'] = types.SimpleNamespace(
+sys.modules["fastembed"] = types.SimpleNamespace(
     TextEmbedding=lambda model_name: DummyEmbedder()
 )
-sys.modules['prometheus_fastapi_instrumentator'] = types.SimpleNamespace(
+sys.modules["prometheus_fastapi_instrumentator"] = types.SimpleNamespace(
     Instrumentator=lambda: DummyInstrumentator()
 )
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
-from app.main import app  # noqa: E402
-from starlette.routing import Mount  # noqa: E402
-from app.ingestion import service  # noqa: E402
 import app.rag as rag  # noqa: E402
 from app.core.db import apply_tenant_settings  # noqa: E402
-
+from app.ingestion import service  # noqa: E402
+from app.main import app  # noqa: E402
+from starlette.routing import Mount  # noqa: E402
 
 TEST_TENANT_ID = uuid4()
 
 # Remove static mount to make API routes available
-app.router.routes = [r for r in app.router.routes if not (isinstance(r, Mount) and r.path == '')]
+app.router.routes = [
+    r for r in app.router.routes if not (isinstance(r, Mount) and r.path == "")
+]
 
 
 def _parse_events(resp):

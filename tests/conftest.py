@@ -82,7 +82,9 @@ def app_factory(monkeypatch):
 
 
 @pytest.fixture
-def tenant_auth(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> AuthContext:
+def tenant_auth(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> AuthContext:
     db_path = tmp_path_factory.mktemp("tenant-auth") / "auth.db"
     db_url = f"sqlite+pysqlite:///{db_path}"
     monkeypatch.setenv("DATABASE_URL", db_url)
@@ -97,6 +99,7 @@ def tenant_auth(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPa
     @event.listens_for(engine, "connect")
     def _register_uuid(conn, _record) -> None:  # pragma: no cover - SQLite test helper
         conn.create_function("gen_random_uuid", 0, lambda: str(uuid.uuid4()))
+
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 

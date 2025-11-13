@@ -14,37 +14,39 @@ short docstring and helper functions explain non-obvious details (e.g., LLM
 language handling, upload limits, SSE pipeline).
 """
 
+import asyncio
+import json
+import logging
+import os
+from io import BytesIO
+from typing import Annotated
+from uuid import uuid4
+
+from dotenv import load_dotenv
 from fastapi import (
-    FastAPI,
-    UploadFile,
-    File,
-    HTTPException,
     BackgroundTasks,
+    FastAPI,
+    File,
     Form,
+    HTTPException,
     Request,
+    UploadFile,
 )
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from uuid import uuid4
-import asyncio
-from pydantic import BaseModel
-import os
-import json
-from dotenv import load_dotenv
-from typing import Dict, List
-from io import BytesIO
-from pypdf import PdfReader
+from fastapi.staticfiles import StaticFiles
 from langdetect import detect
-
+from prometheus_fastapi_instrumentator import Instrumentator
+from pydantic import BaseModel
+from pypdf import PdfReader
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from prometheus_fastapi_instrumentator import Instrumentator
 
-from .rag import build_context
-from .sse_utils import sse_word_buffer
+from .__version__ import __build_date__, __commit_sha__, __version__
 from .app_logging import init_logging
+from .core.tenant_middleware import TenantContextMiddleware
+from .rag import build_context
 from .routers import (
     admin_ingest_api,
     agents,
@@ -54,8 +56,7 @@ from .routers import (
     tenant_accounts,
     webhooks,
 )
-from .core.tenant_middleware import TenantContextMiddleware
-from .__version__ import __version__, __build_date__, __commit_sha__
+from .sse_utils import sse_word_buffer
 
 try:
     from openai import OpenAI
@@ -68,13 +69,20 @@ UPLOAD_DIR = os.getenv("UPLOAD_DIR", "tmp/uploads")
 UPLOAD_TTL = int(os.getenv("UPLOAD_TTL", "3600"))
 UPLOAD_MAX_SIZE = int(os.getenv("UPLOAD_MAX_SIZE", str(5 * 1024 * 1024)))
 UPLOAD_MAX_FILES = int(os.getenv("UPLOAD_MAX_FILES", "5"))
-UPLOAD_ALLOWED_MIME_TYPES = os.getenv("UPLOAD_ALLOWED_MIME_TYPES", "application/pdf").split(",")
+UPLOAD_ALLOWED_MIME_TYPES = os.getenv(
+    "UPLOAD_ALLOWED_MIME_TYPES", "application/pdf"
+).split(",")
+
+logger = logging.getLogger(__name__)
 
 CHAT_MAX_MESSAGE_LENGTH = int(os.getenv("CHAT_MAX_MESSAGE_LENGTH", "5000"))
 SESSION_ID_MAX_LENGTH = int(os.getenv("SESSION_ID_MAX_LENGTH", "64"))
 
+SingleUpload = Annotated[UploadFile, File(...)]
+MultiUpload = Annotated[list[UploadFile], File([])]
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
- 
+
 
 def get_client_ip(request: Request) -> str:
     """Extract a best-effort client IP for rate limiting.
@@ -115,7 +123,7 @@ app.include_router(agents.router)
 app.include_router(conversations.router)
 app.include_router(tenant_accounts.router)
 app.include_router(webhooks.router)
- 
+
 # Expose Prometheus metrics
 Instrumentator().instrument(app).expose(
     app, include_in_schema=False, endpoint="/api/metrics"
@@ -149,6 +157,7 @@ async def remove_file_after_ttl(path: str, ttl: int) -> None:
 
 class AskRequest(BaseModel):
     """Payload for the question-answering endpoint."""
+
     q: str
     k: int = 5
 
@@ -176,7 +185,9 @@ def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
         try:  # pragma: no cover - openai optional
             base_prompt = "Answer the user's question using the supplied context."
             custom_prompt = os.getenv("SYSTEM_PROMPT")
-            system_prompt = f"{custom_prompt} {base_prompt}" if custom_prompt else base_prompt
+            system_prompt = (
+                f"{custom_prompt} {base_prompt}" if custom_prompt else base_prompt
+            )
             system_prompt = f"{system_prompt} {lang_instruction}"
             completion = client.chat.completions.create(
                 model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
@@ -193,10 +204,11 @@ def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
             )
             answer = completion.choices[0].message["content"].strip()
             return answer, True
-        except Exception:  # pragma: no cover - openai optional
-            pass
+        except Exception as exc:  # pragma: no cover - openai optional
+            logger.warning("OpenAI chat completion failed: %s", exc)
     answer = context or f"You asked: {question}"
     return answer, False
+
 
 @app.get("/api/health")
 async def health():
@@ -229,9 +241,7 @@ async def config():
 
 
 @app.post("/api/upload")
-async def upload(
-    background_tasks: BackgroundTasks, file: UploadFile = File(...)
-):
+async def upload(background_tasks: BackgroundTasks, file: SingleUpload):
     """Accept a single PDF upload for temporary use in chat sessions.
 
     The file is validated by MIME type and size, stored under ``UPLOAD_DIR``
@@ -273,7 +283,8 @@ async def chat(
     k: int = Form(5),
     attachments: str = Form("[]"),
     sessionId: str = Form(...),
-    files: List[UploadFile] = File([]),
+    *,
+    files: MultiUpload,
 ):
     """Streaming chat endpoint (SSE) with optional file attachments.
 
@@ -305,8 +316,8 @@ async def chat_stream(
     request: Request,
     q: str,
     k: int,
-    files: List[UploadFile],
-    attachments_meta: List[Dict],
+    files: list[UploadFile],
+    attachments_meta: list[dict],
 ):
     """Shared implementation for chat endpoints.
 
@@ -315,8 +326,8 @@ async def chat_stream(
     - Builds an attachment context and concatenates with user query for
       retrieval/answering, streaming tokens via SSE.
     """
-    attachment_texts: List[str] = []
-    attachment_sources: List[Dict] = []
+    attachment_texts: list[str] = []
+    attachment_sources: list[dict] = []
     for f in files:
         if f.content_type not in UPLOAD_ALLOWED_MIME_TYPES:
             raise HTTPException(status_code=400, detail="Invalid file type")
@@ -357,9 +368,9 @@ async def chat_stream(
     attachment_context = "\n\n".join(attachment_texts)
     combined_q = q if not attachment_context else f"{q}\n\n{attachment_context}"
 
-    usage: Dict = {}
+    usage: dict = {}
     context = ""
-    sources: List[Dict] = []
+    sources: list[dict] = []
 
     tenant_id = _resolve_request_tenant(request)
 
@@ -381,11 +392,15 @@ async def chat_stream(
                     except Exception:  # pragma: no cover - detection optional
                         lang = None
                 lang_instruction = (
-                    f"Reply in {lang}." if lang else "Reply in the same language as the question."
+                    f"Reply in {lang}."
+                    if lang
+                    else "Reply in the same language as the question."
                 )
                 base_prompt = "Answer the user's question using the supplied context."
                 custom_prompt = os.getenv("SYSTEM_PROMPT")
-                system_prompt = f"{custom_prompt} {base_prompt}" if custom_prompt else base_prompt
+                system_prompt = (
+                    f"{custom_prompt} {base_prompt}" if custom_prompt else base_prompt
+                )
                 system_prompt = f"{system_prompt} {lang_instruction}"
                 completion = client.chat.completions.create(
                     model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
@@ -442,7 +457,9 @@ async def chat_stream(
                     break
                 yield chunk
             if sources:
-                yield "event: sources\n" + "data: " + json.dumps(sources, ensure_ascii=False) + "\n\n"
+                yield "event: sources\n" + "data: " + json.dumps(
+                    sources, ensure_ascii=False
+                ) + "\n\n"
             yield "event: done\n" + "data: " + json.dumps({"usage": usage}) + "\n\n"
         except Exception as e:
             msg = str(e).replace("\n", " ")
@@ -457,6 +474,7 @@ async def chat_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
 
 app.mount(
     "/",

@@ -15,11 +15,11 @@ and _answer_with_context.
 import asyncio
 import io
 import os
+import pathlib
 import sys
 import tempfile
 import types
-from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import Request
@@ -28,29 +28,29 @@ from fastapi.testclient import TestClient
 
 class DummyEmbedder:
     """Mock embedder to avoid downloading models during tests."""
+
     def embed(self, texts):
         return [[0.0] * 384 for _ in texts]
 
 
 # Stub fastembed before importing the app to avoid model downloads.
-sys.modules['fastembed'] = types.SimpleNamespace(
+sys.modules["fastembed"] = types.SimpleNamespace(
     TextEmbedding=lambda model_name: DummyEmbedder()
 )
-import pathlib
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
+from app.__version__ import __build_date__, __commit_sha__, __version__
 from app.main import (
+    CHAT_MAX_MESSAGE_LENGTH,
+    SESSION_ID_MAX_LENGTH,
+    UPLOAD_MAX_FILES,
+    UPLOAD_MAX_SIZE,
+    _answer_with_context,
     app,
     get_client_ip,
     remove_file_after_ttl,
-    _answer_with_context,
-    UPLOAD_MAX_SIZE,
-    UPLOAD_MAX_FILES,
-    CHAT_MAX_MESSAGE_LENGTH,
-    SESSION_ID_MAX_LENGTH,
 )
-from app.__version__ import __version__, __build_date__, __commit_sha__
 
 
 @pytest.fixture
@@ -115,13 +115,15 @@ class TestConfigEndpoint:
         monkeypatch.setenv("BRAND_NAME", "Test Brand")
         monkeypatch.setenv("POWERED_BY_LABEL", "Test Label")
         monkeypatch.setenv("LOGO_URL", "https://example.com/logo.png")
-        
+
         # Re-import to pick up new env vars
         from importlib import reload
+
         import app.main
+
         reload(app.main)
         test_client = TestClient(app.main.app)
-        
+
         resp = test_client.get("/api/config")
         data = resp.json()
         assert data["BRAND_NAME"] == "Test Brand"
@@ -135,6 +137,7 @@ class TestUploadEndpoint:
     def _create_simple_pdf(self):
         """Create a simple PDF file for testing."""
         from pypdf import PdfWriter
+
         buf = io.BytesIO()
         writer = PdfWriter()
         writer.add_blank_page(width=72, height=72)
@@ -145,11 +148,11 @@ class TestUploadEndpoint:
         """Test uploading a valid PDF file."""
         pdf_bytes = self._create_simple_pdf()
         files = {"file": ("test.pdf", pdf_bytes, "application/pdf")}
-        
+
         # Mock background task to avoid blocking
         with patch("app.main.BackgroundTasks.add_task"):
             resp = client.post("/api/upload", files=files)
-        
+
         assert resp.status_code == 200
         data = resp.json()
         assert "url" in data
@@ -166,7 +169,7 @@ class TestUploadEndpoint:
     def test_upload_file_too_large(self, client):
         """Test that files exceeding max size are rejected."""
         # Create a file slightly larger than UPLOAD_MAX_SIZE
-        large_bytes = b'x' * (UPLOAD_MAX_SIZE + 1000)
+        large_bytes = b"x" * (UPLOAD_MAX_SIZE + 1000)
         files = {"file": ("large.pdf", large_bytes, "application/pdf")}
         resp = client.post("/api/upload", files=files)
         assert resp.status_code == 400
@@ -176,11 +179,11 @@ class TestUploadEndpoint:
         """Test that uploaded file is saved with UUID prefix."""
         pdf_bytes = self._create_simple_pdf()
         files = {"file": ("test.pdf", pdf_bytes, "application/pdf")}
-        
+
         # Mock background task to avoid blocking
         with patch("app.main.BackgroundTasks.add_task"):
             resp = client.post("/api/upload", files=files)
-        
+
         data = resp.json()
         url = data["url"]
         # URL should have format /uploads/{uuid}-test.pdf
@@ -204,7 +207,9 @@ class TestChatGetEndpoint:
         """Test GET chat endpoint with basic query."""
         headers = {"X-Forwarded-For": "10.0.0.1", "X-Debug-Tenant": "tenant-1"}
         with patch("app.main.build_context", self.dummy_build_context):
-            with client.stream("GET", "/api/chat?q=hello&k=1&sessionId=test", headers=headers) as resp:
+            with client.stream(
+                "GET", "/api/chat?q=hello&k=1&sessionId=test", headers=headers
+            ) as resp:
                 assert resp.status_code == 200
                 # Read at least one event
                 found_event = False
@@ -233,7 +238,9 @@ class TestChatGetEndpoint:
         """Test GET chat endpoint rejects invalid sessionId."""
         headers = {"X-Forwarded-For": "10.0.0.4", "X-Debug-Tenant": "tenant-1"}
         long_session = "s" * (SESSION_ID_MAX_LENGTH + 1)
-        resp = client.get(f"/api/chat?q=hello&sessionId={long_session}", headers=headers)
+        resp = client.get(
+            f"/api/chat?q=hello&sessionId={long_session}", headers=headers
+        )
         assert resp.status_code == 400
         assert "Invalid sessionId" in resp.json()["detail"]
 
@@ -247,7 +254,7 @@ class TestGetClientIpFunction:
         mock_request = MagicMock(spec=Request)
         mock_request.headers.get.return_value = "192.168.1.1, 10.0.0.1"
         mock_request.client.host = "127.0.0.1"
-        
+
         ip = get_client_ip(mock_request)
         assert ip == "192.168.1.1"
 
@@ -256,7 +263,7 @@ class TestGetClientIpFunction:
         mock_request = MagicMock(spec=Request)
         mock_request.headers.get.return_value = None
         mock_request.client.host = "127.0.0.1"
-        
+
         ip = get_client_ip(mock_request)
         assert ip == "127.0.0.1"
 
@@ -265,7 +272,7 @@ class TestGetClientIpFunction:
         mock_request = MagicMock(spec=Request)
         mock_request.headers.get.return_value = "  192.168.1.1  , 10.0.0.1"
         mock_request.client.host = "127.0.0.1"
-        
+
         ip = get_client_ip(mock_request)
         assert ip == "192.168.1.1"
 
@@ -279,12 +286,12 @@ class TestRemoveFileAfterTtlFunction:
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp_path = tmp.name
             tmp.write(b"test content")
-        
+
         assert os.path.exists(tmp_path)
-        
+
         # Remove after 0.1 seconds (run in event loop)
         asyncio.run(remove_file_after_ttl(tmp_path, 0.1))
-        
+
         # File should be deleted
         assert not os.path.exists(tmp_path)
 
@@ -301,7 +308,9 @@ class TestAnswerWithContextFunction:
     def test_answer_without_llm_returns_context(self):
         """Test that without LLM, the function returns the context."""
         with patch("app.main.client", None):
-            answer, used_llm = _answer_with_context("What is AI?", "AI is artificial intelligence.")
+            answer, used_llm = _answer_with_context(
+                "What is AI?", "AI is artificial intelligence."
+            )
             assert answer == "AI is artificial intelligence."
             assert used_llm is False
 
@@ -314,45 +323,68 @@ class TestAnswerWithContextFunction:
 
     def test_answer_with_llm_uses_openai(self):
         """Test that with LLM configured, it uses OpenAI."""
+
         class DummyCompletion:
             def __init__(self):
-                self.choices = [types.SimpleNamespace(message={"content": "AI is intelligence exhibited by machines."})]
+                self.choices = [
+                    types.SimpleNamespace(
+                        message={"content": "AI is intelligence exhibited by machines."}
+                    )
+                ]
 
         class DummyClient:
             def __init__(self):
-                self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
+                self.chat = types.SimpleNamespace(
+                    completions=types.SimpleNamespace(create=self.create)
+                )
 
             def create(self, **kwargs):
                 return DummyCompletion()
 
-        with patch("app.main.client", DummyClient()), patch("app.main.detect", lambda _: "en"):
-            answer, used_llm = _answer_with_context("What is AI?", "AI is artificial intelligence.")
+        with (
+            patch("app.main.client", DummyClient()),
+            patch("app.main.detect", lambda _: "en"),
+        ):
+            answer, used_llm = _answer_with_context(
+                "What is AI?", "AI is artificial intelligence."
+            )
             assert answer == "AI is intelligence exhibited by machines."
             assert used_llm is True
 
     def test_answer_with_llm_fallback_on_error(self):
         """Test that LLM errors fall back to deterministic response."""
+
         class DummyClient:
             def __init__(self):
-                self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
+                self.chat = types.SimpleNamespace(
+                    completions=types.SimpleNamespace(create=self.create)
+                )
 
             def create(self, **kwargs):
                 raise Exception("API Error")
 
-        with patch("app.main.client", DummyClient()), patch("app.main.detect", lambda _: "en"):
-            answer, used_llm = _answer_with_context("What is AI?", "AI is artificial intelligence.")
+        with (
+            patch("app.main.client", DummyClient()),
+            patch("app.main.detect", lambda _: "en"),
+        ):
+            answer, used_llm = _answer_with_context(
+                "What is AI?", "AI is artificial intelligence."
+            )
             assert answer == "AI is artificial intelligence."
             assert used_llm is False
 
     def test_answer_respects_language_env_var(self, monkeypatch):
         """Test that OPENAI_LANG environment variable is respected."""
+
         class DummyCompletion:
             def __init__(self):
                 self.choices = [types.SimpleNamespace(message={"content": "Response"})]
 
         class DummyClient:
             def __init__(self):
-                self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
+                self.chat = types.SimpleNamespace(
+                    completions=types.SimpleNamespace(create=self.create)
+                )
                 self.system_prompt = None
 
             def create(self, **kwargs):
@@ -368,13 +400,16 @@ class TestAnswerWithContextFunction:
 
     def test_answer_detects_language_when_no_env_var(self):
         """Test that language is detected when OPENAI_LANG is not set."""
+
         class DummyCompletion:
             def __init__(self):
                 self.choices = [types.SimpleNamespace(message={"content": "Response"})]
 
         class DummyClient:
             def __init__(self):
-                self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
+                self.chat = types.SimpleNamespace(
+                    completions=types.SimpleNamespace(create=self.create)
+                )
                 self.system_prompt = None
 
             def create(self, **kwargs):
@@ -382,7 +417,10 @@ class TestAnswerWithContextFunction:
                 return DummyCompletion()
 
         dummy_client = DummyClient()
-        with patch("app.main.client", dummy_client), patch("app.main.detect", lambda _: "fr"):
+        with (
+            patch("app.main.client", dummy_client),
+            patch("app.main.detect", lambda _: "fr"),
+        ):
             answer, used_llm = _answer_with_context("Question", "Context")
             assert "Reply in fr" in dummy_client.system_prompt
             assert used_llm is True

@@ -1,17 +1,18 @@
 """Conversation management API routes."""
+
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator, Tuple
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..agents.service import AgentNotFoundError, AgentService, PostgresAgentRepository
+from ..conversations import schemas as convo_schemas
 from ..conversations.repository import PostgresConversationRepository
 from ..conversations.service import ConversationService
-from ..conversations import schemas as convo_schemas
 from ..core.db import apply_tenant_settings, get_required_tenant_id
 from ..security.auth import require_role
 
@@ -30,7 +31,7 @@ def _get_conn() -> psycopg.Connection:
 
 
 @contextmanager
-def _service_context() -> Iterator[Tuple[AgentService, ConversationService]]:
+def _service_context() -> Iterator[tuple[AgentService, ConversationService]]:
     conn = _get_conn()
     try:
         tenant_id = get_required_tenant_id()
@@ -40,7 +41,9 @@ def _service_context() -> Iterator[Tuple[AgentService, ConversationService]]:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - defensive
         conn.close()
-        raise HTTPException(status_code=500, detail="Failed to configure tenant") from exc
+        raise HTTPException(
+            status_code=500, detail="Failed to configure tenant"
+        ) from exc
     agent_repo = PostgresAgentRepository(conn, tenant_id=tenant_id)
     convo_repo = PostgresConversationRepository(conn, tenant_id=tenant_id)
     agent_service = AgentService(agent_repo, tenant_id=tenant_id)
@@ -61,7 +64,10 @@ def _service_context() -> Iterator[Tuple[AgentService, ConversationService]]:
         conn.close()
 
 
-@router.get("/api/agents/{agent_id}/conversations", response_model=convo_schemas.ConversationList)
+@router.get(
+    "/api/agents/{agent_id}/conversations",
+    response_model=convo_schemas.ConversationList,
+)
 def list_conversations(
     agent_id: int,
     limit: int = 20,
@@ -71,7 +77,10 @@ def list_conversations(
         return conversations.list_conversations(agent_id, limit=limit)
 
 
-@router.get("/api/agents/{agent_id}/conversations/dashboard", response_model=convo_schemas.ConversationDashboardPayload)
+@router.get(
+    "/api/agents/{agent_id}/conversations/dashboard",
+    response_model=convo_schemas.ConversationDashboardPayload,
+)
 def conversation_dashboard(
     agent_id: int,
     limit: int = 10,
@@ -81,7 +90,10 @@ def conversation_dashboard(
         return conversations.dashboard_snapshot(agent_id, limit=limit)
 
 
-@router.get("/api/conversations/{conversation_id}", response_model=convo_schemas.ConversationDetail)
+@router.get(
+    "/api/conversations/{conversation_id}",
+    response_model=convo_schemas.ConversationDetail,
+)
 def get_conversation(
     conversation_id: int,
     role: str = Depends(require_role("viewer")),
@@ -93,7 +105,10 @@ def get_conversation(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/api/conversations/{conversation_id}/follow-up", response_model=convo_schemas.FollowUpResponse)
+@router.post(
+    "/api/conversations/{conversation_id}/follow-up",
+    response_model=convo_schemas.FollowUpResponse,
+)
 def schedule_follow_up(
     conversation_id: int,
     payload: convo_schemas.FollowUpRequest,
@@ -108,7 +123,10 @@ def schedule_follow_up(
     return convo_schemas.FollowUpResponse(**detail.model_dump())
 
 
-@router.post("/api/conversations/{conversation_id}/escalate", response_model=convo_schemas.EscalationResponse)
+@router.post(
+    "/api/conversations/{conversation_id}/escalate",
+    response_model=convo_schemas.EscalationResponse,
+)
 def escalate_conversation(
     conversation_id: int,
     payload: convo_schemas.EscalationRequest,
@@ -119,5 +137,7 @@ def escalate_conversation(
         if resolve:
             detail = conversations.resolve_escalation(conversation_id)
         else:
-            detail = conversations.escalate(conversation_id, payload.reason, payload.escalate_to)
+            detail = conversations.escalate(
+                conversation_id, payload.reason, payload.escalate_to
+            )
     return convo_schemas.EscalationResponse(**detail.model_dump())

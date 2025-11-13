@@ -5,11 +5,10 @@ import uuid
 import pytest
 
 pytest.importorskip("sqlalchemy")
+from app.models import Base, Organization, User
 from sqlalchemy import create_engine  # type: ignore  # noqa: E402
 from sqlalchemy.exc import IntegrityError  # type: ignore  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # type: ignore  # noqa: E402
-
-from app.models import Base, Organization, User
 
 
 @pytest.fixture

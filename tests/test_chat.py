@@ -1,4 +1,5 @@
 import io
+import pathlib
 import sys
 import types
 from unittest.mock import patch
@@ -13,14 +14,13 @@ class DummyEmbedder:
 
 
 # Stub fastembed before importing the app to avoid model downloads.
-sys.modules['fastembed'] = types.SimpleNamespace(
+sys.modules["fastembed"] = types.SimpleNamespace(
     TextEmbedding=lambda model_name: DummyEmbedder()
 )
-import pathlib
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
-from app.main import app, CHAT_MAX_MESSAGE_LENGTH, SESSION_ID_MAX_LENGTH
+from app.main import CHAT_MAX_MESSAGE_LENGTH, SESSION_ID_MAX_LENGTH, app
 
 
 def dummy_build_context(q, k, tenant_id=None):
@@ -75,7 +75,9 @@ def test_chat_with_pdf_attachment(client):
     files = {"files": ("test.pdf", _pdf_bytes(), "application/pdf")}
     data = {"q": "hi", "k": "1", "attachments": "[]", "sessionId": "s2"}
     with patch("app.main.build_context", dummy_build_context):
-        with client.stream("POST", "/api/chat", data=data, files=files, headers=headers) as resp:
+        with client.stream(
+            "POST", "/api/chat", data=data, files=files, headers=headers
+        ) as resp:
             events = _parse_events(resp)
     assert any(e[0] == "token" for e in events)
     assert any(e[0] == "done" for e in events)
@@ -146,17 +148,23 @@ def test_chat_with_llm_prompt(client):
     class DummyStream:
         def __iter__(self):
             yield types.SimpleNamespace(
-                choices=[types.SimpleNamespace(delta=types.SimpleNamespace(content="hi"))],
+                choices=[
+                    types.SimpleNamespace(delta=types.SimpleNamespace(content="hi"))
+                ],
                 usage=None,
             )
             yield types.SimpleNamespace(
                 choices=[],
-                usage=types.SimpleNamespace(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+                usage=types.SimpleNamespace(
+                    prompt_tokens=1, completion_tokens=1, total_tokens=2
+                ),
             )
 
     class DummyClient:
         def __init__(self):
-            self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
+            self.chat = types.SimpleNamespace(
+                completions=types.SimpleNamespace(create=self.create)
+            )
             self.messages = None
 
         def create(self, **kwargs):
@@ -164,15 +172,20 @@ def test_chat_with_llm_prompt(client):
             return DummyStream()
 
     dummy_client = DummyClient()
-    with patch("app.main.build_context", dummy_build_context), \
-        patch("app.main.client", dummy_client), \
-        patch("app.main.detect", lambda _: "en"):
+    with (
+        patch("app.main.build_context", dummy_build_context),
+        patch("app.main.client", dummy_client),
+        patch("app.main.detect", lambda _: "en"),
+    ):
         data = {"q": "hi", "k": "1", "sessionId": "sllm"}
         with client.stream("POST", "/api/chat", data=data, headers=headers) as resp:
             events = _parse_events(resp)
     assert any(e[0] == "token" for e in events)
     assert any(e[0] == "done" for e in events)
-    assert dummy_client.messages[0]["content"] == "Answer the user's question using the supplied context. Reply in en."
+    assert (
+        dummy_client.messages[0]["content"]
+        == "Answer the user's question using the supplied context. Reply in en."
+    )
 
 
 def test_chat_with_custom_system_prompt(client, monkeypatch):
@@ -181,17 +194,23 @@ def test_chat_with_custom_system_prompt(client, monkeypatch):
     class DummyStream:
         def __iter__(self):
             yield types.SimpleNamespace(
-                choices=[types.SimpleNamespace(delta=types.SimpleNamespace(content="hi"))],
+                choices=[
+                    types.SimpleNamespace(delta=types.SimpleNamespace(content="hi"))
+                ],
                 usage=None,
             )
             yield types.SimpleNamespace(
                 choices=[],
-                usage=types.SimpleNamespace(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+                usage=types.SimpleNamespace(
+                    prompt_tokens=1, completion_tokens=1, total_tokens=2
+                ),
             )
 
     class DummyClient:
         def __init__(self):
-            self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self.create))
+            self.chat = types.SimpleNamespace(
+                completions=types.SimpleNamespace(create=self.create)
+            )
             self.messages = None
 
         def create(self, **kwargs):
@@ -200,9 +219,11 @@ def test_chat_with_custom_system_prompt(client, monkeypatch):
 
     dummy_client = DummyClient()
     monkeypatch.setenv("SYSTEM_PROMPT", "You are a helper.")
-    with patch("app.main.build_context", dummy_build_context), \
-        patch("app.main.client", dummy_client), \
-        patch("app.main.detect", lambda _: "en"):
+    with (
+        patch("app.main.build_context", dummy_build_context),
+        patch("app.main.client", dummy_client),
+        patch("app.main.detect", lambda _: "en"),
+    ):
         data = {"q": "hi", "k": "1", "sessionId": "sllm2"}
         with client.stream("POST", "/api/chat", data=data, headers=headers) as resp:
             events = _parse_events(resp)
@@ -212,4 +233,3 @@ def test_chat_with_custom_system_prompt(client, monkeypatch):
         dummy_client.messages[0]["content"]
         == "You are a helper. Answer the user's question using the supplied context. Reply in en."
     )
-

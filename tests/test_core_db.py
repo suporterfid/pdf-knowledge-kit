@@ -3,7 +3,6 @@
 from uuid import uuid4
 
 import pytest
-
 from app.core.db import get_required_tenant_id
 from app.core.tenant_context import reset_tenant_context, set_tenant_context
 

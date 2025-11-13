@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 from uuid import UUID
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import column, table
 from sqlalchemy.dialects import postgresql
-
 
 revision = "012_add_tenant_ids"
 down_revision = "011_add_auth_tables"
@@ -23,9 +23,7 @@ def _ensure_default_organization(conn) -> UUID:
     """Return the identifier for the default organization, creating it if needed."""
 
     result = conn.execute(
-        sa.text(
-            "SELECT id FROM organizations WHERE subdomain = :subdomain LIMIT 1"
-        ),
+        sa.text("SELECT id FROM organizations WHERE subdomain = :subdomain LIMIT 1"),
         {"subdomain": "default"},
     ).scalar()
     if result:
@@ -47,10 +45,10 @@ def _add_tenant_column(table: str) -> None:
     op.add_column(table, sa.Column("tenant_id", _UUID, nullable=True))
 
 
-def _set_tenant_values(conn, table: str, tenant_id: UUID) -> None:
+def _set_tenant_values(conn, table_name: str, tenant_id: UUID) -> None:
+    tbl = table(table_name, column("tenant_id"))
     conn.execute(
-        sa.text(f"UPDATE {table} SET tenant_id = :tenant WHERE tenant_id IS NULL"),
-        {"tenant": tenant_id},
+        tbl.update().where(tbl.c.tenant_id.is_(None)).values(tenant_id=tenant_id)
     )
 
 
@@ -90,16 +88,16 @@ def upgrade() -> None:
         "conversation_messages",
     )
 
-    for table in tables:
-        _add_tenant_column(table)
+    for table_name in tables:
+        _add_tenant_column(table_name)
 
     op.drop_constraint("documents_path_key", "documents", type_="unique")
     op.drop_constraint("agents_slug_key", "agents", type_="unique")
 
-    for table in tables:
-        _set_tenant_values(conn, table, tenant_id)
-        _set_not_null(table)
-        _add_tenant_fk(table)
+    for table_name in tables:
+        _set_tenant_values(conn, table_name, tenant_id)
+        _set_not_null(table_name)
+        _add_tenant_fk(table_name)
 
     op.create_unique_constraint(
         "uq_documents_tenant_path", "documents", ["tenant_id", "path"]
@@ -379,10 +377,10 @@ def downgrade() -> None:
         "connector_definitions",
     )
 
-    for table in tables:
-        op.drop_constraint(f"fk_{table}_tenant", table, type_="foreignkey")
-        op.alter_column(table, "tenant_id", existing_type=_UUID, nullable=True)
-        op.drop_column(table, "tenant_id")
+    for table_name in tables:
+        op.drop_constraint(f"fk_{table_name}_tenant", table_name, type_="foreignkey")
+        op.alter_column(table_name, "tenant_id", existing_type=_UUID, nullable=True)
+        op.drop_column(table_name, "tenant_id")
 
     op.create_unique_constraint("agents_slug_key", "agents", ["slug"])
     op.create_unique_constraint("documents_path_key", "documents", ["path"])

@@ -6,10 +6,8 @@ import uuid
 import psycopg
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.engine import make_url
-
 from app.ingestion.service import SCHEMA_PATH, ensure_schema
-
+from sqlalchemy.engine import make_url
 
 MULTI_TENANT_TABLES = [
     ("connector_definitions", "connector_definitions_tenant_isolation"),
@@ -56,7 +54,9 @@ def test_multi_tenant_migration_creates_tables(tmp_path: pathlib.Path) -> None:
             ensure_schema(conn, schema_sql_path=schema_path)
             ensure_schema(conn, schema_sql_path=schema_path)
 
-        engine = sa.create_engine(make_url(pg.url()).set(drivername="postgresql+psycopg"))
+        engine = sa.create_engine(
+            make_url(pg.url()).set(drivername="postgresql+psycopg")
+        )
         try:
             with engine.connect() as connection:
                 inspector = sa.inspect(connection)
@@ -64,13 +64,19 @@ def test_multi_tenant_migration_creates_tables(tmp_path: pathlib.Path) -> None:
                 assert "organizations" in tables
                 assert "users" in tables
 
-                org_columns = {col["name"] for col in inspector.get_columns("organizations")}
+                org_columns = {
+                    col["name"] for col in inspector.get_columns("organizations")
+                }
                 assert {"id", "name", "subdomain", "plan_type"}.issubset(org_columns)
 
                 user_columns = {col["name"] for col in inspector.get_columns("users")}
-                assert {"id", "organization_id", "email", "password_hash", "name"}.issubset(
-                    user_columns
-                )
+                assert {
+                    "id",
+                    "organization_id",
+                    "email",
+                    "password_hash",
+                    "name",
+                }.issubset(user_columns)
 
                 org_indexes = inspector.get_indexes("organizations")
                 assert any(
@@ -165,7 +171,9 @@ def test_multi_tenant_migration_creates_tables(tmp_path: pathlib.Path) -> None:
                         (table_name, policy_name),
                     )
                     policy_row = cur.fetchone()
-                    assert policy_row is not None, f"Missing RLS policy for {table_name}"
+                    assert (
+                        policy_row is not None
+                    ), f"Missing RLS policy for {table_name}"
                     qual, with_check = policy_row
                     expected = "((tenant_id = app.current_tenant_id()))"
                     assert qual == expected

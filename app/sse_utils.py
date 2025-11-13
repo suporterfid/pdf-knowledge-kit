@@ -11,12 +11,12 @@ Event format produced:
 
 import asyncio
 import re
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 # Punctuation sets for flushing and spacing rules
-PUNCT_CUTOFF = set(list(".,;:!?…"))
-CLOSE_PUNCT = set(list(")]}"))
-OPEN_PUNCT = set(list("([{"))
+PUNCT_CUTOFF = set(".,;:!?…")
+CLOSE_PUNCT = set(')]}"')
+OPEN_PUNCT = set("([{")
 
 
 def _should_flush(buf: str, tok: str) -> bool:

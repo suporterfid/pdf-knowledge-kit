@@ -1,4 +1,6 @@
 """Ingestion package exposing high level APIs."""
+
+from .chunking import chunk_text
 from .parsers import (
     Chunk,
     extract_html_text,
@@ -8,25 +10,24 @@ from .parsers import (
     read_xlsx_text,
 )
 from .service import (
+    EMBEDDING_MODEL,
+    TextEmbedding,
+    cancel_job,
+    get_job,
+    ingest_local,
+    ingest_source,
+    ingest_url,
+    ingest_urls,
+    insert_chunks,
+    list_jobs,
+    read_job_log,
     read_md_text,
     read_pdf_text,
     read_url_text,
-    upsert_document,
-    insert_chunks,
-    ingest_local,
-    ingest_url,
-    ingest_urls,
-    ingest_source,
     reindex_source,
     rerun_job,
-    cancel_job,
-    get_job,
-    list_jobs,
-    read_job_log,
-    TextEmbedding,
-    EMBEDDING_MODEL,
+    upsert_document,
 )
-from .chunking import chunk_text
 
 __all__ = [
     "Chunk",

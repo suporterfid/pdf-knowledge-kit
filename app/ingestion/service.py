@@ -8,35 +8,39 @@ Responsibilities
   (documents/chunks with a pgvector column for embeddings).
 - Track ingestion as background jobs with on-disk logs for progress/debugging.
 """
+
 from __future__ import annotations
 
 import importlib
 import logging
 import os
 import uuid
+from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Sequence, Tuple
+from typing import Any
 from uuid import UUID
 
-import requests
-from fastembed import TextEmbedding
-import embedding  # attempts to register custom CLS-pooled model (no-op if unsupported)
-from pdf2image import convert_from_path
-from pypdf import PdfReader
-import pytesseract
 import psycopg
-from pgvector.psycopg import register_vector
+import pytesseract
+import requests
 import sqlalchemy as sa
+from fastembed import TextEmbedding
+from pdf2image import convert_from_path
+from pgvector.psycopg import register_vector
+from pypdf import PdfReader
 
 from app.core.db import apply_tenant_settings
 from app.core.tenant_context import get_current_tenant_id
 
-
 from . import storage
+from .chunking import chunk_text
+from .connectors import ConnectorRecord
+from .connectors.rest import RestConnector
+from .connectors.sql import SqlConnector
+from .connectors.transcription import TranscriptionConnector
 from .models import ChunkMetadata, Job, JobLogSlice, JobStatus, Source, SourceType
-from .runner import IngestionRunner
 from .parsers import (
     Chunk,
     ParsedSegment,
@@ -46,17 +50,15 @@ from .parsers import (
     read_txt_text,
     read_xlsx_text,
 )
-from .chunking import chunk_text
-from .connectors import ConnectorRecord
-from .connectors.rest import RestConnector
-from .connectors.sql import SqlConnector
-from .connectors.transcription import TranscriptionConnector
+from .runner import IngestionRunner
 
 # Multilingual embedding model
 EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2-cls"
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema.sql"
 
-_PDF_SEGMENT_CACHE: Dict[Tuple[str, bool, str | None], List[ParsedSegment]] = {}
+_PDF_SEGMENT_CACHE: dict[tuple[str, bool, str | None], list[ParsedSegment]] = {}
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_tenant_id(tenant_id: UUID | str | None) -> UUID:
@@ -72,7 +74,9 @@ def _normalize_tenant_id(tenant_id: UUID | str | None) -> UUID:
     return uuid.UUID(str(tenant_id))
 
 
-def _pdf_cache_key(pdf_path: Path, use_ocr: bool, ocr_lang: str | None) -> Tuple[str, bool, str | None]:
+def _pdf_cache_key(
+    pdf_path: Path, use_ocr: bool, ocr_lang: str | None
+) -> tuple[str, bool, str | None]:
     resolved = str(pdf_path.resolve())
     if not use_ocr:
         return (resolved, False, None)
@@ -82,7 +86,7 @@ def _pdf_cache_key(pdf_path: Path, use_ocr: bool, ocr_lang: str | None) -> Tuple
 
 def _resolve_pdf_segments(
     pdf_path: Path, use_ocr: bool, ocr_lang: str | None
-) -> List[ParsedSegment]:
+) -> list[ParsedSegment]:
     key = _pdf_cache_key(pdf_path, use_ocr, ocr_lang)
     cached = _PDF_SEGMENT_CACHE.get(key)
     if cached is not None:
@@ -99,9 +103,11 @@ def _resolve_pdf_segments(
     _PDF_SEGMENT_CACHE[key] = segments
     return segments
 
+
 # ---------------------------------------------------------------------------
 # Helper functions moved from the legacy ``ingest.py`` script
 # ---------------------------------------------------------------------------
+
 
 def read_md_text(md_path: Path) -> str:
     """Read a Markdown file with reasonable encoding fallbacks."""
@@ -109,20 +115,21 @@ def read_md_text(md_path: Path) -> str:
         try:
             with md_path.open("r", encoding=enc) as f:
                 return f.read()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to read %s with encoding %s: %s", md_path, enc, exc)
             continue
     try:  # last resort: best-effort decode
         with md_path.open("rb") as f:
             return f.read().decode("utf-8", errors="ignore")
-    except Exception as e:  # pragma: no cover - defensive
-        print(f"[WARN] Falha ao ler {md_path}: {e}")
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Failed to read %s: %s", md_path, exc)
         return ""
 
 
 def _read_pdf_segments(
     pdf_path: Path, use_ocr: bool = False, ocr_lang: str | None = None
-) -> List[ParsedSegment]:
-    segments: List[ParsedSegment] = []
+) -> list[ParsedSegment]:
+    segments: list[ParsedSegment] = []
     try:
         reader = PdfReader(str(pdf_path))
         for idx, page in enumerate(reader.pages, start=1):
@@ -130,7 +137,9 @@ def _read_pdf_segments(
                 text = page.extract_text() or ""
             except Exception:
                 text = ""
-            segments.append((text, {"mime_type": "application/pdf", "page_number": idx}))
+            segments.append(
+                (text, {"mime_type": "application/pdf", "page_number": idx})
+            )
 
         if any(text.strip() for text, _ in segments):
             return segments
@@ -139,30 +148,43 @@ def _read_pdf_segments(
             try:
                 ocr_lang = ocr_lang or os.getenv("OCR_LANG") or "eng+por+spa"
                 available_langs = set(pytesseract.get_languages(config=""))
-                requested_langs = {lang.strip() for lang in ocr_lang.split("+") if lang.strip()}
+                requested_langs = {
+                    lang.strip() for lang in ocr_lang.split("+") if lang.strip()
+                }
                 missing_langs = requested_langs - available_langs
                 if missing_langs:
-                    print(f"[WARN] Missing OCR language(s): {', '.join(sorted(missing_langs))}")
+                    logger.warning(
+                        "Missing OCR language(s) for %s: %s",
+                        pdf_path,
+                        ", ".join(sorted(missing_langs)),
+                    )
 
                 images = convert_from_path(str(pdf_path))
-                ocr_segments: List[ParsedSegment] = []
+                ocr_segments: list[ParsedSegment] = []
                 for idx, img in enumerate(images, start=1):
                     try:
                         txt = pytesseract.image_to_string(img, lang=ocr_lang)
-                    except Exception:
+                    except Exception as exc:
+                        logger.debug(
+                            "Failed OCR for page %s of %s: %s", idx, pdf_path, exc
+                        )
                         txt = ""
-                    ocr_segments.append((txt, {"mime_type": "application/pdf", "page_number": idx}))
+                    ocr_segments.append(
+                        (txt, {"mime_type": "application/pdf", "page_number": idx})
+                    )
                 return ocr_segments
-            except Exception as e:
-                print(f"[WARN] Falha no OCR para {pdf_path}: {e}")
+            except Exception as exc:
+                logger.warning("OCR failed for %s: %s", pdf_path, exc)
                 return segments
         return segments
-    except Exception as e:
-        print(f"[WARN] Falha ao ler {pdf_path}: {e}")
+    except Exception as exc:
+        logger.warning("Failed to read PDF %s: %s", pdf_path, exc)
         return []
 
 
-def read_pdf_text(pdf_path: Path, use_ocr: bool = False, ocr_lang: str | None = None) -> str:
+def read_pdf_text(
+    pdf_path: Path, use_ocr: bool = False, ocr_lang: str | None = None
+) -> str:
     key = _pdf_cache_key(pdf_path, use_ocr, ocr_lang)
     segments = _read_pdf_segments(pdf_path, use_ocr=use_ocr, ocr_lang=ocr_lang)
     _PDF_SEGMENT_CACHE[key] = segments
@@ -175,8 +197,8 @@ def read_url_text(url: str) -> str:
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
         return extract_html_text(resp.text)
-    except Exception as e:
-        print(f"[WARN] Falha ao ler URL {url}: {e}")
+    except Exception as exc:
+        logger.warning("Failed to fetch URL %s: %s", url, exc)
         return ""
 
 
@@ -218,7 +240,9 @@ class _PsycopgOperations:
         table_identifier = self._format_table_name(table_name, schema)
         column_sql = ", ".join(self._preparer.quote(col) for col in columns)
         unique_sql = "UNIQUE " if unique else ""
-        statement = f"CREATE {unique_sql}INDEX IF NOT EXISTS {self._preparer.quote(name)} "
+        statement = (
+            f"CREATE {unique_sql}INDEX IF NOT EXISTS {self._preparer.quote(name)} "
+        )
         statement += f"ON {table_identifier} ({column_sql})"
         if postgresql_where is not None:
             compiled = postgresql_where.compile(
@@ -259,7 +283,9 @@ def _run_python_migrations(
 ) -> None:
     """Execute Alembic-style Python migrations in deterministic order."""
 
-    migrations_dir = migrations_dir or Path(__file__).resolve().parents[1] / "migrations"
+    migrations_dir = (
+        migrations_dir or Path(__file__).resolve().parents[1] / "migrations"
+    )
     if not migrations_dir.exists():
         return
 
@@ -476,7 +502,9 @@ def _process_connector_stream(
         if not record.chunks:
             continue
 
-        texts_for_embedding = [chunk.content for chunk in record.chunks if chunk.content]
+        texts_for_embedding = [
+            chunk.content for chunk in record.chunks if chunk.content
+        ]
         embeddings: list[list[float]] = []
         if texts_for_embedding:
             for emb in embedder.embed(texts_for_embedding):
@@ -520,6 +548,7 @@ def _process_connector_stream(
 
     return documents, chunks_total, canceled
 
+
 # ---------------------------------------------------------------------------
 # High level service API
 # ---------------------------------------------------------------------------
@@ -544,7 +573,9 @@ def ingest_source(
 ) -> uuid.UUID:
     """Ingest a connector-backed source such as a database or REST API."""
 
-    db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+    db_url = os.getenv(
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
+    )
     tenant_uuid = _normalize_tenant_id(tenant_id)
     with connect_and_init(db_url, tenant_id=tenant_uuid) as conn:
         source = storage.get_source(conn, source_id, tenant_id=tenant_uuid)
@@ -566,7 +597,9 @@ def ingest_source(
             source_id=source_id,
             params={
                 "source_type": source.type.value,
-                "provider": (source.params or {}).get("provider") if source.params else None,
+                "provider": (
+                    (source.params or {}).get("provider") if source.params else None
+                ),
             },
         )
 
@@ -623,7 +656,10 @@ def ingest_source(
                         job_id=job_id,
                         tenant_id=tenant_uuid,
                     )
-                elif source.type in {SourceType.AUDIO_TRANSCRIPT, SourceType.VIDEO_TRANSCRIPT}:
+                elif source.type in {
+                    SourceType.AUDIO_TRANSCRIPT,
+                    SourceType.VIDEO_TRANSCRIPT,
+                }:
                     connector = TranscriptionConnector(source, logger=logger)
                     documents, chunks_total, canceled = _process_connector_stream(
                         conn,
@@ -695,7 +731,9 @@ def ingest_local(
 ) -> uuid.UUID:
     """Ingest a local Markdown or PDF file as a background job."""
 
-    db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+    db_url = os.getenv(
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
+    )
     tenant_uuid = _normalize_tenant_id(tenant_id)
     with connect_and_init(db_url, tenant_id=tenant_uuid) as conn:
         source_id = storage.get_or_create_source(
@@ -720,7 +758,7 @@ def ingest_local(
                     log_path=str(log_path),
                 )
 
-                registry: Dict[str, Callable[[], Sequence[ParsedSegment]]] = {
+                registry: dict[str, Callable[[], Sequence[ParsedSegment]]] = {
                     ".pdf": lambda: _resolve_pdf_segments(path, use_ocr, ocr_lang),
                     ".md": lambda: [
                         (
@@ -737,7 +775,11 @@ def ingest_local(
                 segments = registry.get(suffix, lambda: [])()
 
                 def _calc_page_count(items: Sequence[ParsedSegment]) -> int:
-                    page_numbers = [meta.get("page_number") for _, meta in items if meta.get("page_number")]
+                    page_numbers = [
+                        meta.get("page_number")
+                        for _, meta in items
+                        if meta.get("page_number")
+                    ]
                     if page_numbers:
                         return int(max(page_numbers))
                     sheet_names = {
@@ -747,7 +789,11 @@ def ingest_local(
                     }
                     if sheet_names:
                         return len(sheet_names)
-                    row_numbers = [meta.get("row_number") for _, meta in items if meta.get("row_number")]
+                    row_numbers = [
+                        meta.get("row_number")
+                        for _, meta in items
+                        if meta.get("row_number")
+                    ]
                     if row_numbers:
                         return int(max(row_numbers))
                     return 1
@@ -764,9 +810,11 @@ def ingest_local(
                     )
                     return
 
-                chunks: List[Chunk] = []
+                chunks: list[Chunk] = []
                 for text_segment, metadata in segments:
-                    mime_type = str(metadata.get("mime_type") or "application/octet-stream")
+                    mime_type = str(
+                        metadata.get("mime_type") or "application/octet-stream"
+                    )
                     extra_metadata = {
                         k: v
                         for k, v in metadata.items()
@@ -864,12 +912,14 @@ def ingest_url(url: str, *, tenant_id: UUID | str | None = None) -> uuid.UUID:
     return ingest_urls([url], tenant_id=tenant_id)
 
 
-def ingest_urls(urls: List[str], *, tenant_id: UUID | str | None = None) -> uuid.UUID:
+def ingest_urls(urls: list[str], *, tenant_id: UUID | str | None = None) -> uuid.UUID:
     """Ingest multiple public URLs as a background job."""
     if not urls:
         raise ValueError("no URLs provided")
 
-    db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+    db_url = os.getenv(
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
+    )
     first_url = urls[0]
     tenant_uuid = _normalize_tenant_id(tenant_id)
     with connect_and_init(db_url, tenant_id=tenant_uuid) as conn:
@@ -1010,7 +1060,9 @@ def reindex_source(
 ) -> uuid.UUID | None:
     """Re-ingest content for an existing source."""
 
-    db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres")
+    db_url = os.getenv(
+        "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
+    )
     tenant_uuid = _normalize_tenant_id(tenant_id)
 
     with connect_and_init(db_url, tenant_id=tenant_uuid) as conn:
@@ -1121,7 +1173,7 @@ def get_job(job_id: uuid.UUID, *, tenant_id: UUID | str | None = None) -> Job | 
         return storage.get_job(conn, job_id, tenant_id=tenant_uuid)
 
 
-def list_jobs(*, tenant_id: UUID | str | None = None) -> List[Job]:
+def list_jobs(*, tenant_id: UUID | str | None = None) -> list[Job]:
     db_url = os.getenv(
         "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
     )

@@ -5,14 +5,7 @@
 line-length = 88
 target-version = ["py310"]
 include = "\\.pyi?$"
-extend-exclude = [
-  "migrations/",
-  "node_modules/",
-  "tmp/",
-  "build/",
-  "dist/",
-  ".venv/",
-]
+extend-exclude = "(migrations/|node_modules/|tmp/|build/|dist/|\\.venv/)"
 
 [tool.ruff]
 line-length = 88
@@ -30,6 +23,7 @@ src = ["app", "tests", "tools"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "C4", "T20"]
 ignore = ["E203", "E266", "E501"]
+per-file-ignores = {"tests/**/*.py" = ["E402", "S101", "S105", "S106", "S107", "S108", "B008"]}
 
 [tool.ruff.format]
 docstring-code-format = true
