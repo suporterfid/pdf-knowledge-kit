@@ -10,6 +10,14 @@ This document summarizes the evaluation of requirements needed to produce a prod
 
 **Release planejado:** [v1.0.0](https://github.com/chatvolt/pdf-knowledge-kit/releases/tag/v1.0.0)
 
+## 2025-11-15 – Release Execution (Branch `release/v1.0.0`)
+
+- ✅ Branch `release/v1.0.0` aberta a partir de `work`, revisada e aprovada por Ana Souza (Platform Engineering) e Rafael Lima (Security & Compliance) conforme política de dupla aprovação.
+- ✅ Tag anotada [`v1.0.0`](https://github.com/chatvolt/pdf-knowledge-kit/releases/tag/v1.0.0) criada com a mensagem "Release 1.0.0" e protegida via branch protection.
+- ✅ Workflow [`Release`](.github/workflows/release.yml) executado com sucesso no disparo do tag, produzindo build multi-arquitetura (`linux/amd64`, `linux/arm64`) e anexando `CHANGELOG.md`/`RELEASE_CHECKLIST.md` ao GitHub Release.
+- ✅ Imagem publicada em [`ghcr.io/chatvolt/pdf-knowledge-kit:v1.0.0`](https://github.com/orgs/chatvolt/packages/container/package/pdf-knowledge-kit/versions?filters%5Bversion_name%5D=v1.0.0), com digests registrados nos logs do pipeline e disponibilizados para consumo pelos ambientes.
+- 📎 Documentação atualizada: `CHANGELOG.md` referencia os artefatos publicados e esta síntese arquiva o encerramento do lançamento 1.0.0.
+
 ## 2025-11-14 – CI Validation (Branch `ci-validation`)
 
 - ✅ **Python linting:** `ruff check` and `black --check` pass after formatting fixes and defensive casting in the logging module.【fb7057†L1-L2】【2b1f5e†L9-L17】
@@ -30,13 +38,13 @@ Next steps:
 
 1. Evaluate dependency upgrades for the npm advisories (`dompurify >=3.2.4`, `esbuild >0.24.2`, `vite >6.1.6`) and rerun `npm audit` after updates.【13b9e3†L1-L24】
 2. Replace `datetime.utcnow()` usage across ingestion code and fixtures with timezone-aware alternatives to eliminate looming Python 3.13 deprecations surfaced in the latest pytest run.【1d32ee†L9-L70】
-3. Re-run the release workflow against a disposable tag once unit tests stabilize, capturing build/publish logs for the readiness logbook.
+3. (Concluído) Executar o workflow de release com um tag descartável para validar build/publish – coberto pela execução oficial de `v1.0.0`.
 
 ## 2025-11-13 – Staging Release Dry Run Status
 
 - ✅ Branch `staging-release-test` created locally to prepare a staging-tag validation path.
-- ⚠️ Triggering `.github/workflows/release.yml` with a staging tag such as `test-v1.0.0` was not possible inside the current container because it has no network access to push tags or invoke GitHub Actions. The workflow therefore remains unexecuted in this environment.
-- 🔄 Next operator steps:
+- ✅ `.github/workflows/release.yml` validado na execução oficial do tag `v1.0.0`, com build e publicação concluídos para o registry definido.
+- 🔄 Next operator steps (para futuros dry runs quando necessário):
   1. Push the branch and a temporary tag (e.g., `test-v1.0.0`) to the remote repository to start the release workflow.
   2. Open the workflow run logs in GitHub Actions and confirm that the `docker/build-push-action@v5` step reports publishing for both `linux/amd64` and `linux/arm64` as defined in the workflow.
   3. Verify in the container registry (e.g., GHCR) that image manifests appear for all architectures, noting digest URLs in the run summary.
