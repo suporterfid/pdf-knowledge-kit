@@ -86,7 +86,7 @@ export default function ChatPage() {
         />
         {sidebarOpen && (
           <div
-            className="fixed inset-0 bg-black/50 md:hidden z-10"
+            className="sidebar-overlay fixed inset-0 z-10 md:hidden"
             onClick={() => setSidebarOpen(false)}
             aria-hidden="true"
           />

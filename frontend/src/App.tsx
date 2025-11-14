@@ -12,7 +12,7 @@ import RequireAuth from './auth/RequireAuth';
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="flex h-screen flex-col bg-gray-900 text-gray-100">
+      <div className="flex h-screen flex-col bg-background text-text-primary font-sans">
         <ToastContainer />
         <Routes>
           <Route path="/" element={<Navigate to="/chat/new" replace />} />

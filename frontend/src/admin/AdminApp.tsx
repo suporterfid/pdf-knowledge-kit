@@ -19,7 +19,7 @@ export default function AdminApp() {
 
   return (
     <div className="admin flex h-full flex-col md:flex-row">
-      <aside className="w-full bg-gray-900 p-4 md:w-64 md:border-r md:border-gray-800">
+      <aside className="w-full bg-surface p-6 md:w-72 md:border-r md:border-border">
         <nav aria-label="Admin navigation">
           <ul className="space-y-2">
             <li>
@@ -56,25 +56,25 @@ export default function AdminApp() {
         </nav>
       </aside>
       <section className="flex-1 overflow-y-auto p-6">
-        <div className="mb-6 flex flex-col gap-4 rounded-lg border border-gray-800 bg-gray-900 p-4 md:flex-row md:items-center md:justify-between">
+        <div className="admin-card mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-widest text-gray-500">
+            <p className="text-xs uppercase tracking-widest text-text-muted">
               Organização ativa
             </p>
-            <h2 className="text-lg font-semibold text-white">
+            <h2 className="font-heading text-2xl font-semibold text-primary">
               {activeTenant?.name || activeTenant?.slug || tenantId || 'Padrão'}
             </h2>
             {user?.email && (
-              <p className="text-sm text-gray-400">Usuário: {user.email}</p>
+              <p className="text-sm text-text-secondary">Usuário: {user.email}</p>
             )}
           </div>
           {tenants.length > 0 && (
-            <label className="text-sm text-gray-300">
-              <span className="mr-2">Alterar organização:</span>
+            <label className="flex flex-col gap-2 text-sm text-text-secondary md:flex-row md:items-center">
+              <span className="font-semibold">Alterar organização:</span>
               <select
                 value={tenantId ?? tenants[0].id}
                 onChange={handleTenantChange}
-                className="rounded border border-gray-700 bg-gray-800 p-2"
+                className="w-full md:w-auto"
               >
                 {tenants.map((tenant) => (
                   <option key={tenant.id} value={tenant.id}>

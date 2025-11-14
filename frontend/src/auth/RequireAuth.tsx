@@ -12,8 +12,8 @@ export default function RequireAuth({
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center bg-gray-950 text-gray-100">
-        <span className="animate-pulse text-sm text-gray-400">Carregando...</span>
+      <div className="flex h-full items-center justify-center bg-background text-text-secondary">
+        <span className="animate-pulse text-sm">Carregando...</span>
       </div>
     );
   }
