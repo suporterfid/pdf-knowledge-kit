@@ -51,6 +51,10 @@ A versão atual do pacote é **1.0.1** (veja `app/__version__.py`). Releases ofi
    ```
 4. Acesse o frontend em `http://localhost:5173` e a documentação da API em `http://localhost:8000/docs`.
 
+Ao finalizar o processo, o script `seed.py` executado no container da API provisiona automaticamente um tenant e um usuário de demonstração, além de ingerir o PDF de exemplo incluído no repositório. Por padrão, os acessos são criados com o e-mail `admin@demo.local` e a senha `ChangeMe123!` (ajuste as variáveis `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` no `.env` para personalizar). **Altere essas credenciais em qualquer ambiente real** e remova os usuários/tenants de teste conforme a política de segurança da sua organização.
+
+O documento padrão encontra-se em `sample_data/example_document.pdf`. Substitua o arquivo pelo conteúdo desejado ou remova-o do diretório para impedir que seja ingerido automaticamente durante o seed.
+
 Use `docker compose up -d db` quando quiser apenas o banco. Para derrubar tudo, execute `docker compose down` (adicione `-v` para limpar volumes, incluindo o banco).
 
 ## Configuração local (Python + Node)
