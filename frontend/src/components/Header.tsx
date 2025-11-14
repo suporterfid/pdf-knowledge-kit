@@ -38,24 +38,28 @@ export default function Header({ onMenuClick }: Props) {
   }, [menuOpen]);
 
   return (
-    <header className="flex items-center justify-between p-4">
+    <header className="px-6 py-4">
       <div className="flex items-center">
         {onMenuClick && (
           <button
-            className="mr-2 p-2 md:hidden"
+            className="icon-button md:hidden"
             onClick={onMenuClick}
             aria-label="Abrir menu"
-          >
+            >
             ☰
           </button>
         )}
         <div className="brand flex items-center">
           {LOGO_URL && <img src={LOGO_URL} alt={BRAND_NAME} className="logo" />}
-          <h1>{BRAND_NAME}</h1>
+          <h1 className="font-heading text-2xl font-bold text-primary">{BRAND_NAME}</h1>
         </div>
       </div>
-      <div className="header-actions flex items-center space-x-2">
-        <button onClick={() => navigate("/chat/new")} aria-label="Novo chat">
+      <div className="header-actions flex items-center">
+        <button
+          type="button"
+          onClick={() => navigate("/chat/new")}
+          aria-label="Novo chat"
+        >
           Novo Chat
         </button>
         <button
@@ -78,8 +82,10 @@ export default function Header({ onMenuClick }: Props) {
           {menuOpen && (
             <div className="menu" role="menu">
               {currentTenant && (
-                <div className="px-3 py-2 text-sm text-gray-400">
-                  <p className="font-semibold text-gray-200">{user?.fullName || user?.email}</p>
+                <div className="px-3 py-2 text-sm text-text-muted">
+                  <p className="font-semibold text-text-primary">
+                    {user?.fullName || user?.email}
+                  </p>
                   <p>Tenant: {currentTenant.name || currentTenant.slug || currentTenant.id}</p>
                 </div>
               )}

@@ -79,32 +79,41 @@ export default function Sidebar({ currentId, isOpen, onClose }: Props) {
   return (
     <nav
       className={clsx(
-        'fixed inset-y-0 left-0 w-64 transform transition-transform duration-200 bg-gray-800 p-4 flex flex-col md:static md:translate-x-0 md:flex',
+        'fixed inset-y-0 left-0 z-30 flex w-72 transform flex-col bg-surface p-6 text-text-primary shadow-soft transition-transform duration-200 md:static md:z-auto md:border-r md:border-border md:translate-x-0',
         isOpen
-          ? 'translate-x-0 pointer-events-auto z-20'
-          : '-translate-x-full pointer-events-none'
+          ? 'translate-x-0 pointer-events-auto'
+          : '-translate-x-full pointer-events-none md:pointer-events-auto'
       )}
       aria-label="Histórico de conversas"
     >
       <div className="flex justify-end md:hidden">
-        <button onClick={onClose} aria-label="Fechar menu">
+        <button
+          type="button"
+          className="icon-button"
+          onClick={onClose}
+          aria-label="Fechar menu"
+        >
           ✕
         </button>
       </div>
       <button
-        className="mb-4 rounded bg-blue-600 px-3 py-2 text-sm"
+        type="button"
+        className="button w-full justify-center"
         onClick={createNew}
         aria-label="Iniciar novo chat"
       >
         Novo Chat
       </button>
-      <div className="flex-1 overflow-y-auto space-y-2">
+      <div className="mt-6 flex-1 space-y-3 overflow-y-auto">
         {conversations.map((c) => (
           <div
             key={c.id}
-            className={`rounded p-2 text-sm cursor-pointer ${
-              c.id === currentId ? 'bg-gray-700' : 'hover:bg-gray-700'
-            }`}
+            className={clsx(
+              'cursor-pointer rounded-2xl border p-3 text-sm shadow-soft transition focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface',
+              c.id === currentId
+                ? 'border-transparent bg-primary text-on-primary'
+                : 'border-border bg-surface-alt text-text-primary hover:border-primary hover:bg-surface'
+            )}
             role="button"
             tabIndex={0}
             aria-pressed={c.id === currentId}
@@ -117,6 +126,8 @@ export default function Sidebar({ currentId, isOpen, onClose }: Props) {
               <span>{c.title}</span>
               <div className="space-x-1">
                 <button
+                  type="button"
+                  className="icon-button"
                   onClick={(e) => {
                     e.stopPropagation();
                     rename(c.id);
@@ -126,6 +137,8 @@ export default function Sidebar({ currentId, isOpen, onClose }: Props) {
                   ✏️
                 </button>
                 <button
+                  type="button"
+                  className="icon-button"
                   onClick={(e) => {
                     e.stopPropagation();
                     remove(c.id);
@@ -136,7 +149,12 @@ export default function Sidebar({ currentId, isOpen, onClose }: Props) {
                 </button>
               </div>
             </div>
-            <div className="text-xs text-gray-400">
+            <div
+              className={clsx(
+                'text-xs',
+                c.id === currentId ? 'text-on-primary' : 'text-text-muted'
+              )}
+            >
               {new Date(c.createdAt).toLocaleString()}
             </div>
           </div>

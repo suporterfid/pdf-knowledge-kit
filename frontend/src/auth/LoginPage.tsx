@@ -39,50 +39,50 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex h-full items-center justify-center bg-gray-950 text-gray-100">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 text-text-primary">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md space-y-4 rounded-lg bg-gray-900 p-6 shadow-lg"
+        className="w-full max-w-md space-y-6 rounded-3xl border border-border bg-surface p-8 shadow-soft"
         aria-label="Formulário de login"
       >
         <div>
-          <h1 className="text-2xl font-semibold">Entrar</h1>
-          <p className="text-sm text-gray-400">
+          <h1 className="font-heading text-4xl font-bold text-primary">Entrar</h1>
+          <p className="mt-2 text-base text-text-secondary">
             Utilize suas credenciais para acessar o painel e o chat.
           </p>
         </div>
         <label className="block">
-          <span className="mb-1 block text-sm font-medium">E-mail</span>
+          <span className="mb-1 block text-sm font-semibold text-text-secondary">E-mail</span>
           <input
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
-            className="w-full rounded border border-gray-700 bg-gray-800 p-2"
+            className="w-full"
             autoComplete="username"
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-sm font-medium">Senha</span>
+          <span className="mb-1 block text-sm font-semibold text-text-secondary">Senha</span>
           <input
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
-            className="w-full rounded border border-gray-700 bg-gray-800 p-2"
+            className="w-full"
             autoComplete="current-password"
           />
         </label>
         <button
           type="submit"
-          className="w-full rounded bg-blue-600 p-2 font-semibold hover:bg-blue-500"
+          className="button w-full justify-center"
           disabled={submitting}
         >
           {submitting ? 'Entrando...' : 'Entrar'}
         </button>
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-text-muted">
           Ainda não tem conta?{' '}
-          <Link to="/auth/register" className="text-blue-400 hover:underline">
+          <Link to="/auth/register" className="font-semibold text-link">
             Cadastre-se
           </Link>
         </p>
