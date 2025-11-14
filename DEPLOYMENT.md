@@ -151,6 +151,25 @@ Adjust the command to your orchestration tooling as needed.
 
 The container prepares `/var/log/app` with appropriate permissions, so mounting a volume or centralized logging agent to that path will collect structured logs. Toggle `LOG_JSON` in production to emit JSON-formatted logs for ingestion by log processors.【F:Dockerfile†L20-L29】【F:.env.example†L20-L26】
 
+### 4.5 Incident triage, response SLA, and escalation
+
+Use this flow whenever an alert or production incident is raised (for alert configuration specifics see [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md#alert-review-checklists)).
+
+1. **Triage intake**
+   - Alerts from monitoring platforms and the release checklist should land in the `#pdfkit-ops` channel or the on-call paging system.
+   - The on-call engineer acknowledges the alert within **5 minutes** and validates signal fidelity by checking the originating dashboard or log stream.
+   - Classify severity using the matrix below and log the incident in the runbook tool with links to dashboards and recent deployments (see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md#phase-1-pre-release-preparation)).
+2. **Response SLAs**
+   - **Sev1 (critical outage or data loss risk):** mitigation or workaround within **30 minutes**, customer comms every 15 minutes.
+   - **Sev2 (degraded functionality or delayed ingestion):** mitigation within **2 hours**, updates hourly.
+   - **Sev3 (non-blocking defect or alert noise):** response within **1 business day**, schedule fix in the next sprint.
+3. **Escalation path**
+   - If the on-call engineer cannot restore service inside the SLA, escalate to the **Platform Engineering lead** (Ana Souza) and **Incident Commander rotation** via the paging escalation policy.
+   - For infrastructure-level faults (e.g., managed Postgres outage), open a ticket with the cloud provider and notify the **SRE duty manager**.
+   - After restoration, record follow-up actions and link the incident postmortem to the deployment notes.
+
+Cross-reference the operational expectations in [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md) and make sure the release owner has validated observability coverage via [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) before rolling out changes.
+
 ## 5. Continuous integration & delivery
 
 GitHub Actions provides multiple workflows for CI/CD:

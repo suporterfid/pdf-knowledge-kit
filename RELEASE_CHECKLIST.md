@@ -85,6 +85,14 @@ This checklist ensures that all necessary steps are completed before releasing a
   git commit -m "fix: address linting and security issues"
   ```
 
+### 1.4 Alert Review
+
+- [ ] Complete pre-release alert audit in accordance with [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md#pre-release-alert-audit)
+  - [ ] Verify routing and severity mapping matches the incident SLAs in [DEPLOYMENT.md](DEPLOYMENT.md#45-incident-triage-response-sla-and-escalation)
+  - [ ] Document alert review outcome and owners for follow-up actions
+- [ ] Confirm any new alerts have run successfully in staging for at least 24 hours
+- [ ] Update runbook links or dashboards referenced by alerts as needed
+
 ---
 
 ## Phase 2: Testing
