@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Summary
+
+- Nenhuma mudança documentada desde o lançamento 1.0.0.
+
+### Added
+
+### Changed
+
+### Fixed
+
+### Deprecated
+
+### Removed
+
+### Security
+
+---
+
+## [1.0.0] - 2025-11-15
+
+### Summary
+
+- Primeira versão estável reunindo backend FastAPI, frontend React e trilha operacional completas com multi-inquilinos protegidos por RLS.
+
 ### Added
 
 - Production release requirements documentation (PRODUCTION_RELEASE_REQUIREMENTS.md)
@@ -15,47 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changelog template for tracking changes
 - Row Level Security (RLS) implementation for multi-tenancy (migration 011)
 - Test suite for RLS tenant isolation (`test_rls_tenant_isolation.py`)
-
-### Changed
-
-- Hardened database update helpers to compose SQL queries using `psycopg.sql`
-  for agent, conversation, and source repositories, eliminating potential SQL
-  injection vectors flagged by security tooling.
-- Replaced direct `print` usage in administrative CLI scripts with consistent
-  stdout helpers to satisfy linting and security requirements.
-- Introduced structured dependency aliases in authentication and ingestion
-  routers to align with Ruff's dependency-injection guidance and improve type
-  clarity.
-
-### Fixed
-
-- Added defensive logging around optional third-party integrations and file
-  parsing fallbacks to make ingestion error handling observable without failing
-  silently.
-
-- Documents and chunks tables now include `organization_id` column for tenant isolation
-- Ingestion storage layer updated to set `organization_id` from tenant context
-- RAG query enhanced with comment documenting RLS behavior
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
-
-- Implemented Row Level Security (RLS) on documents and chunks tables
-- PostgreSQL RLS policies automatically filter data by tenant via `app.tenant_id` session variable
-- Tenant isolation enforced at the database level, preventing cross-tenant data access
-- Backward compatibility maintained for non-tenant queries (when `app.tenant_id` not set)
-
----
-
-## [1.0.0] - TBD
-
-### Added
-
 - Complete FastAPI backend with semantic search capabilities
 - React/TypeScript frontend with ChatGPT-inspired interface
 - PostgreSQL + pgvector integration for vector similarity search
@@ -89,10 +72,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI for automated testing
 - Dependabot for devcontainer updates
 
+### Changed
+
+- Hardened database update helpers to compose SQL queries using `psycopg.sql`
+  for agent, conversation, and source repositories, eliminating potential SQL
+  injection vectors flagged by security tooling.
+- Replaced direct `print` usage in administrative CLI scripts with consistent
+  stdout helpers to satisfy linting and security requirements.
+- Introduced structured dependency aliases in authentication and ingestion
+  routers to align with Ruff's dependency-injection guidance and improve type
+  clarity.
+
+### Fixed
+
+- Added defensive logging around optional third-party integrations and file
+  parsing fallbacks to make ingestion error handling observable without failing
+  silently.
+- Documents and chunks tables now include `organization_id` column for tenant isolation.
+- Ingestion storage layer updated to set `organization_id` from tenant context.
+- RAG query enhanced with inline documentation explaining the RLS behavior.
+
 ### Security
 
 - Environment-based secrets management
-- Row-level security (RLS) preparation for multi-tenancy
+- Row-level security (RLS) enforcement for multi-tenancy, with PostgreSQL policies filtering by the `app.tenant_id` session variable and backward compatibility when unset
 - Input validation and sanitization
 - CORS configuration
 - Rate limiting to prevent abuse

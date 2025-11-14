@@ -2,6 +2,8 @@
 
 This document explains how to configure, run, and ship **PDF Knowledge Kit** across development and production environments. It consolidates information from the runtime Docker assets, the environment variable template, and the automated CI workflow so teams can follow a predictable deployment process.
 
+> ✅ **Estado do release:** instruções alinhadas com a entrega [v1.0.0](https://github.com/chatvolt/pdf-knowledge-kit/releases/tag/v1.0.0), publicada em 2025-11-15.
+
 ## 1. Prerequisites
 
 Ensure the following tooling is installed locally or in your CI/CD runners:

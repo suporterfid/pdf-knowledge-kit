@@ -2,6 +2,8 @@
 
 This guide documents day-2 operations for ingestion connectors and admin automation. For deployment prerequisites and release coordination refer to [DEPLOYMENT.md](DEPLOYMENT.md) and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
+> 🛠️ **Cobertura:** Procedimentos válidos para o release [v1.0.0](https://github.com/chatvolt/pdf-knowledge-kit/releases/tag/v1.0.0) (2025-11-15).
+
 ## Connector matrix
 
 | Connector     | Endpoint                               | What it ingests                                                           | Required params                                                                                          | Credentials                                                                        | Notes                                                                     |
