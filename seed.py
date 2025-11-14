@@ -149,23 +149,32 @@ def _load_config() -> SeedConfig:
     )
 
 
-async def _wait_for_database(db_url: str, *, timeout: float = 60.0, interval: float = 2.0) -> None:
-    """Poll until the database accepts connections or the timeout expires."""
+def wait_for_database(max_attempts: int = 10, delay: float = 3.0) -> None:
+    """Attempt to establish a database connection, retrying if necessary."""
 
-    deadline = time.monotonic() + timeout
+    db_url = _build_database_url()
     safe_url = _safe_url(db_url)
-    while True:
+
+    for attempt in range(1, max_attempts + 1):
         try:
-            with psycopg.connect(db_url, connect_timeout=5) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-            logger.info("Database connection established: %s", safe_url)
-            return
+            with psycopg.connect(db_url, connect_timeout=5) as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT 1")
         except Exception as exc:  # pragma: no cover - depends on external DB
-            if time.monotonic() >= deadline:
+            logger.info(
+                "Database not ready (attempt %d/%d): %s; retrying in %.1fs",
+                attempt,
+                max_attempts,
+                exc,
+                delay,
+            )
+            if attempt >= max_attempts:
                 raise RuntimeError("Database did not become ready in time") from exc
-            logger.info("Waiting for database (%s); retrying in %.1fs", exc, interval)
-            await asyncio.sleep(interval)
+            time.sleep(delay)
+            continue
+
+        logger.info("Database connection established after %d attempt(s): %s", attempt, safe_url)
+        return
 
 
 def _run_schema_migrations(db_url: str) -> None:
@@ -269,12 +278,13 @@ async def main() -> None:
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+    wait_for_database()
+
     config = _load_config()
     logger.info("Starting seed process using %s", _safe_url(config.db_url))
 
     os.environ.setdefault("DATABASE_URL", config.db_url)
 
-    await _wait_for_database(config.db_url)
     await asyncio.to_thread(_run_schema_migrations, config.db_url)
 
     session_factory = get_sessionmaker(database_url=config.sqlalchemy_url)
