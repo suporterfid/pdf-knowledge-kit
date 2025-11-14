@@ -31,7 +31,7 @@ router = APIRouter(prefix="/api/tenant/accounts", tags=["tenant-accounts"])
 SessionDep = Annotated[Session, Depends(get_db_session)]
 UserDep = Annotated[User, Depends(get_current_user)]
 AdminRoleDep = Annotated[str, Depends(require_role("admin"))]
-AUTH_SCHEME_BEARER = "bearer"
+AUTH_SCHEME_BEARER: Literal["bearer"] = "bearer"
 
 _ROLE_CHOICES: tuple[Literal["viewer", "operator", "admin"], ...] = (
     "viewer",

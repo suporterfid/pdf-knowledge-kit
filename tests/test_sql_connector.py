@@ -86,6 +86,7 @@ def test_sql_connector_streams_rows_and_updates_state(monkeypatch, fake_chunk):
 
     source = Source(
         id=uuid4(),
+        tenant_id=uuid4(),
         type=SourceType.DATABASE,
         created_at=datetime.utcnow(),
         params={
@@ -156,6 +157,7 @@ def test_sql_connector_honours_cancellation(monkeypatch, fake_chunk):
 
     source = Source(
         id=uuid4(),
+        tenant_id=uuid4(),
         type=SourceType.DATABASE,
         created_at=datetime.utcnow(),
         params={

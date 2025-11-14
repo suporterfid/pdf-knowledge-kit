@@ -9,10 +9,11 @@ import os
 import secrets
 from collections.abc import Iterable
 from functools import lru_cache
-from typing import Any
+from typing import Any, cast
 
 import jwt
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from app.models import RefreshToken, User
@@ -173,7 +174,8 @@ def revoke_all_refresh_tokens(
         .values(revoked_at=when)
         .execution_options(synchronize_session="fetch")
     )
-    return int(result.rowcount or 0)
+    cursor_result = cast(CursorResult[Any], result)
+    return int(cursor_result.rowcount or 0)
 
 
 __all__ = [

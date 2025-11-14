@@ -87,13 +87,13 @@ def main(argv: list[str] | None = None) -> None:
         doc_dir = Path(args.docs)
         for doc in _iter_docs(doc_dir):
             log.info("ingesting %s", doc)
-            job_id = _service.ingest_local(
+            doc_job_id = _service.ingest_local(
                 doc,
                 tenant_id=tenant_id,
                 use_ocr=args.ocr,
                 ocr_lang=args.ocr_lang,
             )
-            _service.wait_for_job(job_id)
+            _service.wait_for_job(doc_job_id)
 
     urls: list[str] = list(args.urls)
     if args.urls_file:
@@ -106,8 +106,8 @@ def main(argv: list[str] | None = None) -> None:
                         urls.append(line)
     if urls:
         log.info("ingesting %d url(s)", len(urls))
-        job_id = _service.ingest_urls(urls, tenant_id=tenant_id)
-        _service.wait_for_job(job_id)
+        urls_job_id = _service.ingest_urls(urls, tenant_id=tenant_id)
+        _service.wait_for_job(urls_job_id)
 
     if args.reindex:
         try:
@@ -115,8 +115,11 @@ def main(argv: list[str] | None = None) -> None:
         except ValueError:
             log.error("--reindex requires a valid UUID")
         else:
-            job_id = _service.reindex_source(source_id, tenant_id=tenant_id)
-            _service.wait_for_job(job_id)
+            reindex_job_id = _service.reindex_source(source_id, tenant_id=tenant_id)
+            if reindex_job_id is None:
+                log.error("source %s could not be reindexed", source_id)
+            else:
+                _service.wait_for_job(reindex_job_id)
 
 
 if __name__ != "__main__":  # pragma: no cover - import-time aliasing
@@ -124,4 +127,3 @@ if __name__ != "__main__":  # pragma: no cover - import-time aliasing
     sys.modules[__name__] = _service
 else:  # pragma: no cover - CLI execution
     main()
-

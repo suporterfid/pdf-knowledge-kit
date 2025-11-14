@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -85,12 +85,13 @@ async def get_current_user(
 
 def _highest_role(roles: list[str]) -> str | None:
     ranked = sorted(
-        {role for role in roles if role in _ROLE_LEVELS}, key=_ROLE_LEVELS.get
+        {role for role in roles if role in _ROLE_LEVELS},
+        key=lambda role: _ROLE_LEVELS[role],
     )
     return ranked[-1] if ranked else None
 
 
-def require_role(min_role: str) -> Callable[..., str]:
+def require_role(min_role: str) -> Callable[..., Awaitable[str]]:
     """Create a dependency ensuring the caller has at least ``min_role`` privileges."""
 
     if min_role not in _ROLE_LEVELS:
