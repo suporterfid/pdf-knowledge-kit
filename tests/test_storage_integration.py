@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -93,7 +93,7 @@ def test_storage_sources_and_jobs(tmp_path):
         job_id,
         tenant_id=tenant_a,
         status=JobStatus.RUNNING,
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(timezone.utc),
     )
     job = storage.get_job(conn, job_id, tenant_id=tenant_a)
     assert job and job.status == JobStatus.RUNNING
@@ -110,7 +110,7 @@ def test_storage_sources_and_jobs(tmp_path):
         job_id,
         tenant_id=tenant_a,
         status=JobStatus.SUCCEEDED,
-        finished_at=datetime.utcnow(),
+        finished_at=datetime.now(timezone.utc),
     )
     storage.soft_delete_source(conn, src_id, tenant_id=tenant_a)
     remaining = list(storage.list_sources(conn, tenant_id=tenant_a, active=None))

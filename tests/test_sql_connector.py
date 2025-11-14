@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: S101
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import datetime, timezone
 from threading import Event
 from typing import Any
 from uuid import uuid4
@@ -88,7 +88,7 @@ def test_sql_connector_streams_rows_and_updates_state(monkeypatch, fake_chunk):
         id=uuid4(),
         tenant_id=uuid4(),
         type=SourceType.DATABASE,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         params={
             "dsn": "postgresql://example",
             "queries": [
@@ -159,7 +159,7 @@ def test_sql_connector_honours_cancellation(monkeypatch, fake_chunk):
         id=uuid4(),
         tenant_id=uuid4(),
         type=SourceType.DATABASE,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         params={
             "dsn": "postgresql://example",
             "queries": [

@@ -1,5 +1,5 @@
 import importlib
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from app.ingestion.models import (
@@ -99,7 +99,7 @@ def test_sources_crud_and_reindex(monkeypatch, tenant_auth):
             type=kwargs.get("type"),
             path=kwargs.get("path"),
             url=kwargs.get("url"),
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         return sid
 
@@ -199,7 +199,7 @@ def test_job_lifecycle_and_logs(monkeypatch, tenant_auth):
             tenant_id=tenant_id,
             source_id=uuid4(),
             status=JobStatus.QUEUED,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         return job_id
 
@@ -289,21 +289,21 @@ def test_jobs_pagination_filters(monkeypatch, tenant_auth):
             tenant_id=auth_ctx.organization_id,
             source_id=uuid4(),
             status=JobStatus.QUEUED,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         ),
         Job(
             id=uuid4(),
             tenant_id=auth_ctx.organization_id,
             source_id=uuid4(),
             status=JobStatus.SUCCEEDED,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         ),
         Job(
             id=uuid4(),
             tenant_id=auth_ctx.organization_id,
             source_id=uuid4(),
             status=JobStatus.QUEUED,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         ),
     ]
 
@@ -333,7 +333,7 @@ def test_sources_pagination_filters(monkeypatch, tenant_auth):
             type=SourceType.URL,
             url="http://a",
             path=None,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             active=True,
         ),
         Source(
@@ -342,7 +342,7 @@ def test_sources_pagination_filters(monkeypatch, tenant_auth):
             type=SourceType.URL,
             url="http://b",
             path=None,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             active=True,
         ),
         Source(
@@ -351,7 +351,7 @@ def test_sources_pagination_filters(monkeypatch, tenant_auth):
             type=SourceType.URL,
             url="http://c",
             path=None,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             active=False,
         ),
     ]

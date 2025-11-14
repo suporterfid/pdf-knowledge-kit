@@ -2,7 +2,7 @@ import importlib
 import sys
 import types
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from app.ingestion.models import Source, SourceType
@@ -105,7 +105,7 @@ def test_cross_tenant_source_isolation(monkeypatch, tenant_auth):
             credentials=kwargs.get("credentials"),
             sync_state=kwargs.get("sync_state"),
             version=kwargs.get("version") or 1,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         tenant_sources[tenant_id][source_id] = source
         return source_id
