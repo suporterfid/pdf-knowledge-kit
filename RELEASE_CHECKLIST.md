@@ -102,6 +102,14 @@ This checklist ensures that all necessary steps are completed before releasing a
 - [ ] Confirm any new alerts have run successfully in staging for at least 24 hours
 - [ ] Update runbook links or dashboards referenced by alerts as needed
 
+### 1.5 Backup Validation
+
+- [ ] Verify `pg_dump` automation follows the cadence defined in [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md#database-backup-runbook)
+  - [ ] Last successful logical backup timestamp recorded in operations tracker
+  - [ ] Encrypted storage location verified (S3 bucket, object storage, etc.)
+- [ ] Ensure volume snapshot schedules and retention policies meet production requirements in [DEPLOYMENT.md](DEPLOYMENT.md#46-backup-and-restore-readiness)
+- [ ] Document results of the most recent restore drill (logical + snapshot) and flag any follow-up tasks
+
 ---
 
 ## Phase 2: Testing
