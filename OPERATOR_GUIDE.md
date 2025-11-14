@@ -127,6 +127,31 @@ policies:
 - Maintain an inventory of stored backups, last restore validation date, and
   responsible owner in the operations tracker.
 
+## Disaster recovery ownership and escalation
+
+- **Primary owner:** Platform Ops on-call (rotation stored in PagerDuty schedule
+  `pdfkit-platform-ops`).
+- **Database specialist:** DBRE on-call (`pdfkit-dbre`).
+- **Quality verifier:** QA on-call (`pdfkit-qa`).
+- **Comms lead:** Product operations manager (currently Maria Teixeira).
+
+Follow the contact order below for Sev1 database or platform-wide outages:
+
+1. Engage the Platform Ops on-call through PagerDuty. They act as incident
+   commander (IC) unless they explicitly delegate.
+2. The IC immediately conference-calls DBRE and QA on-call resources. If DBRE
+   cannot be reached within 5 minutes, escalate to the Database Engineering
+   manager (João Barros, +55 11 5555-0101).
+3. IC notifies Maria Teixeira via Slack (`@maria.teixeira`) to coordinate
+   stakeholder communications. If unavailable, escalate to the Head of Product
+   (Renato Vieira, +55 11 5555-0202).
+4. Post status updates in `#pdfkit-incident` every 15 minutes until resolution.
+
+When a database restore is required, run the end-to-end procedure defined in the
+[Disaster Recovery Runbook](DISASTER_RECOVERY_RUNBOOK.md). The IC is responsible
+for tracking elapsed time against the RTO/RPO targets and ensuring hand-offs are
+documented in the incident ticket.
+
 ## Alert review checklists
 
 Operators must validate alert hygiene before every release cut and whenever monitoring rules change. These checklists tie back to the triage flow described in [DEPLOYMENT.md](DEPLOYMENT.md#45-incident-triage-response-sla-and-escalation).

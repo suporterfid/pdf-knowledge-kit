@@ -110,6 +110,17 @@ This checklist ensures that all necessary steps are completed before releasing a
 - [ ] Ensure volume snapshot schedules and retention policies meet production requirements in [DEPLOYMENT.md](DEPLOYMENT.md#46-backup-and-restore-readiness)
 - [ ] Document results of the most recent restore drill (logical + snapshot) and flag any follow-up tasks
 
+### 1.6 Disaster Recovery Exercise Readiness
+
+- [ ] Confirm the quarterly DR exercise calendar is up-to-date in `operations/dr-exercises/`
+- [ ] Ensure the upcoming exercise includes the full workflow in [DISASTER_RECOVERY_RUNBOOK.md](DISASTER_RECOVERY_RUNBOOK.md)
+- [ ] Review acceptance criteria with owners:
+  - [ ] RTO ≤ 60 minutes from incident declaration to cutover
+  - [ ] RPO ≤ 15 minutes of data loss
+  - [ ] Functional verification completed within 15 minutes and documented
+  - [ ] All variances and follow-up actions logged in the exercise record
+- [ ] Capture sign-off from Platform Ops on-call, DBRE on-call, and QA on-call in the release issue
+
 ---
 
 ## Phase 2: Testing
