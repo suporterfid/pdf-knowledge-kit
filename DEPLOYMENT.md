@@ -161,13 +161,17 @@ Use this flow whenever an alert or production incident is raised (for alert conf
    - Alerts from monitoring platforms and the release checklist should land in the `#pdfkit-ops` channel or the on-call paging system.
    - The on-call engineer acknowledges the alert within **5 minutes** and validates signal fidelity by checking the originating dashboard or log stream.
    - Classify severity using the matrix below and log the incident in the runbook tool with links to dashboards and recent deployments (see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md#phase-1-pre-release-preparation)).
+   - Assign the **incident commander (IC)** role to the Platform Ops on-call. If the alert is Sev1, page the DBRE on-call and QA on-call immediately to align with the [Disaster Recovery Runbook](DISASTER_RECOVERY_RUNBOOK.md).
 2. **Response SLAs**
    - **Sev1 (critical outage or data loss risk):** mitigation or workaround within **30 minutes**, customer comms every 15 minutes.
    - **Sev2 (degraded functionality or delayed ingestion):** mitigation within **2 hours**, updates hourly.
    - **Sev3 (non-blocking defect or alert noise):** response within **1 business day**, schedule fix in the next sprint.
-3. **Escalation path**
-   - If the on-call engineer cannot restore service inside the SLA, escalate to the **Platform Engineering lead** (Ana Souza) and **Incident Commander rotation** via the paging escalation policy.
-   - For infrastructure-level faults (e.g., managed Postgres outage), open a ticket with the cloud provider and notify the **SRE duty manager**.
+   - The IC tracks elapsed time against the documented RTO/RPO targets and keeps the incident channel updated with timestamps.
+3. **Escalation path and communications**
+   - If the on-call engineer cannot restore service inside the SLA, escalate to the **Platform Engineering lead** (Ana Souza) and the **Incident Commander rotation** via the paging escalation policy.
+   - For infrastructure-level faults (e.g., managed Postgres outage), open a ticket with the cloud provider and notify the **SRE duty manager**. Share ticket numbers in `#pdfkit-incident`.
+   - If DBRE on-call is unreachable for more than 5 minutes during a Sev1, escalate to the Database Engineering manager (João Barros, +55 11 5555-0101).
+   - Communications lead (Maria Teixeira) sends stakeholder updates to `#pdfkit-status` and customer channels every 15 minutes for Sev1/Sev2 incidents. Escalate to Head of Product (Renato Vieira, +55 11 5555-0202) if she is unavailable.
    - After restoration, record follow-up actions and link the incident postmortem to the deployment notes.
 
 Cross-reference the operational expectations in [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md) and make sure the release owner has validated observability coverage via [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) before rolling out changes.
