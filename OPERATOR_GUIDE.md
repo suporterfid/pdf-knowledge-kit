@@ -1,6 +1,6 @@
 # Operator Guide
 
-This guide documents day-2 operations for ingestion connectors and admin automation.
+This guide documents day-2 operations for ingestion connectors and admin automation. For deployment prerequisites and release coordination refer to [DEPLOYMENT.md](DEPLOYMENT.md) and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 ## Connector matrix
 
@@ -51,6 +51,25 @@ The script supports:
 4. Streaming incremental logs using the `--follow-logs` flag.
 
 Review `python tools/register_connector.py --help` for the full CLI reference.
+
+## Alert review checklists
+
+Operators must validate alert hygiene before every release cut and whenever monitoring rules change. These checklists tie back to the triage flow described in [DEPLOYMENT.md](DEPLOYMENT.md#45-incident-triage-response-sla-and-escalation).
+
+### Pre-release alert audit
+
+- [ ] Confirm primary uptime, latency, and ingestion lag alerts cover the new endpoints or connectors being deployed.
+- [ ] Review alert thresholds against the expected baseline gathered from staging load tests.
+- [ ] Verify alert routing sends Sev1/Sev2 signals to the on-call rotation and mirrors notifications to `#pdfkit-ops`.
+- [ ] Ensure dashboards or saved searches linked in alerts have up-to-date filters and time ranges.
+- [ ] Record the audit outcome in the release issue following [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md#phase-1-pre-release-preparation).
+
+### Post-incident follow-up
+
+- [ ] Capture timeline, remediation, and detection gaps in the incident ticket.
+- [ ] Adjust alert thresholds or suppression rules to avoid noise without masking real regressions.
+- [ ] Link resulting action items to backlog tickets and confirm owners with the Platform Engineering lead.
+- [ ] Share learnings in the next operations review and update this guide if new steps are standardized.
 
 ## Test data for new connectors
 
