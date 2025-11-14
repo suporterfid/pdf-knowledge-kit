@@ -6,11 +6,11 @@ This checklist ensures that all necessary steps are completed before releasing a
 
 ## Release Information
 
-- **Release Version:** `vX.Y.Z`
-- **Release Type:** [ ] MAJOR [ ] MINOR [ ] PATCH [ ] Pre-release
-- **Target Release Date:** YYYY-MM-DD
-- **Release Manager:** [Name]
-- **Release Branch:** `release/vX.Y.Z`
+- **Release Version:** `v1.0.1`
+- **Release Type:** [ ] MAJOR [ ] MINOR [x] PATCH [ ] Pre-release
+- **Target Release Date:** 2025-11-14
+- **Release Manager:** AI Assistant
+- **Release Branch:** `release/v1.0.1`
 
 ---
 
@@ -18,19 +18,19 @@ This checklist ensures that all necessary steps are completed before releasing a
 
 ### 1.1 Version Management
 
-- [ ] Determine new version number following [VERSION_STRATEGY.md](VERSION_STRATEGY.md)
+- [x] Determine new version number following [VERSION_STRATEGY.md](VERSION_STRATEGY.md) (`tools/bump_version.py patch` → 1.0.1)
 - [ ] Create release branch from `main` (for MAJOR/MINOR) or from last release tag (for PATCH)
   ```bash
   git checkout main
   git pull origin main
-  git checkout -b release/vX.Y.Z
+  git checkout -b release/v1.0.1
   ```
-- [ ] Update version in `app/__version__.py`
-- [ ] Update version in `frontend/package.json`
-- [ ] Update version in root `package.json` (if applicable)
-- [ ] Commit version updates
+- [x] Update version in `app/__version__.py`
+- [x] Update version in `frontend/package.json`
+- [x] Update version in root `package.json`
+- [x] Commit version updates
   ```bash
-  git commit -m "chore: bump version to X.Y.Z"
+  git commit -m "chore: bump version to 1.0.1"
   ```
 
 ### 1.2 Documentation Updates
@@ -55,7 +55,7 @@ This checklist ensures that all necessary steps are completed before releasing a
 
 ### 1.3 Code Quality Checks
 
-- [ ] Run linters and formatters
+- [x] Run linters and formatters
 
   ```bash
   # Python (when implemented)
@@ -64,11 +64,16 @@ This checklist ensures that all necessary steps are completed before releasing a
   mypy app/
 
   # Frontend (when implemented)
-  cd frontend && npm run lint
+  cd frontend && npm run lint  # ❌ script missing in package.json
   ```
 
-- [ ] Fix any linting issues
-- [ ] Run security scanners
+  - ✅ `ruff check .` (clean)
+  - ✅ `black --check .` (after formatting `tests/test_ask.py`)
+  - ✅ `mypy app/` (no issues in 55 files)
+  - ❌ `npm run lint` (fails: script not defined)
+
+- [x] Fix any linting issues (formatted `tests/test_ask.py` with Black)
+- [x] Run security scanners
 
   ```bash
   # Python security (when implemented)
@@ -76,10 +81,14 @@ This checklist ensures that all necessary steps are completed before releasing a
   pip-audit
 
   # Frontend security
-  cd frontend && npm audit
+  cd frontend && npm audit --audit-level=high
   ```
 
-- [ ] Address any security vulnerabilities
+  - ✅ `bandit -r app/` (no issues)
+  - ⚠️ `pip-audit` (1 vulnerability: pip 25.2 → fix 25.3)
+  - ⚠️ `npm audit --audit-level=high` (3 moderate vulnerabilities: dompurify <3.2.4, esbuild ≤0.24.2)
+
+- [ ] Address any security vulnerabilities (pending: pip GHSA-4xh5-x5gv-qwph; dompurify/esbuild updates required)
 - [ ] Commit fixes
   ```bash
   git commit -m "fix: address linting and security issues"
@@ -103,11 +112,13 @@ This checklist ensures that all necessary steps are completed before releasing a
   ```bash
   pytest -v --cov=app --cov-report=html
   ```
+  - ❌ Fails: missing dependency `email-validator` required by Pydantic (see pytest log)
 - [ ] Verify test coverage meets minimum threshold (80%+)
-- [ ] Run frontend tests
+- [x] Run frontend tests
   ```bash
-  cd frontend && npm test
+  cd frontend && npm test -- --run
   ```
+  - ✅ `vitest --run` (5 files, 16 tests passed)
 - [ ] Run integration tests with Docker Compose
   ```bash
   docker compose up -d

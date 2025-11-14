@@ -1,7 +1,7 @@
 {
   "name": "pdf-knowledge-kit",
-  "version": "1.0.0",
-  "description": "Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** e **Markdown** em uma pasta local e habilite **busca semântica** para um agente de IA.",
+  "version": "1.0.1",
+  "description": "Crie rapidamente uma base de conhecimento a partir de **arquivos PDF** e **Markdown** em uma pasta local e habilite **busca sem\u00e2ntica** para um agente de IA.",
   "main": "index.js",
   "directories": {
     "test": "tests"
