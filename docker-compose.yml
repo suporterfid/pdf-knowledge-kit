@@ -28,7 +28,7 @@ services:
           - postgres
           - pgvector
 
-  app:
+  api:
     build:
       context: .
       dockerfile: Dockerfile
@@ -44,6 +44,7 @@ services:
     environment:
       LOG_DIR: /var/log/app
     command: >
+      python seed.py &&
       python -Xfrozen_modules=off -m debugpy --listen 0.0.0.0:5678
       -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
     ports:
@@ -62,12 +63,13 @@ services:
         aliases:
           - backend
           - api
+          - app
 
   frontend:
     image: node:20
     working_dir: /workspace/frontend
     depends_on:
-      - app
+      - api
     environment:
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true

@@ -49,7 +49,7 @@ The repository ships with a three-service Compose configuration: Postgres + pgve
    docker compose up --build
    ```
    - `db` exposes Postgres on port 5432 with health checks to block the backend until ready.【F:docker-compose.yml†L2-L29】
-   - `app` rebuilds from the `Dockerfile` and mounts the repository for live reload with debugpy listening on port 5678.【F:docker-compose.yml†L31-L64】
+   - `api` rebuilds from the `Dockerfile` and mounts the repository for live reload with debugpy listening on port 5678.【F:docker-compose.yml†L31-L64】
    - `frontend` runs `npm run dev` with polling watchers and exposes Vite on port 5173.【F:docker-compose.yml†L66-L85】
 3. Access the services:
    - Backend API: http://localhost:8000
@@ -62,7 +62,7 @@ To rebuild after dependency changes, rerun `docker compose up --build` or rely o
 With the containers running, you can exec into the backend to run tests or linting:
 
 ```bash
-docker compose exec app pytest
+docker compose exec api pytest
 ```
 
 Alternatively, install dependencies on the host (`pip install -r requirements.txt`) and run `pytest`. This mirrors the CI setup described in [Section 5](#5-continuous-integration--delivery).
