@@ -68,7 +68,7 @@ Key environment variables (see `.env.example`):
 `docker-compose.yml` defines services:
 
 - **db:** pgvector/postgresql with health checks and persisted volume.
-- **app:** builds the backend image, mounts `docs/` and `logs/`, exposes port `8000`.
+- **api:** builds the backend image, mounts `docs/` and `logs/`, exposes port `8000`.
 
 ### Reverse Proxy
 

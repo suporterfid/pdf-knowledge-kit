@@ -141,7 +141,7 @@ This checklist ensures that all necessary steps are completed before releasing a
 - [ ] Run integration tests with Docker Compose
   ```bash
   docker compose up -d
-  docker compose exec app pytest
+  docker compose exec api pytest
   docker compose down
   ```
 
