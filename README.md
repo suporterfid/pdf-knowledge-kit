@@ -144,6 +144,15 @@ Use `ruff format` ou `black` sem a flag `--check` para aplicar correções autom
 
 > 💡 O workflow de lint do GitHub Actions agora é bloqueante: qualquer falha em Ruff, Black, MyPy ou Bandit interrompe o pipeline de CI.
 
+### Proteções da branch `main` e fluxo de PRs
+
+- A branch `main` está protegida e só aceita merges via Pull Requests aprovados.
+- Os jobs **lint**, **security** e **release smoke-test** do GitHub Actions são obrigatórios para liberar o merge; aguarde todos aparecerem como ✅.
+- Pelo menos uma revisão de um maintainer é exigida antes do merge, e _force push_ direto na `main` é bloqueado.
+- Sempre atualize sua branch com `git pull --rebase origin main` antes de abrir ou atualizar o PR para minimizar conflitos.
+
+> 📌 Resultado prático: abrir um PR sem as checagens verdes ou sem revisão impede o merge automático — planeje o ciclo de feedback considerando esse tempo adicional.
+
 
 ## Como Executar
 
