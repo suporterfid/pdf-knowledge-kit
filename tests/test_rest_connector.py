@@ -59,6 +59,7 @@ def fake_chunk(monkeypatch):
 def _make_source(**overrides: Any) -> Source:
     payload = {
         "id": uuid4(),
+        "tenant_id": uuid4(),
         "type": SourceType.API,
         "created_at": datetime.utcnow(),
         "params": {

@@ -200,4 +200,5 @@ def deploy_agent(
     role: str = Depends(require_role("operator")),
 ) -> schemas.AgentDeployResponse:
     with _service_context() as svc:
-        return svc.deploy_agent(agent_id, payload)
+        deployed = svc.deploy_agent(agent_id, payload)
+    return schemas.AgentDeployResponse.model_validate(deployed.model_dump())

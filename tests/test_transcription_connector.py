@@ -29,6 +29,7 @@ def audio_fixture(tmp_path: Path) -> Path:
 def _make_source(audio_path: Path, **overrides: Any) -> Source:
     payload = {
         "id": uuid4(),
+        "tenant_id": uuid4(),
         "type": SourceType.AUDIO_TRANSCRIPT,
         "created_at": datetime.utcnow(),
         "path": str(audio_path),

@@ -8,12 +8,14 @@ JWT bearer tokens emitidos pelo módulo de segurança (`app.security`).
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Annotated, Any
 from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from ..core.db import apply_tenant_settings
 from ..core.tenant_context import get_current_tenant_id
@@ -45,12 +47,12 @@ router = APIRouter(prefix="/api/admin/ingest", tags=["admin-ingest"])
 
 OperatorRole = Annotated[str, Depends(require_role("operator"))]
 ViewerRole = Annotated[str, Depends(require_role("viewer"))]
-OptionalSourceType = Annotated[SourceType | None, Query(default=None)]
-OptionalJobStatus = Annotated[JobStatus | None, Query(default=None)]
-OptionalLimit = Annotated[int | None, Query(default=None, ge=1)]
-OffsetParam = Annotated[int, Query(default=0, ge=0)]
-ActiveParam = Annotated[bool | None, Query(default=True)]
-LogLimit = Annotated[int, Query(default=16_384, ge=1)]
+OptionalSourceType = Annotated[SourceType | None, Query()]
+OptionalJobStatus = Annotated[JobStatus | None, Query()]
+OptionalLimit = Annotated[int | None, Query(ge=1)]
+OffsetParam = Annotated[int, Query(ge=0)]
+ActiveParam = Annotated[bool | None, Query()]
+LogLimit = Annotated[int, Query(ge=1)]
 
 _DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -142,20 +144,29 @@ def _resolve_credentials(
 
 
 def _ensure_params_for_type(
-    source_type: SourceType, params: dict[str, Any] | None
+    source_type: SourceType, params: Mapping[str, Any] | BaseModel | None
 ) -> dict[str, Any]:
-    if not params:
+    if params is None:
         raise HTTPException(
             status_code=400,
             detail=f"{source_type.value} connector requires configuration parameters",
         )
-    if source_type == SourceType.DATABASE and not params.get("queries"):
+    if isinstance(params, BaseModel):
+        payload = params.model_dump()
+    elif isinstance(params, Mapping):
+        payload = dict(params)
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Connector parameters must be a mapping or Pydantic model",
+        )
+    if source_type == SourceType.DATABASE and not payload.get("queries"):
         raise HTTPException(
             status_code=400,
             detail="Database connector requires at least one query",
         )
     if source_type == SourceType.API and not (
-        params.get("endpoint") or params.get("base_url")
+        payload.get("endpoint") or payload.get("base_url")
     ):
         raise HTTPException(
             status_code=400,
@@ -164,12 +175,25 @@ def _ensure_params_for_type(
     if source_type in {
         SourceType.AUDIO_TRANSCRIPT,
         SourceType.VIDEO_TRANSCRIPT,
-    } and not params.get("provider"):
+    } and not payload.get("provider"):
         raise HTTPException(
             status_code=400,
             detail="Transcription connector requires a provider",
         )
-    return dict(params)
+    return payload
+
+
+def _serialise_params(params: object | None) -> dict[str, Any] | None:
+    if params is None:
+        return None
+    if isinstance(params, BaseModel):
+        return params.model_dump()
+    if isinstance(params, Mapping):
+        return dict(params)
+    raise HTTPException(
+        status_code=400,
+        detail="Connector parameters must be a mapping or Pydantic model",
+    )
 
 
 def _upsert_source_for_connector(
@@ -423,10 +447,10 @@ def start_transcription_connector_job(
 
 @router.get("/connector_definitions", response_model=ListResponse[ConnectorDefinition])
 def list_connector_definitions(
-    type: OptionalSourceType,
-    limit: OptionalLimit,
-    offset: OffsetParam,
     role: ViewerRole,
+    type: OptionalSourceType = None,
+    limit: OptionalLimit = None,
+    offset: OffsetParam = 0,
 ) -> ListResponse[ConnectorDefinition]:
     tenant_id = _require_tenant_id()
     with _get_conn() as conn:
@@ -460,7 +484,7 @@ def create_connector_definition_endpoint(
             name=req.name,
             type=req.type,
             description=req.description,
-            params=req.params,
+            params=_serialise_params(req.params),
             credentials=req.credentials,
             metadata=req.metadata,
         )
@@ -528,7 +552,7 @@ def update_connector_definition_endpoint(
             tenant_id=tenant_id,
             name=req.name,
             description=req.description,
-            params=req.params,
+            params=_serialise_params(req.params),
             credentials=credentials_param,
             metadata=req.metadata,
         )
@@ -570,10 +594,10 @@ def delete_connector_definition_endpoint(
 
 @router.get("/jobs", response_model=ListResponse[Job])
 def list_jobs(
-    status: OptionalJobStatus,
-    limit: OptionalLimit,
-    offset: OffsetParam,
     role: ViewerRole,
+    status: OptionalJobStatus = None,
+    limit: OptionalLimit = None,
+    offset: OffsetParam = 0,
 ) -> ListResponse[Job]:
     tenant_id = _require_tenant_id()
     jobs = service.list_jobs(tenant_id=tenant_id)
@@ -618,9 +642,9 @@ def rerun_job_endpoint(job_id: UUID, role: OperatorRole) -> JobCreated:
 @router.get("/jobs/{job_id}/logs", response_model=JobLogSlice)
 def get_job_logs(
     job_id: UUID,
-    offset: OffsetParam,
-    limit: LogLimit,
     role: ViewerRole,
+    offset: OffsetParam = 0,
+    limit: LogLimit = 16_384,
 ) -> JobLogSlice:
     """Return a slice of the job log starting at ``offset``."""
     tenant_id = _require_tenant_id()
@@ -629,11 +653,11 @@ def get_job_logs(
 
 @router.get("/sources", response_model=ListResponse[Source])
 def list_sources(
-    active: ActiveParam,
-    type: OptionalSourceType,
-    limit: OptionalLimit,
-    offset: OffsetParam,
     role: ViewerRole,
+    active: ActiveParam = True,
+    type: OptionalSourceType = None,
+    limit: OptionalLimit = None,
+    offset: OffsetParam = 0,
 ) -> ListResponse[Source]:
     tenant_id = _require_tenant_id()
     with _get_conn() as conn:
@@ -662,7 +686,7 @@ def create_source(req: SourceCreate, role: OperatorRole) -> Source:
             label=req.label,
             location=req.location,
             active=req.active,
-            params=req.params,
+            params=_serialise_params(req.params),
             connector_type=req.connector_type,
             connector_definition_id=req.connector_definition_id,
             connector_metadata=req.connector_metadata,
@@ -692,7 +716,7 @@ def update_source(
             label=req.label,
             location=req.location,
             active=req.active,
-            params=req.params,
+            params=_serialise_params(req.params),
             connector_type=req.connector_type,
             connector_definition_id=req.connector_definition_id,
             connector_metadata=req.connector_metadata,

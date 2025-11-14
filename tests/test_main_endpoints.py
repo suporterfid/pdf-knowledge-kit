@@ -328,7 +328,9 @@ class TestAnswerWithContextFunction:
             def __init__(self):
                 self.choices = [
                     types.SimpleNamespace(
-                        message={"content": "AI is intelligence exhibited by machines."}
+                        message=types.SimpleNamespace(
+                            content="AI is intelligence exhibited by machines."
+                        )
                     )
                 ]
 
@@ -378,7 +380,11 @@ class TestAnswerWithContextFunction:
 
         class DummyCompletion:
             def __init__(self):
-                self.choices = [types.SimpleNamespace(message={"content": "Response"})]
+                self.choices = [
+                    types.SimpleNamespace(
+                        message=types.SimpleNamespace(content="Response")
+                    )
+                ]
 
         class DummyClient:
             def __init__(self):
@@ -403,7 +409,11 @@ class TestAnswerWithContextFunction:
 
         class DummyCompletion:
             def __init__(self):
-                self.choices = [types.SimpleNamespace(message={"content": "Response"})]
+                self.choices = [
+                    types.SimpleNamespace(
+                        message=types.SimpleNamespace(content="Response")
+                    )
+                ]
 
         class DummyClient:
             def __init__(self):

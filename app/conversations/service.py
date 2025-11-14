@@ -114,6 +114,10 @@ class ConversationService:
             metadata=metadata,
         )
         refreshed = self._repository.get_conversation(conversation.id)
+        if refreshed is None:
+            raise RuntimeError(
+                "Conversation disappeared after persisting inbound message"
+            )
         return schemas.MessageIngestResponse(
             conversation=refreshed, processed_messages=1
         )
@@ -235,7 +239,9 @@ class ConversationService:
                         parsed = datetime.fromisoformat(value)
                     except ValueError:
                         continue
-                else:
+                elif isinstance(value, datetime):
                     parsed = value
+                else:
+                    continue
                 return FollowUpDecision(parsed, note="Entity derived follow-up")
         return FollowUpDecision(None)

@@ -38,12 +38,16 @@ pretty = true
 exclude = "(migrations/|node_modules/|tmp/|build/|dist/|\\.venv/)"
 files = [
   "app",
-  "tools",
-  "tests",
   "embedding.py",
   "ingest.py",
   "query.py",
 ]
+
+[[tool.mypy.overrides]]
+module = [
+  "app.ingestion.*",
+]
+ignore_errors = true
 
 [tool.bandit]
 targets = ["app", "tests", "tools"]

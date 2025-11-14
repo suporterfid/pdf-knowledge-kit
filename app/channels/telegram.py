@@ -62,13 +62,18 @@ class TelegramAdapter(ChannelAdapter):
         chat = message.get("chat", {})
         user = message.get("from") or {}
         text = message.get("text") or message.get("caption") or ""
-        attachments = []
-        if message.get("photo"):
-            attachments.append({"type": "photo", "sizes": message.get("photo")})
-        if message.get("document"):
-            attachments.append({"type": "document", **message.get("document")})
-        if message.get("voice"):
-            attachments.append({"type": "voice", **message.get("voice")})
+        attachments: list[dict[str, Any]] = []
+        photo_sizes = message.get("photo")
+        if isinstance(photo_sizes, list):
+            attachments.append({"type": "photo", "sizes": photo_sizes})
+
+        document = message.get("document")
+        if isinstance(document, Mapping):
+            attachments.append({"type": "document", **dict(document)})
+
+        voice = message.get("voice")
+        if isinstance(voice, Mapping):
+            attachments.append({"type": "voice", **dict(voice)})
         timestamp = message.get("date")
         if timestamp:
             sent_at = datetime.fromtimestamp(timestamp, tz=timezone.utc)

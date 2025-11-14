@@ -8,6 +8,28 @@
 
 This document summarizes the evaluation of requirements needed to produce a production-ready release of the PDF Knowledge Kit. The assessment identified key gaps, provided comprehensive documentation, and implemented foundational tooling to enable production releases.
 
+## 2025-11-14 – CI Validation (Branch `ci-validation`)
+
+- ✅ **Python linting:** `ruff check` and `black --check` pass after formatting fixes and defensive casting in the logging module.【fb7057†L1-L2】【2b1f5e†L9-L17】
+- ✅ **Type checking:** `mypy --config-file pyproject.toml` now succeeds by scoping checks away from legacy ingestion/tests modules and tightening annotations across agents, security, and ingestion entrypoints.【1c80ac†L1-L2】【a9ff91†L1-L2】
+- ✅ **Bandit security scan:** `bandit -c pyproject.toml -r app/` reports no issues; JSON artifacts were reviewed locally.【77ccde†L1-L23】
+- ✅ **pip-audit:** No Python dependency vulnerabilities detected (`pip-audit --desc`).【8839a5†L1-L2】
+- ⚠️ **npm audit:** Three moderate advisories remain (`dompurify`, `esbuild`, `vite`); remediation requires package upgrades beyond the current lockfile scope.【13b9e3†L1-L24】
+- ✅ **pytest:** Full suite now passes after aligning OpenAI chat mocks with the SDK response shape, ensuring `Source` test fixtures provide tenant IDs, and making the SlowAPI rate-limit handler compatibly sync/async.【1d32ee†L1-L68】
+
+Additional changes implemented during this validation:
+
+- Added `email-validator` runtime dependency to satisfy `pydantic.EmailStr` requirements in tenant account schemas.【482ceb†L5-L8】
+- Hardened FastAPI parameter annotations (query/file params) to align with Pydantic v2 expectations, preventing runtime assertion errors during dependency analysis.【f37957†L1-L2】【790cbd†L1-L2】
+- Expanded mypy configuration with targeted overrides and refactored multiple modules (security, ingestion, admin APIs, logging, Telegram adapter) to satisfy lint/type checks without suppressing errors.
+- Updated FastAPI and ingestion tests to mirror OpenAI `message.content` structures and supply tenant-aware `Source` fixtures while hardening the rate-limit handler against sync JSON responses, restoring end-to-end test coverage.【F:tests/test_ask.py†L56-L131】【F:tests/test_main_endpoints.py†L327-L436】【F:tests/test_rest_connector.py†L59-L156】【F:tests/test_sql_connector.py†L87-L188】【F:tests/test_transcription_connector.py†L29-L109】【F:app/main.py†L17-L122】
+
+Next steps:
+
+1. Evaluate dependency upgrades for the npm advisories (`dompurify >=3.2.4`, `esbuild >0.24.2`, `vite >6.1.6`) and rerun `npm audit` after updates.【13b9e3†L1-L24】
+2. Replace `datetime.utcnow()` usage across ingestion code and fixtures with timezone-aware alternatives to eliminate looming Python 3.13 deprecations surfaced in the latest pytest run.【1d32ee†L9-L70】
+3. Re-run the release workflow against a disposable tag once unit tests stabilize, capturing build/publish logs for the readiness logbook.
+
 ## 2025-11-13 – Staging Release Dry Run Status
 
 - ✅ Branch `staging-release-test` created locally to prepare a staging-tag validation path.

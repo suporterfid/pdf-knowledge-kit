@@ -15,11 +15,13 @@ language handling, upload limits, SSE pipeline).
 """
 
 import asyncio
+import inspect
 import json
 import logging
 import os
+from collections.abc import Awaitable, Callable, Sequence
 from io import BytesIO
-from typing import Annotated
+from typing import Annotated, Any, cast
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -30,6 +32,7 @@ from fastapi import (
     Form,
     HTTPException,
     Request,
+    Response,
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
@@ -79,7 +82,7 @@ CHAT_MAX_MESSAGE_LENGTH = int(os.getenv("CHAT_MAX_MESSAGE_LENGTH", "5000"))
 SESSION_ID_MAX_LENGTH = int(os.getenv("SESSION_ID_MAX_LENGTH", "64"))
 
 SingleUpload = Annotated[UploadFile, File(...)]
-MultiUpload = Annotated[list[UploadFile], File([])]
+MultiUpload = Annotated[list[UploadFile] | None, File()]
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -93,7 +96,10 @@ def get_client_ip(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()
-    return request.client.host
+    client = request.client
+    if client and client.host:
+        return client.host
+    return "127.0.0.1"
 
 
 limiter = Limiter(key_func=get_client_ip)
@@ -101,7 +107,27 @@ limiter = Limiter(key_func=get_client_ip)
 app = FastAPI()
 init_logging(app)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+async def rate_limit_exceeded_handler(
+    request: Request, exc: RateLimitExceeded
+) -> Response:
+    handler = cast(
+        Callable[[Request, RateLimitExceeded], Awaitable[Response] | Response],
+        _rate_limit_exceeded_handler,
+    )
+    result = handler(request, exc)
+    if inspect.isawaitable(result):
+        return await cast(Awaitable[Response], result)
+    return cast(Response, result)
+
+
+app.add_exception_handler(
+    RateLimitExceeded,
+    cast(
+        Callable[[Request, Exception], Awaitable[Response]], rate_limit_exceeded_handler
+    ),
+)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(TenantContextMiddleware)
 # Optional CORS for admin UI
@@ -128,7 +154,11 @@ app.include_router(webhooks.router)
 Instrumentator().instrument(app).expose(
     app, include_in_schema=False, endpoint="/api/metrics"
 )
-client = OpenAI() if (OpenAI and os.getenv("OPENAI_API_KEY")) else None
+client: Any | None
+if OpenAI is not None and os.getenv("OPENAI_API_KEY"):
+    client = OpenAI()
+else:
+    client = None
 
 
 def _resolve_request_tenant(request: Request) -> str:
@@ -181,7 +211,7 @@ def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
     lang_instruction = (
         f"Reply in {lang}." if lang else "Reply in the same language as the question."
     )
-    if client:
+    if client is not None:
         try:  # pragma: no cover - openai optional
             base_prompt = "Answer the user's question using the supplied context."
             custom_prompt = os.getenv("SYSTEM_PROMPT")
@@ -202,7 +232,18 @@ def _answer_with_context(question: str, context: str) -> tuple[str, bool]:
                     },
                 ],
             )
-            answer = completion.choices[0].message["content"].strip()
+            message_content: Any = completion.choices[0].message.content
+            if isinstance(message_content, str):
+                answer = message_content.strip()
+            elif isinstance(message_content, Sequence):
+                combined = "".join(
+                    part.get("text", "")
+                    for part in message_content
+                    if isinstance(part, dict)
+                )
+                answer = combined.strip() if combined else context
+            else:
+                answer = context
             return answer, True
         except Exception as exc:  # pragma: no cover - openai optional
             logger.warning("OpenAI chat completion failed: %s", exc)
@@ -284,7 +325,7 @@ async def chat(
     attachments: str = Form("[]"),
     sessionId: str = Form(...),
     *,
-    files: MultiUpload,
+    files: MultiUpload = None,
 ):
     """Streaming chat endpoint (SSE) with optional file attachments.
 
@@ -295,10 +336,11 @@ async def chat(
         raise HTTPException(status_code=400, detail="Message too long")
     if len(sessionId) > SESSION_ID_MAX_LENGTH:
         raise HTTPException(status_code=400, detail="Invalid sessionId")
-    for f in files:
-        if f.content_type not in UPLOAD_ALLOWED_MIME_TYPES:
+    incoming_files = list(files or [])
+    for upload_file in incoming_files:
+        if upload_file.content_type not in UPLOAD_ALLOWED_MIME_TYPES:
             raise HTTPException(status_code=400, detail="Invalid file type")
-    return await chat_stream(request, q, k, files, json.loads(attachments))
+    return await chat_stream(request, q, k, incoming_files, json.loads(attachments))
 
 
 @app.get("/api/chat")
@@ -328,16 +370,16 @@ async def chat_stream(
     """
     attachment_texts: list[str] = []
     attachment_sources: list[dict] = []
-    for f in files:
-        if f.content_type not in UPLOAD_ALLOWED_MIME_TYPES:
+    for upload_file in files:
+        if upload_file.content_type not in UPLOAD_ALLOWED_MIME_TYPES:
             raise HTTPException(status_code=400, detail="Invalid file type")
-        data = await f.read()
+        data = await upload_file.read()
         reader = PdfReader(BytesIO(data))
         text = "".join(page.extract_text() or "" for page in reader.pages)
         attachment_texts.append(text)
         attachment_sources.append(
             {
-                "path": f.filename,
+                "path": upload_file.filename,
                 "chunk_index": None,
                 "content": text,
                 "distance": None,
@@ -351,8 +393,8 @@ async def chat_stream(
             continue
         file_path = os.path.join(UPLOAD_DIR, os.path.basename(url))
         try:
-            with open(file_path, "rb") as f:
-                reader = PdfReader(f)
+            with open(file_path, "rb") as file_handle:
+                reader = PdfReader(file_handle)
                 text = "".join(page.extract_text() or "" for page in reader.pages)
             attachment_texts.append(text)
             attachment_sources.append(
@@ -383,7 +425,7 @@ async def chat_stream(
         else:
             context = context_db
             sources = sources_db
-        if client:
+        if client is not None:
             try:
                 lang = os.getenv("OPENAI_LANG")
                 if not lang:

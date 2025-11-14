@@ -2,6 +2,8 @@ import argparse
 import logging
 import os
 import sys
+from collections.abc import Sequence
+from typing import Any
 
 import psycopg
 from dotenv import load_dotenv
@@ -25,7 +27,7 @@ except Exception:  # pragma: no cover - openai optional
 def _answer_with_context(question: str, context: str) -> str:
     """Generate an answer given a question and context using the LLM if available."""
     api_key = os.getenv("OPENAI_API_KEY")
-    if OpenAI and api_key:
+    if OpenAI is not None and api_key:
         try:  # pragma: no cover - openai optional
             client = OpenAI()
             lang = os.getenv("OPENAI_LANG")
@@ -58,7 +60,18 @@ def _answer_with_context(question: str, context: str) -> str:
                     },
                 ],
             )
-            return completion.choices[0].message["content"].strip()
+            message_content: Any = completion.choices[0].message.content
+            if isinstance(message_content, str):
+                return message_content.strip()
+            if isinstance(message_content, Sequence):
+                combined = "".join(
+                    part.get("text", "")
+                    for part in message_content
+                    if isinstance(part, dict)
+                )
+                if combined:
+                    return combined.strip()
+            return context or f"You asked: {question}"
         except Exception as exc:  # pragma: no cover - openai optional
             logger.warning("OpenAI chat completion failed: %s", exc)
     return context or f"You asked: {question}"

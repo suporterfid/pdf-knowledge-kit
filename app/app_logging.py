@@ -19,6 +19,7 @@ import logging
 import os
 import time
 from logging.handlers import TimedRotatingFileHandler
+from typing import Any, cast
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -109,7 +110,10 @@ def _install_access_logging(app: FastAPI) -> None:
         response = await call_next(request)
 
         process_time_ms = (time.time() - start) * 1000
-        client_ip = request.headers.get("X-Forwarded-For", request.client.host)
+        client = request.client
+        client_ip = request.headers.get("X-Forwarded-For")
+        if not client_ip and client is not None:
+            client_ip = client.host
 
         log_data = {
             "request_id": request_id,
@@ -169,5 +173,5 @@ def init_logging(app: FastAPI | None = None) -> None:
     access_logger.setLevel(log_level)
 
     if app is not None:
-        app.logger = app_logger
+        cast(Any, app).logger = app_logger
         _install_access_logging(app)
