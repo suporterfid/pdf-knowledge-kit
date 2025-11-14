@@ -57,9 +57,7 @@ def test_ask_with_llm(client):
     class DummyCompletion:
         def __init__(self):
             self.choices = [
-                types.SimpleNamespace(
-                    message=types.SimpleNamespace(content="llm")
-                )
+                types.SimpleNamespace(message=types.SimpleNamespace(content="llm"))
             ]
 
     class DummyClient:
@@ -96,9 +94,7 @@ def test_ask_with_custom_system_prompt(client, monkeypatch):
     class DummyCompletion:
         def __init__(self):
             self.choices = [
-                types.SimpleNamespace(
-                    message=types.SimpleNamespace(content="llm")
-                )
+                types.SimpleNamespace(message=types.SimpleNamespace(content="llm"))
             ]
 
     class DummyClient:
