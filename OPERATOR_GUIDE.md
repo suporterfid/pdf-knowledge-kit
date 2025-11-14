@@ -54,6 +54,79 @@ The script supports:
 
 Review `python tools/register_connector.py --help` for the full CLI reference.
 
+## Database backup runbook
+
+Operators are responsible for safeguarding the Postgres cluster that stores
+connector definitions, ingestion state, and chat transcripts. Use a layered
+strategy that combines logical dumps, storage snapshots, and retention
+policies:
+
+### Logical exports (`pg_dump`)
+
+- Run nightly logical backups using `pg_dump` with custom-format archives so
+  restores can target individual schemas or tables when necessary.
+- Recommended command (update host/credentials as needed):
+
+  ```bash
+  pg_dump \
+    --format=custom \
+    --file="/backups/pdfkit_$(date +%Y%m%d%H%M).dump" \
+    --dbname="$DATABASE_URL" \
+    --no-owner --no-privileges
+  ```
+- Execute the command from a hardened runner (e.g., GitHub Actions, cron job on
+  a bastion host, or managed backup service) that has network access to the
+  primary database and stores credentials in a secrets manager.
+- Compress and encrypt the resulting dump before transferring it to long-term
+  storage. Preferred locations are S3-compatible buckets with bucket-level
+  encryption (SSE-KMS) and lifecycle policies, or object storage managed by the
+  chosen cloud provider.
+
+### Volume or snapshot backups
+
+- Provision infrastructure-level snapshots for the Postgres volume (e.g., AWS
+  EBS snapshots, GCP persistent disk snapshots, Azure managed disk snapshots).
+- Schedule snapshots at least every four hours for production. Retain a minimum
+  of the last 24 hours of hourly snapshots plus 7 daily snapshots to cover
+  point-in-time recovery scenarios.
+- Ensure snapshots replicate across availability zones or regions where
+  supported, and regularly test cross-region restore procedures.
+
+### Retention and rotation policies
+
+- Retain logical dumps for 30 days in cold storage, then transition them to an
+  archive tier (or delete) per compliance requirements.
+- Enforce bucket/object immutability for at least 7 days to prevent accidental
+  or malicious deletion.
+- Document restore tests quarterly, including both `pg_restore` and volume
+  snapshot recovery drills.
+
+### Scheduling and automation
+
+- For self-managed cron jobs, add entries similar to the following on the
+  backup runner:
+
+  ```cron
+  # Logical dumps every day at 02:30 UTC
+  30 2 * * * /usr/local/bin/run_pg_dump.sh
+
+  # Snapshot via cloud CLI every 4 hours
+  0 */4 * * * /usr/local/bin/trigger_volume_snapshot.sh
+  ```
+- When relying on managed services (e.g., AWS Backup, Cloud SQL automated
+  backups), configure schedules that match or exceed the cadence above and
+  verify retention/immutability rules in the provider console.
+- Send backup job metrics and alerts to the existing monitoring stack so failed
+  runs page the on-call rotation.
+
+### Secure storage and access control
+
+- Store all backups in encrypted locations (KMS-managed keys or customer
+  managed keys) and restrict access to the `platform-ops` group.
+- Use short-lived credentials or IAM roles when automating uploads/downloads.
+- Maintain an inventory of stored backups, last restore validation date, and
+  responsible owner in the operations tracker.
+
 ## Alert review checklists
 
 Operators must validate alert hygiene before every release cut and whenever monitoring rules change. These checklists tie back to the triage flow described in [DEPLOYMENT.md](DEPLOYMENT.md#45-incident-triage-response-sla-and-escalation).

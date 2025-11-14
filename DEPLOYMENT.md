@@ -172,6 +172,17 @@ Use this flow whenever an alert or production incident is raised (for alert conf
 
 Cross-reference the operational expectations in [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md) and make sure the release owner has validated observability coverage via [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) before rolling out changes.
 
+### 4.6 Backup and restore readiness
+
+- Implement the layered backup approach documented in the
+  [Operator Guide](OPERATOR_GUIDE.md#database-backup-runbook) before promoting a
+  new environment to production.
+- Confirm that automated `pg_dump` jobs and volume snapshots are scheduled,
+  monitored, and writing to encrypted storage locations.
+- Validate restore paths quarterly by performing both a logical restore and a
+  volume snapshot recovery in a staging environment. Document outcomes in the
+  operations tracker referenced by the release checklist.
+
 ## 5. Continuous integration & delivery
 
 GitHub Actions provides multiple workflows for CI/CD:
