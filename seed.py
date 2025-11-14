@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.db import apply_tenant_settings
 from app.ingestion import service as ingestion_service
 from app.ingestion.service import ensure_schema
 from app.models import Organization, User
@@ -272,6 +273,45 @@ def _ingest_content(config: SeedConfig, tenant_id: uuid.UUID) -> None:
         logger.info("No URLs configured for ingestion.")
 
 
+def _resolve_repo_path(*parts: str) -> Path:
+    """Return an absolute path under the repository root for ``parts``."""
+
+    return Path(__file__).resolve().parent.joinpath(*parts)
+
+
+def _ensure_sample_document(config: SeedConfig, tenant_id: uuid.UUID) -> None:
+    """Ensure the bundled sample document exists for the tenant."""
+
+    sample_path = _resolve_repo_path("sample_data", "example_document.pdf").resolve()
+    if not sample_path.exists():
+        logger.warning("Sample document %s not found; skipping ingestion.", sample_path)
+        return
+
+    with psycopg.connect(config.db_url) as conn:
+        apply_tenant_settings(conn, tenant_id)
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM documents WHERE tenant_id = %s AND path = %s LIMIT 1",
+                (tenant_id, str(sample_path)),
+            )
+            exists = cur.fetchone() is not None
+
+    if exists:
+        logger.info(
+            "Sample document already present for tenant %s: %s", tenant_id, sample_path
+        )
+        return
+
+    job_id = ingestion_service.ingest_local(
+        sample_path,
+        tenant_id=tenant_id,
+        use_ocr=config.use_ocr,
+        ocr_lang=config.ocr_lang,
+    )
+    ingestion_service.wait_for_job(job_id)
+    logger.info("Sample document ingested for tenant %s: %s", tenant_id, sample_path)
+
+
 async def main() -> None:
     """Entrypoint for the seeding workflow."""
 
@@ -292,6 +332,7 @@ async def main() -> None:
 
     logger.info("Tenant ready: %s", tenant_id)
     await asyncio.to_thread(_ingest_content, config, tenant_id)
+    await asyncio.to_thread(_ensure_sample_document, config, tenant_id)
 
     logger.info("Seed process completed. Tenant ID: %s", tenant_id)
 
