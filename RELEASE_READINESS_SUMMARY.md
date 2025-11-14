@@ -8,6 +8,8 @@
 
 This document summarizes the evaluation of requirements needed to produce a production-ready release of the PDF Knowledge Kit. The assessment identified key gaps, provided comprehensive documentation, and implemented foundational tooling to enable production releases.
 
+**Release planejado:** [v1.0.0](https://github.com/chatvolt/pdf-knowledge-kit/releases/tag/v1.0.0)
+
 ## 2025-11-14 – CI Validation (Branch `ci-validation`)
 
 - ✅ **Python linting:** `ruff check` and `black --check` pass after formatting fixes and defensive casting in the logging module.【fb7057†L1-L2】【2b1f5e†L9-L17】

@@ -2,6 +2,8 @@
 
 This guide provides instructions for upgrading between versions of the PDF Knowledge Kit, including breaking changes, migration steps, and compatibility notes.
 
+> ⬆️ **Ponto de partida:** orientações atualizadas para o release estável [v1.0.0](https://github.com/chatvolt/pdf-knowledge-kit/releases/tag/v1.0.0).
+
 ## General Upgrade Process
 
 For most upgrades, follow these steps:

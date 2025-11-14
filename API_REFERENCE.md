@@ -2,6 +2,8 @@
 
 This document describes all FastAPI endpoints exposed by the PDF Knowledge Kit backend along with their authentication requirements and the Pydantic models that shape request and response payloads.
 
+> **Release scope:** Documenta a API publicada no release [v1.0.0](https://github.com/chatvolt/pdf-knowledge-kit/releases/tag/v1.0.0), cortado em 2025-11-15.
+
 ## Authentication and Roles
 
 Most administrative routers protect endpoints with the `require_role` dependency, which validates an `X-API-Key` header against role-specific keys defined in the environment. Roles are hierarchical (`viewer` < `operator` < `admin`); requests missing a key, supplying an unknown key, or authenticating with insufficient privileges receive `401` or `403` responses.【F:app/security/auth.py†L1-L90】

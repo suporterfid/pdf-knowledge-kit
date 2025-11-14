@@ -1,6 +1,8 @@
 # Multiagent/AI Knowledge Base → Vector DB (pgvector) Starter Kit
 
-Crie rapidamente uma base de conhecimento a partir de **arquivos PDF**, **documentos do office**, **links** e **Markdown** em uma pasta local e habilite **busca semântica** para um agente de IA.
+Crie rapidamente uma base de conhecimento a partir de **arquivos PDF**, **documentos do office**, **links** e **Markdown** nas suas pastas locais e habilite **busca semântica** para um agente de IA.
+
+> 📦 **Release atual:** [v1.0.0](https://github.com/chatvolt/pdf-knowledge-kit/releases/tag/v1.0.0) (2025-11-15) — primeira versão estável com backend FastAPI, frontend React e trilha operacional completas.
 
 Inclui uma interface web inspirada no ChatGPT com histórico de conversas, anexos, destaque de código e alternância de tema claro/escuro.
 

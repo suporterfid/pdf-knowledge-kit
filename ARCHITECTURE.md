@@ -2,6 +2,8 @@
 
 This document captures the relationships between the agent-oriented Python services and the React context providers that coordinate frontend state.
 
+> 🧭 **Versão mapeada:** release [v1.0.0](https://github.com/chatvolt/pdf-knowledge-kit/releases/tag/v1.0.0) publicado em 2025-11-15.
+
 ## Backend – Agent Orchestration (`app/agents`)
 
 ```
