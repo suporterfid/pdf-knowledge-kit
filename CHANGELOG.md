@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Summary
 
 - Primeira versão estável reunindo backend FastAPI, frontend React e trilha operacional completas com multi-inquilinos protegidos por RLS.
+- Branch `release/v1.0.0` aprovada pelo comitê de plataforma e fechada após execução bem-sucedida do workflow [Release](.github/workflows/release.yml) para o tag anotado `v1.0.0`.
+- Artefatos publicados: [GitHub Release v1.0.0][1.0.0] e imagem [`ghcr.io/chatvolt/pdf-knowledge-kit:v1.0.0`][1.0.0-ghcr] disponível no registry corporativo.
 
 ### Added
 
@@ -158,5 +160,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-**Maintained by:** PDF Knowledge Kit Development Team  
+**Maintained by:** PDF Knowledge Kit Development Team
 **First version:** 2025-11-08
+
+[Unreleased]: https://github.com/chatvolt/pdf-knowledge-kit/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/chatvolt/pdf-knowledge-kit/releases/tag/v1.0.0
+[1.0.0-ghcr]: https://github.com/orgs/chatvolt/packages/container/package/pdf-knowledge-kit/versions?filters%5Bversion_name%5D=v1.0.0
