@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -61,7 +61,7 @@ def _make_source(**overrides: Any) -> Source:
         "id": uuid4(),
         "tenant_id": uuid4(),
         "type": SourceType.API,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "params": {
             "base_url": "https://api.example.com",
             "endpoint": "/messages",

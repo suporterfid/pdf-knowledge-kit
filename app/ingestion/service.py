@@ -17,7 +17,7 @@ import os
 import uuid
 from collections.abc import Callable, Sequence
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -613,7 +613,7 @@ def ingest_source(
                     job_id,
                     tenant_id=tenant_uuid,
                     status=JobStatus.RUNNING,
-                    started_at=datetime.utcnow(),
+                    started_at=datetime.now(timezone.utc),
                     log_path=str(log_path),
                 )
 
@@ -683,7 +683,7 @@ def ingest_source(
                         job_id,
                         tenant_id=tenant_uuid,
                         status=JobStatus.CANCELED,
-                        finished_at=datetime.utcnow(),
+                        finished_at=datetime.now(timezone.utc),
                     )
                     return
 
@@ -695,7 +695,7 @@ def ingest_source(
                     job_id,
                     tenant_id=tenant_uuid,
                     status=JobStatus.SUCCEEDED,
-                    finished_at=datetime.utcnow(),
+                    finished_at=datetime.now(timezone.utc),
                 )
         except Exception as e:  # pragma: no cover - defensive
             logger.exception("ingestion failed: %s", e)
@@ -708,7 +708,7 @@ def ingest_source(
                         tenant_id=tenant_uuid,
                         status=JobStatus.FAILED,
                         error=str(e),
-                        finished_at=datetime.utcnow(),
+                        finished_at=datetime.now(timezone.utc),
                     )
             finally:
                 pass
@@ -754,7 +754,7 @@ def ingest_local(
                     job_id,
                     tenant_id=tenant_uuid,
                     status=JobStatus.RUNNING,
-                    started_at=datetime.utcnow(),
+                    started_at=datetime.now(timezone.utc),
                     log_path=str(log_path),
                 )
 
@@ -806,7 +806,7 @@ def ingest_local(
                         job_id,
                         tenant_id=tenant_uuid,
                         status=JobStatus.CANCELED,
-                        finished_at=datetime.utcnow(),
+                        finished_at=datetime.now(timezone.utc),
                     )
                     return
 
@@ -840,7 +840,7 @@ def ingest_local(
                         job_id,
                         tenant_id=tenant_uuid,
                         status=JobStatus.CANCELED,
-                        finished_at=datetime.utcnow(),
+                        finished_at=datetime.now(timezone.utc),
                     )
                     return
 
@@ -860,7 +860,7 @@ def ingest_local(
                                 job_id,
                                 tenant_id=tenant_uuid,
                                 status=JobStatus.CANCELED,
-                                finished_at=datetime.utcnow(),
+                                finished_at=datetime.now(timezone.utc),
                             )
                             return
                         embeddings.append(emb)
@@ -881,7 +881,7 @@ def ingest_local(
                     job_id,
                     tenant_id=tenant_uuid,
                     status=JobStatus.SUCCEEDED,
-                    finished_at=datetime.utcnow(),
+                    finished_at=datetime.now(timezone.utc),
                 )
         except Exception as e:  # pragma: no cover - defensive
             logger.exception("ingestion failed: %s", e)
@@ -894,7 +894,7 @@ def ingest_local(
                         tenant_id=tenant_uuid,
                         status=JobStatus.FAILED,
                         error=str(e),
-                        finished_at=datetime.utcnow(),
+                        finished_at=datetime.now(timezone.utc),
                     )
             finally:
                 pass
@@ -941,7 +941,7 @@ def ingest_urls(urls: list[str], *, tenant_id: UUID | str | None = None) -> uuid
                     job_id,
                     tenant_id=tenant_uuid,
                     status=JobStatus.RUNNING,
-                    started_at=datetime.utcnow(),
+                    started_at=datetime.now(timezone.utc),
                     log_path=str(log_path),
                 )
 
@@ -959,7 +959,7 @@ def ingest_urls(urls: list[str], *, tenant_id: UUID | str | None = None) -> uuid
                             job_id,
                             tenant_id=tenant_uuid,
                             status=JobStatus.CANCELED,
-                            finished_at=datetime.utcnow(),
+                            finished_at=datetime.now(timezone.utc),
                         )
                         return
 
@@ -976,7 +976,7 @@ def ingest_urls(urls: list[str], *, tenant_id: UUID | str | None = None) -> uuid
                             job_id,
                             tenant_id=tenant_uuid,
                             status=JobStatus.CANCELED,
-                            finished_at=datetime.utcnow(),
+                            finished_at=datetime.now(timezone.utc),
                         )
                         return
 
@@ -993,7 +993,7 @@ def ingest_urls(urls: list[str], *, tenant_id: UUID | str | None = None) -> uuid
                             job_id,
                             tenant_id=tenant_uuid,
                             status=JobStatus.CANCELED,
-                            finished_at=datetime.utcnow(),
+                            finished_at=datetime.now(timezone.utc),
                         )
                         return
 
@@ -1007,7 +1007,7 @@ def ingest_urls(urls: list[str], *, tenant_id: UUID | str | None = None) -> uuid
                                     job_id,
                                     tenant_id=tenant_uuid,
                                     status=JobStatus.CANCELED,
-                                    finished_at=datetime.utcnow(),
+                                    finished_at=datetime.now(timezone.utc),
                                 )
                                 return
                             embeddings.append(emb)
@@ -1028,7 +1028,7 @@ def ingest_urls(urls: list[str], *, tenant_id: UUID | str | None = None) -> uuid
                     job_id,
                     tenant_id=tenant_uuid,
                     status=JobStatus.SUCCEEDED,
-                    finished_at=datetime.utcnow(),
+                    finished_at=datetime.now(timezone.utc),
                 )
         except Exception as e:  # pragma: no cover - defensive
             logger.exception("ingestion failed: %s", e)
@@ -1041,7 +1041,7 @@ def ingest_urls(urls: list[str], *, tenant_id: UUID | str | None = None) -> uuid
                         tenant_id=tenant_uuid,
                         status=JobStatus.FAILED,
                         error=str(e),
-                        finished_at=datetime.utcnow(),
+                        finished_at=datetime.now(timezone.utc),
                     )
             finally:
                 pass
@@ -1152,7 +1152,7 @@ def cancel_job(job_id: uuid.UUID, *, tenant_id: UUID | str | None = None) -> Non
                 job_id,
                 tenant_id=tenant_uuid,
                 status=JobStatus.CANCELED,
-                finished_at=datetime.utcnow(),
+                finished_at=datetime.now(timezone.utc),
             )
 
 

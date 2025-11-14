@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import wave
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -31,7 +31,7 @@ def _make_source(audio_path: Path, **overrides: Any) -> Source:
         "id": uuid4(),
         "tenant_id": uuid4(),
         "type": SourceType.AUDIO_TRANSCRIPT,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "path": str(audio_path),
         "params": {
             "provider": "mock",

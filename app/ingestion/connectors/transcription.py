@@ -11,7 +11,7 @@ import tempfile
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Event
 from typing import Any, Protocol
@@ -142,7 +142,7 @@ class MockTranscriptionProvider:
         metadata.update(config.get("extra_metadata") or {})
         metadata.update(self._config.get("extra_metadata") or {})
         metadata.setdefault("media_uri", media_uri)
-        metadata.setdefault("generated_at", datetime.utcnow().isoformat())
+        metadata.setdefault("generated_at", datetime.now(timezone.utc).isoformat())
         return TranscriptionResult(segments=segments, metadata=metadata)
 
 
@@ -567,8 +567,10 @@ class TranscriptionConnector:
             result: TranscriptionResult | None = None
             use_cache = False
             if self.cache_path.exists() and cache_ttl is not None:
-                mtime = datetime.fromtimestamp(self.cache_path.stat().st_mtime)
-                if datetime.utcnow() - mtime <= timedelta(seconds=int(cache_ttl)):
+                mtime = datetime.fromtimestamp(
+                    self.cache_path.stat().st_mtime, tz=timezone.utc
+                )
+                if datetime.now(timezone.utc) - mtime <= timedelta(seconds=int(cache_ttl)):
                     use_cache = True
 
             if not use_cache and self.source.sync_state:
@@ -650,7 +652,7 @@ class TranscriptionConnector:
                 "cache_path": str(self.cache_path),
                 "segments": len(chunks),
                 "generated_at": result.metadata.get("generated_at")
-                or datetime.utcnow().isoformat(),
+                or datetime.now(timezone.utc).isoformat(),
             }
             document_state.update(result.metadata)
 

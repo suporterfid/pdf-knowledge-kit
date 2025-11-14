@@ -1,6 +1,6 @@
 import pathlib
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from threading import Event
 from uuid import uuid4
 
@@ -102,7 +102,7 @@ def test_ingest_local_and_url(tmp_path, monkeypatch):
             tenant_id=tenant_id,
             source_id=source_id,
             status=status,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         return jid
 
@@ -136,7 +136,7 @@ def test_ingest_local_and_url(tmp_path, monkeypatch):
         tenant_id=TEST_TENANT_ID,
         source_id=uuid4(),
         status=JobStatus.SUCCEEDED,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     monkeypatch.setattr(service, "ingest_url", lambda url, **kwargs: dummy_job)
     job2 = service.get_job(
@@ -172,7 +172,7 @@ def test_ingest_local_error(tmp_path, monkeypatch):
             tenant_id=tenant_id,
             source_id=source_id,
             status=status,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         return jid
 
@@ -227,7 +227,7 @@ def test_ingest_local_ocr_failure(tmp_path, monkeypatch):
             tenant_id=tenant_id,
             source_id=source_id,
             status=status,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         return jid
 
@@ -348,7 +348,7 @@ def test_rerun_job_calls_reindex(monkeypatch):
             tenant_id=tenant_id,
             source_id=source_id,
             status=JobStatus.SUCCEEDED,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
 
     monkeypatch.setattr(service.storage, "get_job", fake_get_job)
@@ -443,7 +443,7 @@ def test_read_job_log_slicing(tmp_path, monkeypatch):
             tenant_id=TEST_TENANT_ID,
             source_id=uuid4(),
             status=JobStatus.RUNNING,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             log_path=str(log_path),
         )
     }
