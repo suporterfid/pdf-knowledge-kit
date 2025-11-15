@@ -23,7 +23,7 @@ RUN mkdir -p /var/log/app && \
     chmod 755 /var/log/app
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --default-timeout=120 -r requirements.txt
 COPY . .
 COPY --from=frontend-build /workspace/app/static ./app/static
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
