@@ -45,6 +45,7 @@ A versão atual do pacote é **1.0.1** (veja `app/__version__.py`). Releases ofi
    cp .env.example .env
    ```
 2. Ajuste credenciais do banco, chaves JWT (`TENANT_TOKEN_*`) e chaves de API (OpenAI ou admin) conforme necessário.
+   O arquivo de exemplo já inclui as credenciais padrão `pdfkb`/`pdfkb` para o Postgres local.
 3. Suba a stack completa (db, backend, frontend):
    ```bash
    docker compose up --build
