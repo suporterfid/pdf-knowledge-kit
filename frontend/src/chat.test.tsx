@@ -305,7 +305,13 @@ test('Novo Chat button creates a new conversation ID', async () => {
     >
       <ConfigProvider>
         <ThemeProvider>
-          <MemoryRouter initialEntries={['/chat/first']}>
+          <MemoryRouter
+            initialEntries={['/chat/first']}
+            future={{
+              v7_startTransition: true,
+              v7_relativeSplatPath: true,
+            }}
+          >
             <LocationDisplay />
             <Routes>
               <Route path="/chat/:id" element={<ChatPage />} />
@@ -341,7 +347,13 @@ test('Novo Chat button creates a new conversation ID', async () => {
 test('RequireAuth redirects to login when no session is present', async () => {
   render(
     <AuthProvider>
-      <MemoryRouter initialEntries={['/protected']}>
+      <MemoryRouter
+        initialEntries={['/protected']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <Routes>
           <Route
             path="/protected"
@@ -383,7 +395,13 @@ test('LoginPage autentica e redireciona para o chat', async () => {
 
   render(
     <AuthProvider>
-      <MemoryRouter initialEntries={['/auth/login']}>
+      <MemoryRouter
+        initialEntries={['/auth/login']}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <Routes>
           <Route path="/auth/login" element={<LoginPage />} />
           <Route path="/chat/new" element={<div>Chat carregado</div>} />
