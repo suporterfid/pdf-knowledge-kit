@@ -108,7 +108,7 @@ def main():
     FROM chunks c
     JOIN documents d ON d.id = c.doc_id
     WHERE c.embedding IS NOT NULL
-      AND d.tenant_id = current_setting('app.tenant_id')
+      AND d.tenant_id = app.current_tenant_id()
     ORDER BY c.embedding <-> %s
     LIMIT %s;
     """

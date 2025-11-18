@@ -995,7 +995,7 @@ def upsert_document(
                         version,
                         created_at
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                     """,
                     (
                         doc_id,
