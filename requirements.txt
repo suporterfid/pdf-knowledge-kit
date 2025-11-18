@@ -1,3 +1,7 @@
+# Core runtime dependencies for PDF Knowledge Kit
+# Optional / heavy dependencies (transcription, GPU) have been moved out to a separate file
+# (e.g. requirements-transcribe.txt). Install those only when needed.
+
 psycopg[binary]>=3.1
 SQLAlchemy>=2.0
 alembic>=1.12
@@ -26,11 +30,14 @@ beautifulsoup4>=4.12.0
 prometheus-fastapi-instrumentator>=6.0.0
 testing.postgresql
 rank-bm25>=0.2.2
+
 # Document conversion connectors
 python-docx>=1.1.0
 openpyxl>=3.1.0
 
-# Optional transcription providers (install selectively)
-boto3>=1.34.0
-faster-whisper>=1.0.0
-openai-whisper>=20231117
+# Notes:
+# - Optional transcription providers and heavy GPU-enabled packages were removed from this file
+#   to keep Docker builds fast and deterministic. If you need local transcription or GPU support,
+#   create and install from requirements-transcribe.txt (or install CPU-only variants explicitly).
+# - Recommended: enable BuildKit and add a pip cache mount in the Dockerfile to speed rebuilds:
+#   DOCKER_BUILDKIT=1 docker compose build --progress=plain
