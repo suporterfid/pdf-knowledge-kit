@@ -30,6 +30,10 @@ def get_engine(database_url: str | None = None, **kwargs: object) -> Engine:
     if not url:
         raise RuntimeError("DATABASE_URL is not configured.")
 
+    # Convert postgresql:// to postgresql+psycopg:// to use psycopg3 driver
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+
     engine = create_engine(url, **kwargs)
 
     if engine.dialect.name == "sqlite":
