@@ -42,10 +42,7 @@ services:
       - .env
     environment:
       LOG_DIR: /var/log/app
-    command: >
-      python seed.py &&
-      python -Xfrozen_modules=off -m debugpy --listen 0.0.0.0:5678
-      -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    command: /bin/sh -c "python seed.py && python -Xfrozen_modules=off -m debugpy --listen 0.0.0.0:5678 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
       - "5678:5678"

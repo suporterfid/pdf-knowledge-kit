@@ -16,42 +16,33 @@ _UUID = postgresql.UUID(as_uuid=True)
 
 
 def upgrade() -> None:
-    op.add_column(
-        "users",
-        sa.Column(
-            "role",
-            sa.String(length=32),
-            nullable=False,
-            server_default=sa.text("'viewer'"),
-        ),
-    )
-    op.add_column(
-        "users",
-        sa.Column(
-            "is_active",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.text("true"),
-        ),
-    )
-    op.add_column(
-        "users",
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("timezone('utc', now())"),
-        ),
-    )
-    op.add_column(
-        "users",
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("timezone('utc', now())"),
-        ),
-    )
+    # Check if tables/columns already exist (schema.sql creates them)
+    with op._conn.cursor() as cur:
+        # Check if user_invites table exists
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'user_invites'
+            );
+        """)
+        tables_exist = cur.fetchone()[0]
+
+        if tables_exist:
+            # Tables and columns already created by schema.sql, skip
+            return
+
+    # Legacy migration code for older databases
+    # This won't run on fresh installs as schema.sql creates everything
+    # Adding columns to users table (note: _PsycopgOperations doesn't have add_column)
+    # So we'll use raw SQL
+    with op._conn.cursor() as cur:
+        cur.execute("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS role VARCHAR(32) NOT NULL DEFAULT 'viewer',
+            ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true,
+            ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now()),
+            ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now());
+        """)
 
     op.create_table(
         "user_invites",

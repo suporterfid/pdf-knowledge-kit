@@ -18,6 +18,7 @@ import psycopg
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
+from ..core.db import apply_tenant_settings
 from .models import (
     ChunkMetadata,
     ConnectorDefinition,
@@ -140,6 +141,9 @@ def get_or_create_source(
     Soft deleted sources are ignored when checking for existing records.
     """
 
+    # Ensure tenant context is set before transaction (defensive programming)
+    apply_tenant_settings(conn, tenant_id)
+
     with conn.transaction():
         with conn.cursor() as cur:
             update_kwargs: dict[str, Any] = {}
@@ -214,7 +218,7 @@ def get_or_create_source(
                     version,
                     created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                 """,
                 (
                     source_id,
@@ -859,6 +863,9 @@ def upsert_document(
     decrypt_credentials: Callable[[bytes], bytes] | None = None,
 ) -> DocumentVersion:
     """Insert or update a tenant-scoped document and persist a version snapshot."""
+
+    # Ensure tenant context is set before transaction (defensive programming)
+    apply_tenant_settings(conn, tenant_id)
 
     encoded_credentials = _encode_credentials(credentials, encrypt=encrypt_credentials)
     with conn.transaction():

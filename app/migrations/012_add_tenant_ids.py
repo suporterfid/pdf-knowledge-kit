@@ -68,8 +68,23 @@ def _add_tenant_fk(table: str) -> None:
 
 
 def upgrade() -> None:
-    conn = op.get_bind()
-    tenant_id = _ensure_default_organization(conn)
+    # Check if tenant_id columns already exist (schema.sql creates them)
+    with op._conn.cursor() as cur:
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.columns
+                WHERE table_name = 'connector_definitions'
+                AND column_name = 'tenant_id'
+            );
+        """)
+        tenant_cols_exist = cur.fetchone()[0]
+
+        if tenant_cols_exist:
+            # tenant_id columns already created by schema.sql, skip
+            return
+
+    # Legacy migration code for older databases
+    tenant_id = _ensure_default_organization(op._conn)
 
     tables: Iterable[str] = (
         "connector_definitions",

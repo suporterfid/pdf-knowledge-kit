@@ -18,6 +18,21 @@ _UUID = postgresql.UUID(as_uuid=True)
 def upgrade() -> None:
     """Create ``organizations`` and ``users`` tables with supporting indexes."""
 
+    # Check if tables already exist (schema.sql creates them)
+    # Access the connection from the _PsycopgOperations object
+    with op._conn.cursor() as cur:
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'organizations'
+            );
+        """)
+        orgs_exist = cur.fetchone()[0]
+
+        if orgs_exist:
+            # Tables already created by schema.sql, skip
+            return
+
     op.create_table(
         "organizations",
         sa.Column(

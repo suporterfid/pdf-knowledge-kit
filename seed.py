@@ -252,14 +252,18 @@ def _ingest_content(config: SeedConfig, tenant_id: uuid.UUID) -> None:
         docs = list(_iter_documents(config.docs_dir))
         if docs:
             for doc in docs:
-                logger.info("Ingesting document %s", doc)
-                job_id = ingestion_service.ingest_local(
-                    doc,
-                    tenant_id=tenant_id,
-                    use_ocr=config.use_ocr,
-                    ocr_lang=config.ocr_lang,
-                )
-                ingestion_service.wait_for_job(job_id)
+                try:
+                    logger.info("Ingesting document %s", doc)
+                    job_id = ingestion_service.ingest_local(
+                        doc,
+                        tenant_id=tenant_id,
+                        use_ocr=config.use_ocr,
+                        ocr_lang=config.ocr_lang,
+                    )
+                    ingestion_service.wait_for_job(job_id)
+                except Exception as e:
+                    logger.warning("Failed to ingest document %s: %s", doc, e)
+                    continue
         else:
             logger.info("No documents found under %s; skipping local ingestion.", config.docs_dir)
     else:
