@@ -56,6 +56,12 @@ services:
       - ./docs:/app/docs:ro
       - ./logs:/var/log/app
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).read()\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     networks:
       appnet:
         aliases:
@@ -67,7 +73,8 @@ services:
     image: node:20
     working_dir: /workspace/frontend
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     environment:
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
