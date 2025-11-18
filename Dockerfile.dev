@@ -1,0 +1,27 @@
+# Use a imagem base do Python
+FROM python:3.12-slim
+WORKDIR /app
+
+# Instala dependências do sistema que você possa precisar (ex: para libs do psycopg2)
+# Mantive a instalação do poppler-utils e tesseract, caso seu backend os utilize em tempo real
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Prepara o diretório de logs
+RUN mkdir -p /var/log/app && \
+    chown -R root:root /var/log/app && \
+    chmod 755 /var/log/app
+
+# Copia apenas o arquivo de dependências para aproveitar o cache do Docker
+COPY requirements.txt ./
+
+# Instala as dependências do Python
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir --default-timeout=120 -r requirements.txt
+
+# O CMD não é estritamente necessário aqui, pois será sobrescrito
+# no docker-compose.yml, mas é uma boa prática.
+CMD ["uvicorn", "app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]

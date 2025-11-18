@@ -1,0 +1,25 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev # ✅ Usa o novo Dockerfile de desenvolvimento
+    command: > # ✅ Comando otimizado para desenvolvimento
+      uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+      # Descomente a porta de debug se precisar
+      # - "5678:5678"
+    volumes:
+      - ./:/app # ✅ Mapeia todo o código do backend
+      - ./logs:/var/log/app
+    # A seção 'develop' não é mais necessária aqui, pois o volume já cuida do hot-reload
+
+  frontend:
+    working_dir: /workspace/frontend
+    command: bash -lc "npm install && npm run dev -- --host 0.0.0.0" # ✅ Troca 'npm ci' por 'npm install'
+    volumes:
+      - ./frontend:/workspace/frontend
+      - frontend_node_modules:/workspace/frontend/node_modules
+
+# Não é necessário redefinir 'db', 'volumes' ou 'networks',
+# pois o Docker Compose os pegará do arquivo principal.
