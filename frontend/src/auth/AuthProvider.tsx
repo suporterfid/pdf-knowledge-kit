@@ -323,7 +323,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ refreshToken }),
+            body: JSON.stringify({ refresh_token: refreshToken }),
             signal: controller.signal,
           });
           
@@ -334,8 +334,9 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
           }
           
           const data = await response.json();
-          const accessToken = data.accessToken ?? data.access_token ?? null;
-          const newRefreshToken = data.refreshToken ?? data.refresh_token ?? refreshToken;
+          const tokens = data.tokens || {};
+          const accessToken = tokens.access_token ?? null;
+          const newRefreshToken = tokens.refresh_token ?? refreshToken;
           
           // Reset attempts on success
           setRefreshAttempts(0);
@@ -343,8 +344,8 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
           applySession(
             { accessToken, refreshToken: newRefreshToken },
             data.user ?? null,
-            data.tenants ?? null,
-            preferredTenantId ?? (data.activeTenantId ?? data.active_tenant_id ?? null)
+            data.organization ? [{ id: data.organization.id, name: data.organization.name, slug: data.organization.subdomain }] : null,
+            preferredTenantId ?? (data.organization?.id ?? null)
           );
           return { accessToken, refreshToken: newRefreshToken };
         } catch (error) {
@@ -400,16 +401,17 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
         throw new Error(message);
       }
       const data = await response.json();
-      const accessToken = data.accessToken ?? data.access_token ?? null;
-      const refreshToken = data.refreshToken ?? data.refresh_token ?? null;
+      const tokens = data.tokens || {};
+      const accessToken = tokens.access_token ?? null;
+      const refreshToken = tokens.refresh_token ?? null;
       if (!accessToken || !refreshToken) {
         throw new Error('Tokens de autenticação ausentes na resposta.');
       }
       applySession(
         { accessToken, refreshToken },
         data.user ?? null,
-        data.tenants ?? null,
-        data.activeTenantId ?? data.active_tenant_id ?? null
+        data.organization ? [{ id: data.organization.id, name: data.organization.name, slug: data.organization.subdomain }] : null,
+        data.organization?.id ?? null
       );
     },
     [applySession]
@@ -431,16 +433,17 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
         throw new Error(message);
       }
       const data = await response.json();
-      const accessToken = data.accessToken ?? data.access_token ?? null;
-      const refreshToken = data.refreshToken ?? data.refresh_token ?? null;
+      const tokens = data.tokens || {};
+      const accessToken = tokens.access_token ?? null;
+      const refreshToken = tokens.refresh_token ?? null;
       if (!accessToken || !refreshToken) {
         throw new Error('Tokens de autenticação ausentes na resposta.');
       }
       applySession(
         { accessToken, refreshToken },
         data.user ?? null,
-        data.tenants ?? null,
-        data.activeTenantId ?? data.active_tenant_id ?? null
+        data.organization ? [{ id: data.organization.id, name: data.organization.name, slug: data.organization.subdomain }] : null,
+        data.organization?.id ?? null
       );
     },
     [applySession]
@@ -448,15 +451,20 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
 
   const logout = useCallback(async () => {
     try {
-      await fetch('/api/tenant/accounts/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
+      const refreshToken = state.tokens.refreshToken;
+      if (refreshToken) {
+        await fetch('/api/tenant/accounts/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+      }
     } catch {
       // Ignore network failures when logging out
     }
     clearSession();
-  }, [clearSession]);
+  }, [clearSession, state.tokens.refreshToken]);
 
   const refresh = useCallback(async () => {
     if (refreshPromise.current) {
