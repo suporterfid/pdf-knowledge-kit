@@ -48,9 +48,9 @@ The repository ships with a three-service Compose configuration: Postgres + pgve
    ```bash
    docker compose up --build
    ```
-   - `db` exposes Postgres on port 5432 with health checks to block the backend until ready.【F:docker-compose.yml†L2-L29】
-   - `api` rebuilds from the `Dockerfile` and mounts the repository for live reload with debugpy listening on port 5678.【F:docker-compose.yml†L31-L64】
-   - `frontend` runs `npm run dev` with polling watchers and exposes Vite on port 5173.【F:docker-compose.yml†L66-L85】
+   - `db` exposes Postgres on port 5432 with health checks to block the backend until ready.
+   - `api` rebuilds from the `Dockerfile`, includes health check on `/api/health`, and mounts the repository for live reload with debugpy listening on port 5678.
+   - `frontend` runs `npm run dev` with polling watchers, waits for API health, and exposes Vite on port 5173.
 3. Access the services:
    - Backend API: http://localhost:8000
    - Frontend UI: http://localhost:5173

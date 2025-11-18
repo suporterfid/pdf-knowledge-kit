@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Summary
 
+- Correções críticas de login Docker: psycopg2 e conexão frontend-backend
 - Correções críticas para browser freeze no ambiente de desenvolvimento (DryRun-Dev-2025118)
 - Todas as 4 issues identificadas foram resolvidas em ~50 minutos (89% mais rápido que estimado)
 
@@ -34,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **[CRÍTICO]** Erro de login Docker: ModuleNotFoundError psycopg2
+  - SQLAlchemy estava tentando usar psycopg2 mas requirements.txt tem psycopg3
+  - Solução: app/models/session.py agora converte postgresql:// para postgresql+psycopg://
+  - Mantém compatibilidade com sqlite:// e postgresql+psycopg:// URLs existentes
+- **[CRÍTICO]** Erro de login Docker: Frontend ECONNREFUSED ao conectar no backend
+  - Frontend iniciava antes do backend estar pronto para aceitar conexões
+  - Solução: Adicionado healthcheck ao serviço API e frontend aguarda API saudável
+  - Healthcheck usa endpoint existente /api/health com start_period de 40s
 - **[CRÍTICO]** Incompatibilidade de rotas de autenticação (ISSUE-001)
   - `/api/auth/refresh` → `/api/tenant/accounts/refresh`
   - `/api/auth/login` → `/api/tenant/accounts/login`
