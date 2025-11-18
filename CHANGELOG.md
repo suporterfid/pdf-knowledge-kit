@@ -9,19 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Summary
 
-- Nenhuma mudança documentada desde o lançamento 1.0.0.
+- Correções críticas para browser freeze no ambiente de desenvolvimento (DryRun-Dev-2025118)
+- Todas as 4 issues identificadas foram resolvidas em ~50 minutos (89% mais rápido que estimado)
 
 ### Added
 
+- Rate limiting e proteção contra infinite loops no AuthProvider (ISSUE-003)
+  - Timeout de 10 segundos para requisições de refresh
+  - Mínimo de 5 segundos entre tentativas de refresh
+  - Máximo de 3 tentativas consecutivas
+  - Reset automático de contador em login/registro manual
+- Variáveis de ambiente TENANT_TOKEN_* no .env.example (ISSUE-004)
+  - TENANT_TOKEN_SECRET com exemplo de valor de desenvolvimento
+  - TENANT_TOKEN_ISSUER com valor padrão
+  - TENANT_TOKEN_AUDIENCE com valor padrão
+  - Documentação e instruções para geração de secrets seguros
+
 ### Changed
 
+- ConfigProvider agora usa fetch nativo ao invés de useAuthenticatedFetch (ISSUE-002)
+  - Remove dependência circular com AuthProvider
+  - Melhora performance de carregamento inicial
+  - Adiciona tratamento de erro com console.warn
+
 ### Fixed
+
+- **[CRÍTICO]** Incompatibilidade de rotas de autenticação (ISSUE-001)
+  - `/api/auth/refresh` → `/api/tenant/accounts/refresh`
+  - `/api/auth/login` → `/api/tenant/accounts/login`
+  - `/api/auth/register` → `/api/tenant/accounts/register`
+  - `/api/auth/logout` → `/api/tenant/accounts/logout`
+- **[CRÍTICO]** Race condition no ConfigProvider causando chamadas API prematuras (ISSUE-002)
+- **[ALTO]** AuthProvider criando loops infinitos de refresh sem proteção (ISSUE-003)
+- **[MÉDIO]** Configurações de tenant token ausentes dificultando setup inicial (ISSUE-004)
 
 ### Deprecated
 
 ### Removed
 
 ### Security
+
+- Implementadas proteções contra ataques de DoS via infinite loops no refresh de autenticação
+- Adicionado timeout para prevenir requests pendentes indefinidamente
 
 ---
 

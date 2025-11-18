@@ -1,10 +1,21 @@
 # ISSUE-003: AuthProvider Pode Criar Loops Infinitos de Refresh
 
+## Status
+✅ **RESOLVIDO** - Implementado em 18/11/2025
+
 ## Severidade
 🟠 **ALTA** - Pode causar consumo excessivo de recursos
 
 ## Descrição
 O `AuthProvider` não tem proteções adequadas contra loops infinitos de refresh token. Quando o refresh token é inválido ou o backend está com problemas, o sistema tenta fazer refresh indefinidamente sem timeout, backoff exponencial ou limite de tentativas.
+
+## Resolução Implementada
+- ✅ Implementado rate limiting (mínimo 5 segundos entre tentativas)
+- ✅ Adicionado timeout de 10 segundos para requisições
+- ✅ Limitado máximo de 3 tentativas consecutivas
+- ✅ Reset de contador em login/registro manual
+- ✅ Mensagens de erro claras ao usuário
+- ✅ Todos os testes passando (16/16)
 
 ## Evidências
 

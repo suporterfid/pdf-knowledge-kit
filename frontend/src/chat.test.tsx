@@ -371,7 +371,7 @@ test('LoginPage autentica e redireciona para o chat', async () => {
     email: 'tester@example.com',
   });
   server.use(
-    http.post('/api/auth/login', async () =>
+    http.post('/api/tenant/accounts/login', async () =>
       HttpResponse.json({
         accessToken: loginAccessToken,
         refreshToken: 'refresh-123',

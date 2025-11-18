@@ -1,10 +1,20 @@
 # ISSUE-004: Configurações de Tenant Token Ausentes no .env.example
 
+## Status
+✅ **RESOLVIDO** - Implementado em 18/11/2025
+
 ## Severidade
 🟡 **MÉDIA** - Afeta deployment e configuração inicial
 
 ## Descrição
 O arquivo `.env.example` não inclui as variáveis de ambiente necessárias para configuração de tokens JWT multi-tenant (`TENANT_TOKEN_SECRET`, `TENANT_TOKEN_ISSUER`, `TENANT_TOKEN_AUDIENCE`). Isso dificulta a configuração inicial e pode causar erros de autenticação se o backend não conseguir gerar/validar tokens corretamente.
+
+## Resolução Implementada
+- ✅ Adicionadas variáveis TENANT_TOKEN_* ao .env.example
+- ✅ Incluídos comentários explicativos sobre cada variável
+- ✅ Adicionado exemplo de comando para gerar secret seguro
+- ✅ Definidos valores de desenvolvimento apropriados
+- ✅ Alertas sobre necessidade de mudança em produção
 
 ## Evidências
 

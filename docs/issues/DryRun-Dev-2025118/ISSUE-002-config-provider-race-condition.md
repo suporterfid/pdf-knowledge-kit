@@ -1,10 +1,19 @@
 # ISSUE-002: ConfigProvider Causa Chamadas API Prematuras
 
+## Status
+✅ **RESOLVIDO** - Implementado em 18/11/2025
+
 ## Severidade
 🔴 **CRÍTICA** - Contribui para loops infinitos e consumo excessivo de recursos
 
 ## Descrição
 O `ConfigProvider` faz chamadas autenticadas à API `/api/config` antes que a autenticação esteja completamente inicializada. Isso causa tentativas de chamadas autenticadas que podem falhar, serem retentadas automaticamente pelo `fetchWithAuth`, e contribuir para o congelamento do navegador.
+
+## Resolução Implementada
+- ✅ Substituído `useAuthenticatedFetch` por `fetch` nativo em `frontend/src/config.tsx`
+- ✅ Removida dependência desnecessária do AuthProvider
+- ✅ Melhorado tratamento de erros com console.warn
+- ✅ Todos os testes passando (16/16)
 
 ## Evidências
 
