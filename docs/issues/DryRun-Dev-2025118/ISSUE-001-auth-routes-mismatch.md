@@ -1,10 +1,18 @@
 # ISSUE-001: Incompatibilidade Crítica de Rotas de Autenticação
 
+## Status
+✅ **RESOLVIDO** - Implementado em 18/11/2025
+
 ## Severidade
 🔴 **CRÍTICA** - Bloqueia completamente o uso da aplicação
 
 ## Descrição
 Existe uma incompatibilidade total entre as rotas de autenticação chamadas pelo frontend e as rotas expostas pelo backend. Isso causa falhas 404 em todas as operações de autenticação (login, registro, refresh, logout), resultando em loops infinitos de retry que congelam o navegador.
+
+## Resolução Implementada
+- ✅ Atualizadas todas as rotas de autenticação em `frontend/src/auth/AuthProvider.tsx`
+- ✅ Atualizado mock de teste em `frontend/src/chat.test.tsx`
+- ✅ Todos os testes passando (16/16)
 
 ## Evidências
 

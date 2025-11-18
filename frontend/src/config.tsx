@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useAuthenticatedFetch } from './auth/AuthProvider';
 
 export interface AppConfig {
   BRAND_NAME: string;
@@ -24,14 +23,16 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
     const injected = (window as any).__CONFIG__ || {};
     return { ...defaultConfig, ...injected } as AppConfig;
   });
-  const apiFetch = useAuthenticatedFetch();
 
   useEffect(() => {
-    apiFetch('/api/config')
+    // Use native fetch since /api/config is a public endpoint
+    fetch('/api/config')
       .then((res) => (res.ok ? res.json() : {}))
       .then((data) => setConfig((prev) => ({ ...prev, ...data })))
-      .catch(() => {});
-  }, [apiFetch]);
+      .catch((err) => {
+        console.warn('Failed to load config from API, using defaults:', err);
+      });
+  }, []);
 
   return (
     <ConfigContext.Provider value={config}>{children}</ConfigContext.Provider>

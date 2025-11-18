@@ -287,7 +287,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
         return refreshPromise.current;
       }
       const promise = (async () => {
-        const response = await fetch('/api/auth/refresh', {
+        const response = await fetch('/api/tenant/accounts/refresh', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -340,7 +340,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
 
   const login = useCallback(
     async (payload: LoginPayload) => {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/tenant/accounts/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -368,7 +368,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
 
   const register = useCallback(
     async (payload: RegisterPayload) => {
-      const response = await fetch('/api/auth/register', {
+      const response = await fetch('/api/tenant/accounts/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -396,7 +396,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
 
   const logout = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout', {
+      await fetch('/api/tenant/accounts/logout', {
         method: 'POST',
         credentials: 'include',
       });

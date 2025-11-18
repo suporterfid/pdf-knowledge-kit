@@ -6,7 +6,7 @@ Este diretório contém análises detalhadas de problemas identificados no proje
 
 ### [DryRun-Dev-2025118](./DryRun-Dev-2025118/) - Browser Freeze no Ambiente de Desenvolvimento
 
-**Status**: 🔴 Crítico - Documentação completa, aguardando implementação  
+**Status**: 🔄 Em Progresso - Issues críticas resolvidas (ISSUE-001, ISSUE-002)  
 **Data**: 18/11/2025  
 **Severidade**: Bloqueador de desenvolvimento
 
@@ -24,8 +24,8 @@ Este diretório contém análises detalhadas de problemas identificados no proje
 - [🔧 Technical Flow](./DryRun-Dev-2025118/TECHNICAL-FLOW.md) - Diagramas técnicos
 
 **Issues Individuais**:
-- [ISSUE-001](./DryRun-Dev-2025118/ISSUE-001-auth-routes-mismatch.md) - Incompatibilidade de rotas (🔴 Crítico)
-- [ISSUE-002](./DryRun-Dev-2025118/ISSUE-002-config-provider-race-condition.md) - Race condition no config (🔴 Crítico)
+- [ISSUE-001](./DryRun-Dev-2025118/ISSUE-001-auth-routes-mismatch.md) - Incompatibilidade de rotas (✅ Resolvido)
+- [ISSUE-002](./DryRun-Dev-2025118/ISSUE-002-config-provider-race-condition.md) - Race condition no config (✅ Resolvido)
 - [ISSUE-003](./DryRun-Dev-2025118/ISSUE-003-auth-refresh-infinite-loop.md) - Loops infinitos (🟠 Alto)
 - [ISSUE-004](./DryRun-Dev-2025118/ISSUE-004-missing-tenant-config.md) - Config de tenant ausente (🟡 Médio)
 

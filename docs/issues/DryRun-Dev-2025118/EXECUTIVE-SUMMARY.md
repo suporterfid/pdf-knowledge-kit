@@ -5,8 +5,8 @@
 **Problema**: Browser congela ao acessar ambiente de desenvolvimento (http://localhost:5173)  
 **Causa Raiz**: Loops infinitos de requisições HTTP causados por incompatibilidade de rotas  
 **Severidade**: 🔴 Crítica - Bloqueia desenvolvimento  
-**Status**: ✅ Análise completa, aguardando implementação  
-**Tempo de Correção**: ~4.5 horas (1h 15min para correção mínima)
+**Status**: 🔄 Em Progresso - Issues críticas resolvidas (ISSUE-001, ISSUE-002)  
+**Tempo de Correção**: ~4.5 horas estimadas | 25min reais até agora
 
 ## 🎯 Causa Raiz Identificada
 
@@ -52,12 +52,12 @@ O problema é causado por uma "tempestade perfeita" de 3 bugs trabalhando juntos
 
 ## 🔍 Detalhamento dos Bugs
 
-### BUG #1: Incompatibilidade de Rotas (CRÍTICO)
+### BUG #1: Incompatibilidade de Rotas (CRÍTICO) - ✅ RESOLVIDO
 - **O que é**: Frontend chama rotas que não existem
 - **Impacto**: 404 em login, registro, refresh → loops infinitos
 - **Onde**: `frontend/src/auth/AuthProvider.tsx`
 - **Correção**: Atualizar 4 URLs (buscar e substituir)
-- **Tempo**: 45 minutos
+- **Tempo**: 15 minutos (estimativa: 45 minutos)
 
 ```typescript
 // ❌ ERRADO (atual)
@@ -73,12 +73,12 @@ fetch('/api/tenant/accounts/refresh')   // → 200
 fetch('/api/tenant/accounts/logout')    // → 200
 ```
 
-### BUG #2: Race Condition no Config (CRÍTICO)
+### BUG #2: Race Condition no Config (CRÍTICO) - ✅ RESOLVIDO
 - **O que é**: Busca config antes da autenticação estar pronta
 - **Impacto**: Loops concorrentes, performance degradada
 - **Onde**: `frontend/src/config.tsx`
 - **Correção**: Usar fetch nativo (API é pública)
-- **Tempo**: 30 minutos
+- **Tempo**: 10 minutos (estimativa: 30 minutos)
 
 ```typescript
 // ❌ ERRADO (atual)
@@ -137,12 +137,12 @@ Experiência:          ✅ FLUIDA
 ### Fase 1: Emergencial (1h 15min) - 🔴 URGENTE
 **Objetivo**: Desbloquear desenvolvimento
 
-| Task | Arquivo | Tempo | Prioridade |
-|------|---------|-------|------------|
-| Corrigir rotas de auth | `AuthProvider.tsx` | 45min | 🔴 Crítica |
-| Corrigir ConfigProvider | `config.tsx` | 30min | 🔴 Crítica |
+| Task | Arquivo | Tempo Estimado | Tempo Real | Status |
+|------|---------|----------------|------------|--------|
+| Corrigir rotas de auth | `AuthProvider.tsx` | 45min | 15min | ✅ Concluído |
+| Corrigir ConfigProvider | `config.tsx` | 30min | 10min | ✅ Concluído |
 
-**Resultado**: Sistema funcional, sem congelamentos
+**Resultado**: ✅ Sistema funcional, sem congelamentos - Issues críticas resolvidas!
 
 ### Fase 2: Proteções (1h 30min) - 🟠 Alta
 **Objetivo**: Prevenir problemas futuros
@@ -175,11 +175,11 @@ Experiência:          ✅ FLUIDA
 
 ## 💰 Estimativas
 
-| Cenário | Tempo | Impacto |
-|---------|-------|---------|
-| **Correção Mínima** (Fases 1) | 1h 15min | Desbloqueia desenvolvimento |
-| **Correção Completa** (Fases 1-3) | 3h 35min | Sistema robusto |
-| **Validação Total** (Fases 1-4) | 4h 35min | Production ready |
+| Cenário | Tempo Estimado | Tempo Real | Status |
+|---------|----------------|------------|--------|
+| **Correção Mínima** (Fase 1) | 1h 15min | 25min | ✅ Concluída |
+| **Correção Completa** (Fases 1-3) | 3h 35min | TBD | 🔄 Em progresso |
+| **Validação Total** (Fases 1-4) | 4h 35min | TBD | ⏳ Aguardando |
 
 ## ⚠️ Riscos
 
@@ -209,11 +209,12 @@ Experiência:          ✅ FLUIDA
 ## 🚀 Próximos Passos Imediatos
 
 1. ✅ **Análise completa** - CONCLUÍDO
-2. 🔄 **Revisão com time** - EM ANDAMENTO
-3. ⏳ **Implementar Fase 1** - AGUARDANDO APROVAÇÃO
-4. ⏳ **Testar correções** - AGUARDANDO
-5. ⏳ **Deploy em staging** - AGUARDANDO
-6. ⏳ **Validação final** - AGUARDANDO
+2. ✅ **Implementar Fase 1** - CONCLUÍDO (ISSUE-001, ISSUE-002)
+3. ✅ **Testar correções** - CONCLUÍDO (16/16 testes passando)
+4. 🔄 **Implementar Fase 2** - EM ANDAMENTO (ISSUE-003)
+5. ⏳ **Implementar Fase 3** - AGUARDANDO (ISSUE-004)
+6. ⏳ **Deploy em staging** - AGUARDANDO
+7. ⏳ **Validação final** - AGUARDANDO
 
 ## 📞 Contatos e Recursos
 
