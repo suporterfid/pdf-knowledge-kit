@@ -225,6 +225,12 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
     return defaultState;
   });
   const refreshPromise = useRef<Promise<AuthTokens | null> | null>(null);
+  
+  // Rate limiting and retry protection
+  const [refreshAttempts, setRefreshAttempts] = useState(0);
+  const lastRefreshAttempt = useRef<number>(0);
+  const MAX_REFRESH_ATTEMPTS = 3;
+  const MIN_REFRESH_INTERVAL = 5000; // 5 seconds
 
   const clearSession = useCallback(() => {
     localStorage.removeItem(REFRESH_TOKEN_KEY);
@@ -283,42 +289,82 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
         clearSession();
         return null;
       }
+      
+      // Check if max refresh attempts reached
+      if (refreshAttempts >= MAX_REFRESH_ATTEMPTS) {
+        console.warn('Max refresh attempts reached, clearing session');
+        toast.error('Não foi possível renovar a sessão. Por favor, faça login novamente.');
+        clearSession();
+        return null;
+      }
+      
+      // Apply rate limiting (minimum 5 seconds between attempts)
+      const now = Date.now();
+      const timeSinceLastAttempt = now - lastRefreshAttempt.current;
+      if (timeSinceLastAttempt < MIN_REFRESH_INTERVAL && lastRefreshAttempt.current > 0) {
+        console.warn('Refresh attempt too soon, throttling');
+        return null;
+      }
+      
       if (refreshPromise.current) {
         return refreshPromise.current;
       }
+      
+      lastRefreshAttempt.current = now;
+      setRefreshAttempts((prev) => prev + 1);
+      
       const promise = (async () => {
-        const response = await fetch('/api/tenant/accounts/refresh', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ refreshToken }),
-        });
-        if (!response.ok) {
-          clearSession();
+        try {
+          // Add timeout of 10 seconds
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
+          
+          const response = await fetch('/api/tenant/accounts/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ refreshToken }),
+            signal: controller.signal,
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            throw new Error(`Refresh failed: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          const accessToken = data.accessToken ?? data.access_token ?? null;
+          const newRefreshToken = data.refreshToken ?? data.refresh_token ?? refreshToken;
+          
+          // Reset attempts on success
+          setRefreshAttempts(0);
+          
+          applySession(
+            { accessToken, refreshToken: newRefreshToken },
+            data.user ?? null,
+            data.tenants ?? null,
+            preferredTenantId ?? (data.activeTenantId ?? data.active_tenant_id ?? null)
+          );
+          return { accessToken, refreshToken: newRefreshToken };
+        } catch (error) {
+          console.error('Refresh error:', error);
+          
+          // If reached max attempts, show error and clear session
+          if (refreshAttempts + 1 >= MAX_REFRESH_ATTEMPTS) {
+            toast.error('Não foi possível renovar a sessão. Por favor, faça login novamente.');
+            clearSession();
+          }
           return null;
-        }
-        const data = await response.json();
-        const accessToken = data.accessToken ?? data.access_token ?? null;
-        const newRefreshToken = data.refreshToken ?? data.refresh_token ?? refreshToken;
-        applySession(
-          { accessToken, refreshToken: newRefreshToken },
-          data.user ?? null,
-          data.tenants ?? null,
-          preferredTenantId ?? (data.activeTenantId ?? data.active_tenant_id ?? null)
-        );
-        return { accessToken, refreshToken: newRefreshToken };
-      })()
-        .catch(() => {
-          clearSession();
-          return null;
-        })
-        .finally(() => {
+        } finally {
           refreshPromise.current = null;
-        });
+        }
+      })();
+      
       refreshPromise.current = promise;
       return promise;
     },
-    [applySession, clearSession]
+    [applySession, clearSession, refreshAttempts]
   );
 
   useEffect(() => {
@@ -340,6 +386,9 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
 
   const login = useCallback(
     async (payload: LoginPayload) => {
+      // Reset refresh attempts on manual login
+      setRefreshAttempts(0);
+      
       const response = await fetch('/api/tenant/accounts/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -368,6 +417,9 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
 
   const register = useCallback(
     async (payload: RegisterPayload) => {
+      // Reset refresh attempts on registration
+      setRefreshAttempts(0);
+      
       const response = await fetch('/api/tenant/accounts/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
