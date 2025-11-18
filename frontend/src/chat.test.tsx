@@ -385,10 +385,16 @@ test('LoginPage autentica e redireciona para o chat', async () => {
   server.use(
     http.post('/api/tenant/accounts/login', async () =>
       HttpResponse.json({
-        accessToken: loginAccessToken,
-        refreshToken: 'refresh-123',
-        user: { email: 'tester@example.com', tenant_id: 'tenant-1', roles: ['admin'] },
-        tenants: [{ id: 'tenant-1', name: 'Tenant 1' }],
+        organization: { id: 'tenant-1', name: 'Tenant 1', subdomain: 'tenant1', plan_type: 'free' },
+        user: { id: 'user-1', email: 'tester@example.com', name: 'Tester', role: 'admin' },
+        tokens: {
+          access_token: loginAccessToken,
+          refresh_token: 'refresh-123',
+          token_type: 'bearer',
+          expires_in: 3600,
+          refresh_expires_in: 86400,
+          roles: ['admin'],
+        },
       })
     )
   );
