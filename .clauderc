@@ -1,0 +1,52 @@
+# Claude Code Configuration for PDF Knowledge Kit
+
+## Project Context
+This is a multi-tenant RAG (Retrieval-Augmented Generation) platform that transforms PDFs, Markdown, spreadsheets, and remote sources into a vector database with semantic search and chat capabilities.
+
+## Stack
+- **Backend**: Python 3.11+, FastAPI, PostgreSQL 16 with pgvector extension
+- **Frontend**: React 18 + TypeScript + Vite 5 + Tailwind CSS
+- **Embeddings**: fastembed with sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+- **Optional LLM**: OpenAI API integration for chat responses
+- **Containerization**: Docker + Docker Compose
+
+## Key Directories
+- `app/`: FastAPI application (routers, agents, ingestion, RAG)
+- `frontend/`: React/TypeScript UI with chat interface
+- `tests/`: Python pytest and frontend vitest tests
+- `migrations/`: Database migration SQL scripts
+- `tools/`: Utility scripts for connectors and configuration
+- `docs/`: Project documentation and issue tracking
+
+## Important Files
+- `schema.sql`: Database schema (idempotent)
+- `seed.py`: Bootstrap script for demo tenant and data
+- `docker-compose.yml`: Production container orchestration
+- `docker-compose.dev.yml`: Development overrides
+- `Dockerfile`: Production build
+- `Dockerfile.dev`: Development build
+- `.env.example`: Environment variable template
+
+## Development Workflow
+1. Use `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build` for dev environment
+2. Backend runs on port 8000, Frontend on port 5173
+3. Default credentials: admin@demo.local / ChangeMe123!
+4. Run tests with `pytest` (backend) and `npm test` (frontend)
+
+## Code Quality Tools
+- Python: ruff, black, mypy, bandit, pytest
+- Frontend: ESLint, TypeScript compiler, vitest
+- CI/CD: GitHub Actions (tests.yml)
+
+## Multi-tenancy
+- Row Level Security (RLS) enforced at PostgreSQL level
+- JWT-based authentication with tenant isolation
+- TenantContextMiddleware sets session variables for RLS
+
+## Documentation
+- README.md: Quick start and overview
+- PROJECT_OVERVIEW.md: Architecture and deployment guide
+- ARCHITECTURE.md: Detailed system design
+- API_REFERENCE.md: Complete API documentation
+- FRONTEND_GUIDE.md: Frontend development guide
+- OPERATOR_GUIDE.md: Operations and maintenance

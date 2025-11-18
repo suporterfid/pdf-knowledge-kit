@@ -13,12 +13,15 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        target: process.env.VITE_API_URL || 'http://api:8000',
         changeOrigin: true,
+        secure: false,
+        ws: true,
       },
       '/uploads': {
-        target: 'http://backend:8000',
+        target: process.env.VITE_API_URL || 'http://api:8000',
         changeOrigin: true,
+        secure: false,
       }
     }
   },

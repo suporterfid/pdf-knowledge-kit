@@ -1,9 +1,11 @@
 FROM node:20 AS frontend-build
-WORKDIR /workspace/frontend
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ ./
-RUN npm run build
+WORKDIR /workspace
+# Copy frontend files
+COPY frontend/package*.json ./frontend/
+RUN cd frontend && npm ci
+COPY frontend/ ./frontend/
+# Build frontend - it will output to /workspace/app/static due to vite.config.ts
+RUN cd frontend && npm run build
 
 FROM python:3.12-slim
 WORKDIR /app
@@ -31,6 +33,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # Copy application code
 COPY . .
-COPY --from=frontend-build /workspace/frontend/dist ./app/static
+# Copy frontend build from the correct location (vite.config.ts outputs to ../app/static from frontend/)
+COPY --from=frontend-build /workspace/app/static ./app/static
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
