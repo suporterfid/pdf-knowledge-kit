@@ -16,7 +16,7 @@ services:
 
   frontend:
     working_dir: /workspace/frontend
-    command: bash -lc "npm install && npm run dev -- --host 0.0.0.0" # ✅ Troca 'npm ci' por 'npm install'
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0" # ✅ Troca 'npm ci' por 'npm install'
     volumes:
       - ./frontend:/workspace/frontend
       - frontend_node_modules:/workspace/frontend/node_modules
