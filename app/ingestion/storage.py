@@ -664,10 +664,10 @@ def update_job_params(
         if cur.rowcount == 0:
             logger.warning(
                 "Attempt to update params for job %s in tenant %s failed",
-                    job_id,
-                    tenant_id,
-                )
-                raise ValueError("Job not found for tenant")
+                job_id,
+                tenant_id,
+            )
+            raise ValueError("Job not found for tenant")
 
 
 def get_job(conn: psycopg.Connection, job_id: UUID, *, tenant_id: UUID) -> Job | None:
@@ -848,13 +848,13 @@ def soft_delete_source(
             """,
             (source_id, tenant_id),
         )
-            if cur.rowcount == 0:
-                logger.warning(
-                    "Attempt to delete source %s for tenant %s failed",
-                    source_id,
-                    tenant_id,
-                )
-                raise ValueError("Source not found for tenant")
+        if cur.rowcount == 0:
+            logger.warning(
+                "Attempt to delete source %s for tenant %s failed",
+                source_id,
+                tenant_id,
+            )
+            raise ValueError("Source not found for tenant")
 
 
 def upsert_document(
@@ -1138,11 +1138,11 @@ def update_source_sync_state(
         cur.execute(query, values)
         if cur.rowcount == 0:
             logger.warning(
-                    "Attempt to update sync state for source %s tenant %s failed",
-                    source_id,
-                    tenant_id,
-                )
-                raise ValueError("Source not found for tenant")
+                "Attempt to update sync state for source %s tenant %s failed",
+                source_id,
+                tenant_id,
+            )
+            raise ValueError("Source not found for tenant")
 
 
 def get_latest_versions_for_connector(
