@@ -11,7 +11,12 @@ import RequireAuth from './auth/RequireAuth';
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <div className="flex h-screen flex-col bg-background text-text-primary font-sans">
         <ToastContainer />
         <Routes>

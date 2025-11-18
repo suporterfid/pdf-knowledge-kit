@@ -27,10 +27,21 @@ export function ConfigProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Use native fetch since /api/config is a public endpoint
     fetch('/api/config')
-      .then((res) => (res.ok ? res.json() : {}))
-      .then((data) => setConfig((prev) => ({ ...prev, ...data })))
-      .catch((err) => {
-        console.warn('Failed to load config from API, using defaults:', err);
+      .then((res) => {
+        if (!res.ok) {
+          // Don't throw to avoid console errors, just use defaults silently
+          return {};
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data && Object.keys(data).length > 0) {
+          setConfig((prev) => ({ ...prev, ...data }));
+        }
+      })
+      .catch(() => {
+        // Silently fail and use defaults if backend is unavailable
+        // This is expected during development when backend might not be running
       });
   }, []);
 

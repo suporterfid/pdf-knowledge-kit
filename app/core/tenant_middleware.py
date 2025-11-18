@@ -140,6 +140,16 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             return True
 
         path = request.url.path
+        
+        # Public endpoints that don't require authentication
+        public_endpoints = {
+            "/api/health",
+            "/api/version",
+            "/api/config",
+        }
+        if path in public_endpoints:
+            return True
+        
         if not path.startswith("/api/tenant/accounts"):
             return False
 

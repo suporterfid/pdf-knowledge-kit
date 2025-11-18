@@ -79,6 +79,21 @@ def _create_app(
             }
         )
 
+    @app.get("/api/health")
+    async def health() -> JSONResponse:
+        """Public health endpoint."""
+        return JSONResponse({"status": "ok"})
+
+    @app.get("/api/version")
+    async def version() -> JSONResponse:
+        """Public version endpoint."""
+        return JSONResponse({"version": "1.0.0"})
+
+    @app.get("/api/config")
+    async def config() -> JSONResponse:
+        """Public config endpoint."""
+        return JSONResponse({"BRAND_NAME": "Test"})
+
     return app
 
 
@@ -180,6 +195,35 @@ def test_invalid_token_returns_unauthorized(
     )
 
     assert response.status_code == 401
+    assert connection.statements == []
+    assert get_current_tenant_id() is None
+
+    client.close()
+
+
+def test_public_endpoints_bypass_auth(
+    client_factory: Callable[[], tuple[TestClient, DummyConnection]],
+) -> None:
+    """Public endpoints should be accessible without authentication."""
+
+    client, connection = client_factory()
+
+    # Test /api/health endpoint
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+    # Test /api/version endpoint
+    response = client.get("/api/version")
+    assert response.status_code == 200
+    assert response.json() == {"version": "1.0.0"}
+
+    # Test /api/config endpoint
+    response = client.get("/api/config")
+    assert response.status_code == 200
+    assert response.json() == {"BRAND_NAME": "Test"}
+
+    # Verify no database connection was made for public endpoints
     assert connection.statements == []
     assert get_current_tenant_id() is None
 
