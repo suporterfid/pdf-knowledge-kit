@@ -25,6 +25,7 @@ services:
     networks:
       appnet:
         aliases:
+          - db              # ✅ ADICIONE ESTA LINHA
           - postgres
           - pgvector
 
