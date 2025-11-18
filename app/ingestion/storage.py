@@ -144,8 +144,9 @@ def get_or_create_source(
     # Ensure tenant context is set before transaction (defensive programming)
     apply_tenant_settings(conn, tenant_id)
 
-    with conn.transaction():
-        with conn.cursor() as cur:
+    # Note: No explicit transaction needed here as the connection is already in a transaction
+    # and will be committed by the connection context manager in the caller
+    with conn.cursor() as cur:
             update_kwargs: dict[str, Any] = {}
             if label is not None:
                 update_kwargs["label"] = label
@@ -390,34 +391,35 @@ def create_connector_definition(
 ) -> UUID:
     definition_id = uuid4()
     encoded_credentials = _encode_credentials(credentials, encrypt=encrypt_credentials)
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO connector_definitions (
-                    id,
-                    tenant_id,
-                    name,
-                    type,
-                    description,
-                    params,
-                    credentials,
-                    metadata,
-                    created_at
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
-                """,
-                (
-                    definition_id,
-                    tenant_id,
-                    name,
-                    type.value if isinstance(type, SourceType) else type,
-                    description,
-                    Jsonb(params) if params is not None else None,
-                    encoded_credentials,
-                    Jsonb(metadata) if metadata is not None else None,
-                ),
+    # Note: No explicit transaction needed here as the connection is already in a transaction
+    # and will be committed by the connection context manager in the caller
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO connector_definitions (
+                id,
+                tenant_id,
+                name,
+                type,
+                description,
+                params,
+                credentials,
+                metadata,
+                created_at
             )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
+            """,
+            (
+                definition_id,
+                tenant_id,
+                name,
+                type.value if isinstance(type, SourceType) else type,
+                description,
+                Jsonb(params) if params is not None else None,
+                encoded_credentials,
+                Jsonb(metadata) if metadata is not None else None,
+            ),
+        )
     return definition_id
 
 
@@ -463,16 +465,17 @@ def update_connector_definition(
     ).format(fields=sql.SQL(", ").join(fields))
     values.extend([definition_id, tenant_id])
 
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute(query, values)
-            if cur.rowcount == 0:
-                logger.warning(
-                    "Attempt to update connector definition %s for tenant %s failed",
-                    definition_id,
-                    tenant_id,
-                )
-                raise ValueError("Connector definition not found for tenant")
+    # Note: No explicit transaction needed here as the connection is already in a transaction
+    # and will be committed by the connection context manager in the caller
+    with conn.cursor() as cur:
+        cur.execute(query, values)
+        if cur.rowcount == 0:
+            logger.warning(
+                "Attempt to update connector definition %s for tenant %s failed",
+                definition_id,
+                tenant_id,
+            )
+            raise ValueError("Connector definition not found for tenant")
 
 
 def get_connector_definition(
@@ -548,19 +551,20 @@ def list_connector_definitions(
 def delete_connector_definition(
     conn: psycopg.Connection, definition_id: UUID, *, tenant_id: UUID
 ) -> None:
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute(
-                "DELETE FROM connector_definitions WHERE id = %s AND tenant_id = %s",
-                (definition_id, tenant_id),
+    # Note: No explicit transaction needed here as the connection is already in a transaction
+    # and will be committed by the connection context manager in the caller
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM connector_definitions WHERE id = %s AND tenant_id = %s",
+            (definition_id, tenant_id),
+        )
+        if cur.rowcount == 0:
+            logger.warning(
+                "Attempt to delete connector definition %s for tenant %s failed",
+                definition_id,
+                tenant_id,
             )
-            if cur.rowcount == 0:
-                logger.warning(
-                    "Attempt to delete connector definition %s for tenant %s failed",
-                    definition_id,
-                    tenant_id,
-                )
-                raise ValueError("Connector definition not found for tenant")
+            raise ValueError("Connector definition not found for tenant")
 
 
 def create_job(
@@ -573,23 +577,24 @@ def create_job(
 ) -> UUID:
     """Create a new ingestion job for a given source and return its id."""
     job_id = uuid4()
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO ingestion_jobs (
-                    id, tenant_id, source_id, status, created_at, params
-                )
-                VALUES (%s, %s, %s, %s, now(), %s)
-                """,
-                (
-                    job_id,
-                    tenant_id,
-                    source_id,
-                    status.value,
-                    Jsonb(params) if params is not None else None,
-                ),
+    # Note: No explicit transaction needed here as the connection is already in a transaction
+    # and will be committed by the connection context manager in the caller
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO ingestion_jobs (
+                id, tenant_id, source_id, status, created_at, params
             )
+            VALUES (%s, %s, %s, %s, now(), %s)
+            """,
+            (
+                job_id,
+                tenant_id,
+                source_id,
+                status.value,
+                Jsonb(params) if params is not None else None,
+            ),
+        )
     return job_id
 
 
@@ -625,14 +630,15 @@ def update_job_status(
         "UPDATE ingestion_jobs SET {fields} WHERE id = %s AND tenant_id = %s"
     ).format(fields=sql.SQL(", ").join(fields))
     values.extend([job_id, tenant_id])
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute(query, values)
-            if cur.rowcount == 0:
-                logger.warning(
-                    "Attempt to update job %s for tenant %s failed", job_id, tenant_id
-                )
-                raise ValueError("Job not found for tenant")
+    # Note: No explicit transaction needed here as the connection is already in a transaction
+    # and will be committed by the connection context manager in the caller
+    with conn.cursor() as cur:
+        cur.execute(query, values)
+        if cur.rowcount == 0:
+            logger.warning(
+                "Attempt to update job %s for tenant %s failed", job_id, tenant_id
+            )
+            raise ValueError("Job not found for tenant")
 
 
 def update_job_params(
@@ -644,23 +650,24 @@ def update_job_params(
 ) -> None:
     """Persist metadata about a job run in the ``params`` column."""
 
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE ingestion_jobs
-                SET params = %s, updated_at = now()
-                WHERE id = %s AND tenant_id = %s
-                """,
-                (Jsonb(params) if params is not None else None, job_id, tenant_id),
+    # Note: No explicit transaction needed here as the connection is already in a transaction
+    # and will be committed by the connection context manager in the caller
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE ingestion_jobs
+            SET params = %s, updated_at = now()
+            WHERE id = %s AND tenant_id = %s
+            """,
+            (Jsonb(params) if params is not None else None, job_id, tenant_id),
+        )
+        if cur.rowcount == 0:
+            logger.warning(
+                "Attempt to update params for job %s in tenant %s failed",
+                job_id,
+                tenant_id,
             )
-            if cur.rowcount == 0:
-                logger.warning(
-                    "Attempt to update params for job %s in tenant %s failed",
-                    job_id,
-                    tenant_id,
-                )
-                raise ValueError("Job not found for tenant")
+            raise ValueError("Job not found for tenant")
 
 
 def get_job(conn: psycopg.Connection, job_id: UUID, *, tenant_id: UUID) -> Job | None:
@@ -812,16 +819,17 @@ def update_source(
         "UPDATE sources SET {fields} WHERE id = %s AND tenant_id = %s"
     ).format(fields=sql.SQL(", ").join(fields))
     values.extend([source_id, tenant_id])
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute(query, values)
-            if cur.rowcount == 0:
-                logger.warning(
-                    "Attempt to update source %s for tenant %s failed",
-                    source_id,
-                    tenant_id,
-                )
-                raise ValueError("Source not found for tenant")
+    # Note: No explicit transaction needed here as the connection is already in a transaction
+    # and will be committed by the connection context manager in the caller
+    with conn.cursor() as cur:
+        cur.execute(query, values)
+        if cur.rowcount == 0:
+            logger.warning(
+                "Attempt to update source %s for tenant %s failed",
+                source_id,
+                tenant_id,
+            )
+            raise ValueError("Source not found for tenant")
 
 
 def soft_delete_source(
@@ -829,23 +837,24 @@ def soft_delete_source(
 ) -> None:
     """Soft delete a source (mark deleted_at and set active=false)."""
 
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE sources
-                SET active = FALSE, deleted_at = now(), updated_at = now()
-                WHERE id = %s AND tenant_id = %s
-                """,
-                (source_id, tenant_id),
+    # Note: No explicit transaction needed here as the connection is already in a transaction
+    # and will be committed by the connection context manager in the caller
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE sources
+            SET active = FALSE, deleted_at = now(), updated_at = now()
+            WHERE id = %s AND tenant_id = %s
+            """,
+            (source_id, tenant_id),
+        )
+        if cur.rowcount == 0:
+            logger.warning(
+                "Attempt to delete source %s for tenant %s failed",
+                source_id,
+                tenant_id,
             )
-            if cur.rowcount == 0:
-                logger.warning(
-                    "Attempt to delete source %s for tenant %s failed",
-                    source_id,
-                    tenant_id,
-                )
-                raise ValueError("Source not found for tenant")
+            raise ValueError("Source not found for tenant")
 
 
 def upsert_document(
@@ -868,8 +877,9 @@ def upsert_document(
     apply_tenant_settings(conn, tenant_id)
 
     encoded_credentials = _encode_credentials(credentials, encrypt=encrypt_credentials)
-    with conn.transaction():
-        with conn.cursor() as cur:
+    # Note: No explicit transaction needed here as the connection is already in a transaction
+    # and will be committed by the connection context manager in the caller
+    with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT id, version, source_id, connector_type, credentials, sync_state, bytes, page_count
@@ -1072,8 +1082,9 @@ def insert_chunks(
 ) -> None:
     """Insert chunk rows ensuring metadata is persisted as JSONB."""
 
-    with conn.transaction():
-        with conn.cursor() as cur:
+    # Note: No explicit transaction needed here as the connection is already in a transaction
+    # and will be committed by the connection context manager in the caller
+    with conn.cursor() as cur:
             for index, (content, embedding, metadata) in enumerate(
                 zip(chunks, embeddings, metadatas, strict=False)
             ):
@@ -1121,16 +1132,17 @@ def update_source_sync_state(
     ).format(fields=sql.SQL(", ").join(fields))
     values.extend([source_id, tenant_id])
 
-    with conn.transaction():
-        with conn.cursor() as cur:
-            cur.execute(query, values)
-            if cur.rowcount == 0:
-                logger.warning(
-                    "Attempt to update sync state for source %s tenant %s failed",
-                    source_id,
-                    tenant_id,
-                )
-                raise ValueError("Source not found for tenant")
+    # Note: No explicit transaction needed here as the connection is already in a transaction
+    # and will be committed by the connection context manager in the caller
+    with conn.cursor() as cur:
+        cur.execute(query, values)
+        if cur.rowcount == 0:
+            logger.warning(
+                "Attempt to update sync state for source %s tenant %s failed",
+                source_id,
+                tenant_id,
+            )
+            raise ValueError("Source not found for tenant")
 
 
 def get_latest_versions_for_connector(

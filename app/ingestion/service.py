@@ -743,6 +743,8 @@ def ingest_local(
             path=str(path),
         )
         job_id = storage.create_job(conn, tenant_id=tenant_uuid, source_id=source_id)
+        # Explicitly commit to ensure source and job are persisted before worker starts
+        conn.commit()
 
     logger, log_path = _setup_job_logging(job_id)
 
@@ -930,6 +932,8 @@ def ingest_urls(urls: list[str], *, tenant_id: UUID | str | None = None) -> uuid
             url=first_url,
         )
         job_id = storage.create_job(conn, tenant_id=tenant_uuid, source_id=source_id)
+        # Explicitly commit to ensure source and job are persisted before worker starts
+        conn.commit()
 
     logger, log_path = _setup_job_logging(job_id)
 
