@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import psycopg
 import pytest
-
 from seed import wait_for_database
 
 

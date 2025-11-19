@@ -9,7 +9,6 @@ from typing import Any
 
 import psycopg
 import pytest
-
 from seed import SeedConfig, _ensure_sample_document
 
 

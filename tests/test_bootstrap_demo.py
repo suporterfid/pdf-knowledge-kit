@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy.orm import sessionmaker
-
 from app.models import Base
 from app.models.session import get_engine
 from app.security import verify_password
+from sqlalchemy.orm import sessionmaker
 from tools import bootstrap_demo
 
 

@@ -6,15 +6,14 @@ import logging
 import os
 
 import psycopg
-from dotenv import load_dotenv
-from sqlalchemy import select
-from sqlalchemy.engine import make_url
-from sqlalchemy.orm import Session
-
 from app.ingestion.service import ensure_schema
 from app.models import Organization, User
 from app.models.session import get_sessionmaker
 from app.security import hash_password
+from dotenv import load_dotenv
+from sqlalchemy import select
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger("tools.bootstrap_demo")
 

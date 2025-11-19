@@ -111,7 +111,7 @@ Antes de começar, garanta que seu ambiente possui as seguintes versões e ferra
 
 1. Rodar a ingestão local de PDFs/Markdown:
    ```bash
-   python ingest.py --docs ./docs  # use --ocr ou ENABLE_OCR=1 para PDFs escaneados
+   python ingest.py --docs ./sample_data  # use --ocr ou ENABLE_OCR=1 para PDFs escaneados
    ```
 2. Consultar a base com a ferramenta CLI:
    ```bash
