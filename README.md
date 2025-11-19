@@ -145,9 +145,9 @@ Consulte `.env.example` para a lista completa.
 ### Arquivos locais
 
 ```bash
-python ingest.py --docs ./docs --tenant-id "$TENANT_ID"
+python ingest.py --docs ./sample_data --tenant-id "$TENANT_ID"
 # Habilite OCR quando necessário
-python ingest.py --docs ./docs --ocr --ocr-lang eng+por --tenant-id "$TENANT_ID"
+python ingest.py --docs ./sample_data --ocr --ocr-lang eng+por --tenant-id "$TENANT_ID"
 ```
 
 O script percorre a pasta indicada (recursivamente), registra jobs e aguarda a conclusão. As mesmas funções estão disponíveis via `app.ingestion.service` para uso programático.
