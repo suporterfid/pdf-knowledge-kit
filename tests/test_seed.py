@@ -8,12 +8,11 @@ from pathlib import Path
 from typing import Any, Iterator
 
 import pytest
-from sqlalchemy import create_engine, event, select
-from sqlalchemy.orm import Session, sessionmaker
-
 from app.models import Base, Organization, User
 from app.security import verify_password
 from seed import SeedConfig, _ensure_sample_document, _provision_tenant
+from sqlalchemy import create_engine, event, select
+from sqlalchemy.orm import Session, sessionmaker
 
 
 @dataclass(slots=True)

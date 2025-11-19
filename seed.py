@@ -11,18 +11,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from dotenv import load_dotenv
 import psycopg
-from sqlalchemy import select
-from sqlalchemy.engine import make_url
-from sqlalchemy.orm import Session, sessionmaker
-
 from app.core.db import apply_tenant_settings
 from app.ingestion import service as ingestion_service
 from app.ingestion.service import ensure_schema
 from app.models import Organization, User
 from app.models.session import get_sessionmaker
 from app.security import hash_password
+from dotenv import load_dotenv
+from sqlalchemy import select
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import Session, sessionmaker
 
 logger = logging.getLogger("seed")
 
