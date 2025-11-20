@@ -15,10 +15,10 @@ TEST_TENANT = "tenant-a"
 def _set_tenant(conn: psycopg.Connection, tenant_id: str | None) -> None:
     if tenant_id is None:
         with conn.cursor() as cur:
-            cur.execute("RESET app.tenant_id")
+            cur.execute("SELECT set_config('app.tenant_id', NULL, false)")
         return
     with conn.cursor() as cur:
-        cur.execute("SET app.tenant_id = %s", (str(tenant_id),))
+        cur.execute("SELECT set_config('app.tenant_id', %s, false)", (str(tenant_id),))
 
 
 def _get_conn(*, tenant_id: str | None = None):
@@ -29,7 +29,10 @@ def _get_conn(*, tenant_id: str | None = None):
         conn = psycopg.connect(url)
     except Exception:
         pytest.skip("database not available")
-    register_vector(conn)
+    try:
+        register_vector(conn)
+    except Exception:
+        pass
     if tenant_id is not None:
         _set_tenant(conn, tenant_id)
     return conn
@@ -55,7 +58,9 @@ def _setup_db(conn):
             )
             """
         )
+        )
     conn.commit()
+    register_vector(conn)
 
 
 class DummyEmbedder:

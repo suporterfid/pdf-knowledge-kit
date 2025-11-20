@@ -53,7 +53,8 @@ def test_ask_without_llm(client):
     assert data["sources"]
 
 
-def test_ask_with_llm(client):
+def test_ask_with_llm(client, monkeypatch):
+    monkeypatch.delenv("OPENAI_LANG", raising=False)
     class DummyCompletion:
         def __init__(self):
             self.choices = [
@@ -109,6 +110,7 @@ def test_ask_with_custom_system_prompt(client, monkeypatch):
             return DummyCompletion()
 
     dummy_client = DummyClient()
+    monkeypatch.delenv("OPENAI_LANG", raising=False)
     monkeypatch.setenv("SYSTEM_PROMPT", "You are a helper.")
     headers = {"X-Debug-Tenant": "tenant-1"}
     with (

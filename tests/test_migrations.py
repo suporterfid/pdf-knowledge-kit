@@ -10,7 +10,7 @@ from app.ingestion.models import JobStatus, SourceType
 
 def _set_tenant(conn: psycopg.Connection, tenant_id):
     with conn.cursor() as cur:
-        cur.execute("SET app.tenant_id = %s", (str(tenant_id),))
+        cur.execute("SELECT set_config('app.tenant_id', %s, false)", (str(tenant_id),))
 
 
 def _require_conn(*, tenant_id=None):

@@ -142,7 +142,7 @@ def test_rate_limit(client):
     assert resp.status_code == 429
 
 
-def test_chat_with_llm_prompt(client):
+def test_chat_with_llm_prompt(client, monkeypatch):
     headers = {"X-Forwarded-For": "3.3.3.3", "X-Debug-Tenant": "tenant-1"}
 
     class DummyStream:
@@ -172,6 +172,7 @@ def test_chat_with_llm_prompt(client):
             return DummyStream()
 
     dummy_client = DummyClient()
+    monkeypatch.delenv("OPENAI_LANG", raising=False)
     with (
         patch("app.main.build_context", dummy_build_context),
         patch("app.main.client", dummy_client),
@@ -218,6 +219,7 @@ def test_chat_with_custom_system_prompt(client, monkeypatch):
             return DummyStream()
 
     dummy_client = DummyClient()
+    monkeypatch.delenv("OPENAI_LANG", raising=False)
     monkeypatch.setenv("SYSTEM_PROMPT", "You are a helper.")
     with (
         patch("app.main.build_context", dummy_build_context),

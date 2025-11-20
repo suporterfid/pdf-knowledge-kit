@@ -1,0 +1,531 @@
+ Container pdf-knowledge-kit-db-1  Running
+============================= test session starts ==============================
+platform linux -- Python 3.12.12, pytest-9.0.1, pluggy-1.6.0 -- /usr/local/bin/python3.12
+cachedir: .pytest_cache
+rootdir: /app
+configfile: pytest.ini
+plugins: anyio-4.11.0
+collecting ... collected 126 items
+
+tests/test_access_logging.py::test_access_logging_request_id_and_scrubbing PASSED [  0%]
+tests/test_admin_ingest_api.py::test_role_enforcement PASSED             [  1%]
+tests/test_admin_ingest_api.py::test_cross_tenant_source_isolation PASSED [  2%]
+tests/test_admin_ingest_api_extended.py::test_start_local_job_auth_validation PASSED [  3%]
+tests/test_admin_ingest_api_extended.py::test_start_urls_job_validation PASSED [  3%]
+tests/test_admin_ingest_api_extended.py::test_sources_crud_and_reindex PASSED [  4%]
+tests/test_admin_ingest_api_extended.py::test_job_lifecycle_and_logs PASSED [  5%]
+tests/test_admin_ingest_api_extended.py::test_rerun_job_endpoint PASSED  [  6%]
+tests/test_admin_ingest_api_extended.py::test_jobs_pagination_filters PASSED [  7%]
+tests/test_admin_ingest_api_extended.py::test_sources_pagination_filters PASSED [  7%]
+tests/test_agents_api.py::test_agent_crud_and_deploy_flow PASSED         [  8%]
+tests/test_agents_api.py::test_agents_cross_tenant_isolation PASSED      [  9%]
+tests/test_agents_service.py::test_get_agent_by_slug_with_inmemory_repository PASSED [ 10%]
+tests/test_agents_service.py::test_run_test_records_tenant_id PASSED     [ 11%]
+tests/test_ask.py::test_ask_without_llm PASSED                           [ 11%]
+tests/test_ask.py::test_ask_with_llm FAILED                              [ 12%]
+tests/test_ask.py::test_ask_with_custom_system_prompt FAILED             [ 13%]
+tests/test_auth_roles.py::test_roles_endpoint_valid_token PASSED         [ 14%]
+tests/test_auth_roles.py::test_roles_endpoint_missing_token PASSED       [ 15%]
+tests/test_auth_roles.py::test_roles_endpoint_invalid_token PASSED       [ 15%]
+tests/test_bootstrap_demo.py::test_ensure_demo_entities_creates_records PASSED [ 16%]
+tests/test_bootstrap_demo.py::test_ensure_demo_entities_reuses_existing PASSED [ 17%]
+tests/test_chat.py::test_chat_without_attachment PASSED                  [ 18%]
+tests/test_chat.py::test_chat_with_pdf_attachment PASSED                 [ 19%]
+tests/test_chat.py::test_cancel_and_reconnect PASSED                     [ 19%]
+tests/test_chat.py::test_invalid_mime_type PASSED                        [ 20%]
+tests/test_chat.py::test_message_and_session_validation PASSED           [ 21%]
+tests/test_chat.py::test_rate_limit PASSED                               [ 22%]
+tests/test_chat.py::test_chat_with_llm_prompt FAILED                     [ 23%]
+tests/test_chat.py::test_chat_with_custom_system_prompt FAILED           [ 23%]
+tests/test_core_auth.py::test_decode_tenant_token_success PASSED         [ 24%]
+tests/test_core_auth.py::test_decode_tenant_token_missing_required_claims PASSED [ 25%]
+tests/test_core_auth.py::test_decode_tenant_token_requires_access_type PASSED [ 26%]
+tests/test_core_auth.py::test_decode_tenant_token_configuration_error PASSED [ 26%]
+tests/test_core_auth.py::test_get_tenant_context_success PASSED          [ 27%]
+tests/test_core_auth.py::test_get_tenant_context_missing_header PASSED   [ 28%]
+tests/test_core_auth.py::test_get_tenant_context_invalid_scheme PASSED   [ 29%]
+tests/test_core_auth.py::test_get_tenant_context_invalid_signature PASSED [ 30%]
+tests/test_core_auth.py::test_get_tenant_context_configuration_error PASSED [ 30%]
+tests/test_core_db.py::test_get_required_tenant_id_from_context PASSED   [ 31%]
+tests/test_core_db.py::test_get_required_tenant_id_invalid_raises PASSED [ 32%]
+tests/test_feedback_api.py::test_submit_feedback_sets_tenant PASSED      [ 33%]
+tests/test_feedback_api.py::test_submit_feedback_requires_tenant PASSED  [ 34%]
+tests/test_ingest_app_endpoints.py::test_ingest_and_query_via_endpoints SKIPPED [ 34%]
+tests/test_ingest_cli_regression.py::test_cli_invokes_service PASSED     [ 35%]
+tests/test_ingest_docx.py::test_read_docx_text_returns_segments PASSED   [ 36%]
+tests/test_ingest_docx.py::test_read_csv_text_creates_rows PASSED        [ 37%]
+tests/test_ingest_md.py::test_read_chunk_embed_markdown[sample_en.md] PASSED [ 38%]
+tests/test_ingest_md.py::test_read_chunk_embed_markdown[sample_pt.md] PASSED [ 38%]
+tests/test_ingest_md.py::test_read_chunk_embed_markdown[sample_es.md] PASSED [ 39%]
+tests/test_ingest_ocr.py::test_read_pdf_text_with_ocr[eng] PASSED        [ 40%]
+tests/test_ingest_ocr.py::test_read_pdf_text_with_ocr[por] PASSED        [ 41%]
+tests/test_ingest_ocr.py::test_read_pdf_text_with_ocr[spa] PASSED        [ 42%]
+tests/test_ingest_url.py::test_read_chunk_embed_url[<html><body><h1>Hello</h1><p>World!</p></body></html>] PASSED [ 42%]
+tests/test_ingest_url.py::test_read_chunk_embed_url[<html><body><h1>Ol\xe1</h1><p>Mundo!</p></body></html>] PASSED [ 43%]
+tests/test_ingest_url.py::test_read_chunk_embed_url[<html><body><h1>Hola</h1><p>Mundo!</p></body></html>] PASSED [ 44%]
+tests/test_ingestion_runner.py::test_runner_cancel_stops_work PASSED     [ 45%]
+tests/test_ingestion_runner.py::test_setup_job_logging_creates_file PASSED [ 46%]
+tests/test_ingestion_runner.py::test_runner_submit_and_cleanup PASSED    [ 46%]
+tests/test_ingestion_service.py::test_ingest_local_and_url PASSED        [ 47%]
+tests/test_ingestion_service.py::test_ingest_local_error PASSED          [ 48%]
+tests/test_ingestion_service.py::test_ingest_local_ocr_failure PASSED    [ 49%]
+tests/test_ingestion_service.py::test_reindex_source_reingests PASSED    [ 50%]
+tests/test_ingestion_service.py::test_rerun_job_calls_reindex PASSED     [ 50%]
+tests/test_ingestion_service.py::test_ingest_local_integration_persists_chunks SKIPPED [ 51%]
+tests/test_ingestion_service.py::test_read_job_log_slicing PASSED        [ 52%]
+tests/test_init_logging.py::test_init_logging_adds_handlers PASSED       [ 53%]
+tests/test_init_logging.py::test_init_logging_replaces_existing_access_handlers PASSED [ 53%]
+tests/test_logging.py::test_timed_rotating_handler_configuration PASSED  [ 54%]
+tests/test_logging.py::test_log_files_and_redaction PASSED               [ 55%]
+tests/test_main_endpoints.py::TestHealthEndpoint::test_health_returns_ok_status PASSED [ 56%]
+tests/test_main_endpoints.py::TestHealthEndpoint::test_health_returns_json PASSED [ 57%]
+tests/test_main_endpoints.py::TestVersionEndpoint::test_version_returns_version_info PASSED [ 57%]
+tests/test_main_endpoints.py::TestVersionEndpoint::test_version_matches_package_version PASSED [ 58%]
+tests/test_main_endpoints.py::TestConfigEndpoint::test_config_returns_default_values PASSED [ 59%]
+tests/test_main_endpoints.py::TestConfigEndpoint::test_config_respects_environment_variables PASSED [ 60%]
+tests/test_main_endpoints.py::TestUploadEndpoint::test_upload_valid_pdf PASSED [ 61%]
+tests/test_main_endpoints.py::TestUploadEndpoint::test_upload_invalid_mime_type PASSED [ 61%]
+tests/test_main_endpoints.py::TestUploadEndpoint::test_upload_file_too_large PASSED [ 62%]
+tests/test_main_endpoints.py::TestUploadEndpoint::test_upload_creates_file_with_uuid PASSED [ 63%]
+tests/test_main_endpoints.py::TestChatGetEndpoint::test_chat_get_basic_query PASSED [ 64%]
+tests/test_main_endpoints.py::TestChatGetEndpoint::test_chat_get_without_session_id PASSED [ 65%]
+tests/test_main_endpoints.py::TestChatGetEndpoint::test_chat_get_message_too_long PASSED [ 65%]
+tests/test_main_endpoints.py::TestChatGetEndpoint::test_chat_get_session_id_too_long PASSED [ 66%]
+tests/test_main_endpoints.py::TestGetClientIpFunction::test_get_client_ip_from_forwarded_header PASSED [ 67%]
+tests/test_main_endpoints.py::TestGetClientIpFunction::test_get_client_ip_from_client_host PASSED [ 68%]
+tests/test_main_endpoints.py::TestGetClientIpFunction::test_get_client_ip_strips_whitespace PASSED [ 69%]
+tests/test_main_endpoints.py::TestRemoveFileAfterTtlFunction::test_remove_file_after_ttl_deletes_file PASSED [ 69%]
+tests/test_main_endpoints.py::TestRemoveFileAfterTtlFunction::test_remove_file_after_ttl_handles_missing_file PASSED [ 70%]
+tests/test_main_endpoints.py::TestAnswerWithContextFunction::test_answer_without_llm_returns_context PASSED [ 71%]
+tests/test_main_endpoints.py::TestAnswerWithContextFunction::test_answer_without_context_returns_echo PASSED [ 72%]
+tests/test_main_endpoints.py::TestAnswerWithContextFunction::test_answer_with_llm_uses_openai PASSED [ 73%]
+tests/test_main_endpoints.py::TestAnswerWithContextFunction::test_answer_with_llm_fallback_on_error PASSED [ 73%]
+tests/test_main_endpoints.py::TestAnswerWithContextFunction::test_answer_respects_language_env_var PASSED [ 74%]
+tests/test_main_endpoints.py::TestAnswerWithContextFunction::test_answer_detects_language_when_no_env_var FAILED [ 75%]
+tests/test_migrations.py::test_migration_persistence_and_soft_delete FAILED [ 76%]
+tests/test_multi_tenant_migration.py::test_multi_tenant_migration_creates_tables SKIPPED [ 76%]
+tests/test_multi_tenant_migration.py::test_rls_blocks_cross_tenant_queries SKIPPED [ 77%]
+tests/test_query_cli.py::test_query_cli FAILED                           [ 78%]
+tests/test_rag.py::test_build_context_returns_expected_sources FAILED    [ 79%]
+tests/test_rag.py::test_build_context_filters_out_other_tenants FAILED   [ 80%]
+tests/test_rest_connector.py::test_rest_connector_cursor_pagination PASSED [ 80%]
+tests/test_rest_connector.py::test_rest_connector_page_pagination PASSED [ 81%]
+tests/test_rls_tenant_isolation.py::test_rls_filters_documents_by_tenant FAILED [ 82%]
+tests/test_rls_tenant_isolation.py::test_rls_prevents_cross_tenant_access FAILED [ 83%]
+tests/test_rls_tenant_isolation.py::test_rls_with_join_query FAILED      [ 84%]
+tests/test_seed.py::test_seed_first_run_creates_entities_and_ingests PASSED [ 84%]
+tests/test_seed.py::test_seed_second_run_is_idempotent PASSED            [ 85%]
+tests/test_seed_sample_document.py::test_ensure_sample_document_skips_when_present PASSED [ 86%]
+tests/test_seed_sample_document.py::test_ensure_sample_document_ingests_when_missing PASSED [ 87%]
+tests/test_seed_wait.py::test_wait_for_database_succeeds PASSED          [ 88%]
+tests/test_seed_wait.py::test_wait_for_database_raises_after_attempts PASSED [ 88%]
+tests/test_sql_connector.py::test_sql_connector_streams_rows_and_updates_state PASSED [ 89%]
+tests/test_sql_connector.py::test_sql_connector_honours_cancellation PASSED [ 90%]
+tests/test_storage_integration.py::test_storage_sources_and_jobs FAILED  [ 91%]
+tests/test_tenant_accounts_api.py::test_register_login_refresh_logout PASSED [ 92%]
+tests/test_tenant_accounts_api.py::test_invite_accept_and_rotate PASSED  [ 92%]
+tests/test_tenant_middleware.py::test_middleware_sets_state_and_context PASSED [ 93%]
+tests/test_tenant_middleware.py::test_missing_token_returns_unauthorized PASSED [ 94%]
+tests/test_tenant_middleware.py::test_invalid_token_returns_unauthorized PASSED [ 95%]
+tests/test_tenant_middleware.py::test_public_endpoints_bypass_auth PASSED [ 96%]
+tests/test_tenant_models.py::test_can_persist_organization_and_user PASSED [ 96%]
+tests/test_tenant_models.py::test_unique_subdomain_constraint PASSED     [ 97%]
+tests/test_tenant_models.py::test_unique_email_constraint PASSED         [ 98%]
+tests/test_transcription_connector.py::test_transcription_connector_mock_segments PASSED [ 99%]
+tests/test_transcription_connector.py::test_transcription_connector_with_custom_provider PASSED [100%]
+
+=================================== FAILURES ===================================
+______________________________ test_ask_with_llm _______________________________
+
+client = <starlette.testclient.TestClient object at 0x7a9431ac3470>
+
+>   ???
+E   AssertionError: assert 'Answer the u...n PORTUGUESE.' == 'Answer the u... Reply in en.'
+E     
+E     - Answer the user's question using the supplied context. Reply in en.
+E     ?                                                                 ^^
+E     + Answer the user's question using the supplied context. Reply in PORTUGUESE.
+E     ?                                                                 ^^^^^^^^^^
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_ask.py:87: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     uvicorn.access:app_logging.py:133 {"request_id": "f9f2a680f2094afe95ed2125aefedcd0", "method": "POST", "path": "/api/ask", "status": 200, "latency_ms": 2.99, "client_ip": "testclient", "headers": {"host": "testserver", "accept": "*/*", "accept-encoding": "gzip, deflate", "connection": "keep-alive", "user-agent": "testclient", "x-debug-tenant": "tenant-1", "content-length": "16", "content-type": "application/json"}}
+______________________ test_ask_with_custom_system_prompt ______________________
+
+client = <starlette.testclient.TestClient object at 0x7a942bf27920>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7a942bf25400>
+
+>   ???
+E   AssertionError: assert 'You are a he...n PORTUGUESE.' == 'You are a he... Reply in en.'
+E     
+E     - You are a helper. Answer the user's question using the supplied context. Reply in en.
+E     ?                                                                                   ^^
+E     + You are a helper. Answer the user's question using the supplied context. Reply in PORTUGUESE.
+E     ?                                                                                   ^^^^^^^^^^
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_ask.py:125: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     uvicorn.access:app_logging.py:133 {"request_id": "0048f072352e4b8889f5176ebbf64ebf", "method": "POST", "path": "/api/ask", "status": 200, "latency_ms": 8.1, "client_ip": "testclient", "headers": {"host": "testserver", "accept": "*/*", "accept-encoding": "gzip, deflate", "connection": "keep-alive", "user-agent": "testclient", "x-debug-tenant": "tenant-1", "content-length": "16", "content-type": "application/json"}}
+__________________________ test_chat_with_llm_prompt ___________________________
+
+client = <starlette.testclient.TestClient object at 0x7a94305a8ec0>
+
+>   ???
+E   AssertionError: assert 'Answer the u...n PORTUGUESE.' == 'Answer the u... Reply in en.'
+E     
+E     - Answer the user's question using the supplied context. Reply in en.
+E     ?                                                                 ^^
+E     + Answer the user's question using the supplied context. Reply in PORTUGUESE.
+E     ?                                                                 ^^^^^^^^^^
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_chat.py:185: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     uvicorn.access:app_logging.py:133 {"request_id": "d142977d470c442e850bcc9fcf8b8d1b", "method": "POST", "path": "/api/chat", "status": 200, "latency_ms": 7.91, "client_ip": "3.3.3.3", "headers": {"host": "testserver", "accept": "*/*", "accept-encoding": "gzip, deflate", "connection": "keep-alive", "user-agent": "testclient", "x-forwarded-for": "3.3.3.3", "x-debug-tenant": "tenant-1", "content-length": "23", "content-type": "application/x-www-form-urlencoded"}}
+_____________________ test_chat_with_custom_system_prompt ______________________
+
+client = <starlette.testclient.TestClient object at 0x7a94305572c0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7a9430554b60>
+
+>   ???
+E   AssertionError: assert 'You are a he...n PORTUGUESE.' == 'You are a he... Reply in en.'
+E     
+E     - You are a helper. Answer the user's question using the supplied context. Reply in en.
+E     ?                                                                                   ^^
+E     + You are a helper. Answer the user's question using the supplied context. Reply in PORTUGUESE.
+E     ?                                                                                   ^^^^^^^^^^
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_chat.py:232: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     uvicorn.access:app_logging.py:133 {"request_id": "5ea04732a7cf454fb3f68e27be97e338", "method": "POST", "path": "/api/chat", "status": 200, "latency_ms": 5.05, "client_ip": "3.3.3.4", "headers": {"host": "testserver", "accept": "*/*", "accept-encoding": "gzip, deflate", "connection": "keep-alive", "user-agent": "testclient", "x-forwarded-for": "3.3.3.4", "x-debug-tenant": "tenant-1", "content-length": "24", "content-type": "application/x-www-form-urlencoded"}}
+__ TestAnswerWithContextFunction.test_answer_detects_language_when_no_env_var __
+
+self = <test_main_endpoints.TestAnswerWithContextFunction object at 0x7a9431e492e0>
+
+>   ???
+E   assert 'Reply in fr' in "Answer the user's question using the supplied context. Reply in PORTUGUESE."
+E    +  where "Answer the user's question using the supplied context. Reply in PORTUGUESE." = <test_main_endpoints.TestAnswerWithContextFunction.test_answer_detects_language_when_no_env_var.<locals>.DummyClient object at 0x7a9431b03110>.system_prompt
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_main_endpoints.py:435: AssertionError
+__________________ test_migration_persistence_and_soft_delete __________________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_migration_persistence_and0')
+
+>   ???
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_migrations.py:31: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_migrations.py:25: in _require_conn
+    ???
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_migrations.py:13: in _set_tenant
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [INERROR] (host=db database=pdfkb) at 0x7a942bee0110>
+query = 'SET app.tenant_id = %s'
+params = ('ef004ade-e65e-4f37-96c8-77f0f99c502e',)
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.SyntaxError: syntax error at or near "$1"
+E           LINE 1: SET app.tenant_id = $1
+E                                       ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: SyntaxError
+________________________________ test_query_cli ________________________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7a94302f9cd0>
+capsys = <_pytest.capture.CaptureFixture object at 0x7a94302f8230>
+
+>   ???
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_query_cli.py:54: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [INERROR] (host=db database=pdfkb) at 0x7a942bee2150>
+query = 'INSERT INTO chunks (doc_id, chunk_index, content, embedding) VALUES (%s, %s, %s, %s)'
+params = (UUID('9f5735c7-69fb-4fe5-9ede-18d01d6cc247'), 0, 'chunk1', [1, 0, 0])
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.DatatypeMismatch: column "embedding" is of type vector but expression is of type smallint[]
+E           LINE 1: ...id, chunk_index, content, embedding) VALUES ($1, $2, $3, $4)
+E                                                                               ^
+E           HINT:  You will need to rewrite or cast the expression.
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: DatatypeMismatch
+_________________ test_build_context_returns_expected_sources __________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7a94302f88f0>
+
+>   ???
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_rag.py:82: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [INERROR] (host=db database=pdfkb) at 0x7a942bee2e10>
+query = 'INSERT INTO chunks (tenant_id, doc_id, chunk_index, content, embedding) VALUES (%s, %s, %s, %s, %s)'
+params = ('tenant-a', UUID('6c681d92-e1db-4274-8a30-8f81fc35f834'), 0, 'chunk1', [1, 0, 0])
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.DatatypeMismatch: column "embedding" is of type vector but expression is of type smallint[]
+E           LINE 1: ...chunk_index, content, embedding) VALUES ($1, $2, $3, $4, $5)
+E                                                                               ^
+E           HINT:  You will need to rewrite or cast the expression.
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: DatatypeMismatch
+_________________ test_build_context_filters_out_other_tenants _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7a94302f8230>
+
+>   ???
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_rag.py:128: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [INERROR] (host=db database=pdfkb) at 0x7a9431951910>
+query = 'INSERT INTO chunks (tenant_id, doc_id, chunk_index, content, embedding) VALUES (%s, %s, %s, %s, %s)'
+params = ('tenant-a', UUID('4830da37-9cd8-4cba-9b80-c23126adef57'), 0, 'chunk-local', [1, 0, 0])
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.DatatypeMismatch: column "embedding" is of type vector but expression is of type smallint[]
+E           LINE 1: ...chunk_index, content, embedding) VALUES ($1, $2, $3, $4, $5)
+E                                                                               ^
+E           HINT:  You will need to rewrite or cast the expression.
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: DatatypeMismatch
+_____________________ test_rls_filters_documents_by_tenant _____________________
+
+>   ???
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_rls_tenant_isolation.py:145: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [INERROR] (host=db database=pdfkb) at 0x7a94319528d0>
+query = 'INSERT INTO test_chunks (doc_id, chunk_index, content, embedding, organization_id) VALUES (%s, %s, %s, %s, %s)'
+params = (UUID('1233c082-384d-4310-a7ec-289b0e0de020'), 0, 'chunk from org1', [1, 0, 0], UUID('cacead48-a203-40ab-98b7-26f3e7df46fd'))
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.DatatypeMismatch: column "embedding" is of type vector but expression is of type smallint[]
+E           LINE 1: ...ent, embedding, organization_id) VALUES ($1, $2, $3, $4, $5)
+E                                                                           ^
+E           HINT:  You will need to rewrite or cast the expression.
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: DatatypeMismatch
+____________________ test_rls_prevents_cross_tenant_access _____________________
+
+>   ???
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_rls_tenant_isolation.py:225: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [INERROR] (host=db database=pdfkb) at 0x7a942bee1e50>
+query = 'INSERT INTO test_chunks (doc_id, chunk_index, content, embedding, organization_id) VALUES (%s, %s, %s, %s, %s)'
+params = (UUID('4055efe5-30d6-404b-8071-ca509ef2fad4'), 0, 'secret content', [1, 0, 0], UUID('21bab850-eff1-4180-9673-f1c754bc9bf7'))
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.DatatypeMismatch: column "embedding" is of type vector but expression is of type smallint[]
+E           LINE 1: ...ent, embedding, organization_id) VALUES ($1, $2, $3, $4, $5)
+E                                                                           ^
+E           HINT:  You will need to rewrite or cast the expression.
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: DatatypeMismatch
+___________________________ test_rls_with_join_query ___________________________
+
+>   ???
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_rls_tenant_isolation.py:285: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [INERROR] (host=db database=pdfkb) at 0x7a942bee1010>
+query = 'INSERT INTO test_chunks (doc_id, chunk_index, content, embedding, organization_id) VALUES (%s, %s, %s, %s, %s)'
+params = (UUID('175ccc9f-39ca-4354-8e40-84139ffa2268'), 0, 'org1 chunk', [1, 0, 0], UUID('a54514ed-ee7c-46f5-876b-a7fef990764a'))
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.DatatypeMismatch: column "embedding" is of type vector but expression is of type smallint[]
+E           LINE 1: ...ent, embedding, organization_id) VALUES ($1, $2, $3, $4, $5)
+E                                                                           ^
+E           HINT:  You will need to rewrite or cast the expression.
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: DatatypeMismatch
+________________________ test_storage_sources_and_jobs _________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_storage_sources_and_jobs0')
+
+>   ???
+
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_storage_integration.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+C:\Users\alexa\Dropbox\workspace\dev-agentes\pdf-knowledge-kit\tests\test_storage_integration.py:15: in _set_tenant
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [INERROR] (host=db database=pdfkb) at 0x7a942bee1cd0>
+query = 'SET app.tenant_id = %s'
+params = ('54168380-0766-4b77-8667-8dfa0cbd5871',)
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.SyntaxError: syntax error at or near "$1"
+E           LINE 1: SET app.tenant_id = $1
+E                                       ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: SyntaxError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/passlib/utils/__init__.py:854
+  /usr/local/lib/python3.12/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+tests/test_admin_ingest_api.py::test_role_enforcement
+  /usr/local/lib/python3.12/site-packages/passlib/handlers/argon2.py:716: DeprecationWarning: Accessing argon2.__version__ is deprecated and will be removed in a future release. Use importlib.metadata directly to query for argon2-cffi's packaging metadata.
+    _argon2_cffi.__version__, max_version)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_ask.py::test_ask_with_llm - AssertionError: assert 'Answer ...
+FAILED tests/test_ask.py::test_ask_with_custom_system_prompt - AssertionError...
+FAILED tests/test_chat.py::test_chat_with_llm_prompt - AssertionError: assert...
+FAILED tests/test_chat.py::test_chat_with_custom_system_prompt - AssertionErr...
+FAILED tests/test_main_endpoints.py::TestAnswerWithContextFunction::test_answer_detects_language_when_no_env_var
+FAILED tests/test_migrations.py::test_migration_persistence_and_soft_delete
+FAILED tests/test_query_cli.py::test_query_cli - psycopg.errors.DatatypeMisma...
+FAILED tests/test_rag.py::test_build_context_returns_expected_sources - psyco...
+FAILED tests/test_rag.py::test_build_context_filters_out_other_tenants - psyc...
+FAILED tests/test_rls_tenant_isolation.py::test_rls_filters_documents_by_tenant
+FAILED tests/test_rls_tenant_isolation.py::test_rls_prevents_cross_tenant_access
+FAILED tests/test_rls_tenant_isolation.py::test_rls_with_join_query - psycopg...
+FAILED tests/test_storage_integration.py::test_storage_sources_and_jobs - psy...
+====== 13 failed, 109 passed, 4 skipped, 2 warnings in 149.07s (0:02:29) =======
+

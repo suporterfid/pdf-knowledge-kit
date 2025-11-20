@@ -404,7 +404,7 @@ class TestAnswerWithContextFunction:
             assert "Reply in pt" in dummy_client.system_prompt
             assert used_llm is True
 
-    def test_answer_detects_language_when_no_env_var(self):
+    def test_answer_detects_language_when_no_env_var(self, monkeypatch):
         """Test that language is detected when OPENAI_LANG is not set."""
 
         class DummyCompletion:
@@ -427,6 +427,7 @@ class TestAnswerWithContextFunction:
                 return DummyCompletion()
 
         dummy_client = DummyClient()
+        monkeypatch.delenv("OPENAI_LANG", raising=False)
         with (
             patch("app.main.client", dummy_client),
             patch("app.main.detect", lambda _: "fr"),
