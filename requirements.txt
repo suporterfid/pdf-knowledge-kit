@@ -8,7 +8,7 @@ alembic>=1.12
 pgvector>=0.2.5
 pypdf>=4.2
 python-dotenv>=1.0
-fastembed==0.7.3
+fastembed==0.7.4
 tqdm>=4.66
 fastapi>=0.110
 sse-starlette>=1.6
