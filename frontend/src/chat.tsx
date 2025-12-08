@@ -12,6 +12,11 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   status?: 'streaming' | 'done';
+  sources?: Array<{
+    path: string;
+    chunk_index?: number;
+    distance?: number;
+  }>;
 }
 
 export interface Source {
@@ -42,29 +47,72 @@ export function ChatProvider({
   children: React.ReactNode;
   conversationId?: string;
 }) {
-  const storageKey = `messages-${conversationId}`;
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const stored = localStorage.getItem(storageKey);
-    return stored ? JSON.parse(stored) : [];
-  });
+  const [messages, setMessages] = useState<Message[]>([]);
   const [sources, setSources] = useState<Source[] | null>(null);
   const sessionId = conversationId;
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
   const controllerRef = useRef<AbortController | null>(null);
   const lastRequestRef = useRef<{ text: string; files: File[] } | null>(null);
   const { UPLOAD_MAX_SIZE, UPLOAD_MAX_FILES } = useConfig();
   const apiFetch = useAuthenticatedFetch();
 
+  // Load session from backend on mount or when sessionId changes
   useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(messages));
-  }, [messages, storageKey]);
+    const loadSession = async () => {
+      try {
+        setIsLoadingSession(true);
+        const res = await apiFetch(`/api/chat-sessions/${sessionId}`);
+        if (res.ok) {
+          const data = await res.json();
+          // Convert backend format to frontend format
+          const loadedMessages = data.messages.map((msg: any) => ({
+            role: msg.role,
+            content: msg.content,
+            status: 'done' as const,
+            sources: msg.sources,
+          }));
+          setMessages(loadedMessages);
+        } else if (res.status === 404) {
+          // Session doesn't exist yet, create it
+          const createRes = await apiFetch('/api/chat-sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: `Chat ${new Date().toLocaleString()}` }),
+          });
+          if (createRes.ok) {
+            setMessages([]);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load chat session:', err);
+        // Fall back to empty messages if loading fails
+        setMessages([]);
+      } finally {
+        setIsLoadingSession(false);
+      }
+    };
 
+    loadSession();
+  }, [sessionId, apiFetch]);
+
+  // Save messages to backend whenever they change
   useEffect(() => {
-    const stored = localStorage.getItem(storageKey);
-    setMessages(stored ? JSON.parse(stored) : []);
-    setSources(null);
-  }, [storageKey]);
+    if (isLoadingSession || messages.length === 0) return;
+
+    const saveSession = async () => {
+      try {
+        // We save messages individually as they're added via the add_message endpoint
+        // This effect is mainly for syncing state
+      } catch (err) {
+        console.error('Failed to save chat session:', err);
+      }
+    };
+
+    const timer = setTimeout(saveSession, 500);
+    return () => clearTimeout(timer);
+  }, [messages, isLoadingSession, apiFetch]);
 
   const send = async (text: string, files: File[] = []) => {
     if (text.length > 5000) {
@@ -145,6 +193,9 @@ export function ChatProvider({
       if (!reader) throw new Error('No reader');
       let buffer = '';
       let doneReading = false;
+      let assistantContent = '';
+      let assistantSources: Source[] = [];
+
       while (!doneReading) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -159,6 +210,7 @@ export function ChatProvider({
           const event = eventLine.replace('event:', '').trim();
           const data = dataLine.replace('data:', '').trim();
           if (event === 'token') {
+            assistantContent += data;
             setMessages((msgs) => {
               const updated = [...msgs];
               const last = updated[updated.length - 1];
@@ -169,7 +221,8 @@ export function ChatProvider({
               return updated;
             });
           } else if (event === 'sources') {
-            setSources(JSON.parse(data));
+            assistantSources = JSON.parse(data);
+            setSources(assistantSources);
           } else if (event === 'done') {
             doneReading = true;
             setIsStreaming(false);
@@ -180,6 +233,9 @@ export function ChatProvider({
               return updated;
             });
             controllerRef.current = null;
+
+            // Save messages to backend
+            saveMessagesToBackend(text, assistantContent, assistantSources);
           } else if (event === 'error') {
             doneReading = true;
             setError(data || 'Erro desconhecido');
@@ -208,6 +264,38 @@ export function ChatProvider({
       }
       setIsStreaming(false);
       controllerRef.current = null;
+    }
+  };
+
+  const saveMessagesToBackend = async (
+    userMessage: string,
+    assistantMessage: string,
+    assistantSources: Source[]
+  ) => {
+    try {
+      // Save user message
+      await apiFetch(`/api/chat-sessions/${sessionId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: 'user',
+          content: userMessage,
+        }),
+      });
+
+      // Save assistant message
+      await apiFetch(`/api/chat-sessions/${sessionId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: 'assistant',
+          content: assistantMessage,
+          sources: assistantSources,
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to save messages to backend:', err);
+      // Don't interrupt user experience if saving fails
     }
   };
 
