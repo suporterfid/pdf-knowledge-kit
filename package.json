@@ -22,7 +22,7 @@
   "homepage": "https://github.com/suporterfid/pdf-knowledge-kit#readme",
   "dependencies": {
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
+    "react-dom": "^19.2.1",
     "typescript": "^5.9.2"
   },
   "devDependencies": {
