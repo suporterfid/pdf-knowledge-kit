@@ -81,7 +81,13 @@ def main(argv: list[str] | None = None) -> None:
 
     tenant_id = args.tenant_id
     if not tenant_id:
-        parser.error("--tenant-id is required (or set TENANT_ID)")
+        # Provide a sensible default for development environments
+        if os.getenv("ENVIRONMENT") == "development" or os.getenv("DEBUG") == "1":
+            # Use a fixed UUID for local development
+            tenant_id = "00000000-0000-0000-0000-000000000001"
+            log.info("Using default development tenant ID: %s", tenant_id)
+        else:
+            parser.error("--tenant-id is required (or set TENANT_ID)")
 
     if args.docs:
         doc_dir = Path(args.docs)

@@ -54,6 +54,7 @@ from .routers import (
     admin_ingest_api,
     agents,
     auth_api,
+    chat_sessions,
     conversations,
     feedback_api,
     tenant_accounts,
@@ -144,6 +145,7 @@ if admin_ui_origins:
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.include_router(admin_ingest_api.router)
 app.include_router(auth_api.router)
+app.include_router(chat_sessions.router)
 app.include_router(feedback_api.router)
 app.include_router(agents.router)
 app.include_router(conversations.router)
@@ -471,16 +473,12 @@ async def chat_stream(
                             "completion_tokens": u.completion_tokens,
                             "total_tokens": u.total_tokens,
                         }
-            except Exception:
-                answer = context or f"You asked: {q}"
-                for token in answer.split():
-                    yield token
-                n = len(answer.split())
-                usage = {
-                    "prompt_tokens": 0,
-                    "completion_tokens": n,
-                    "total_tokens": n,
-                }
+            except Exception as exc:  # pragma: no cover - openai optional
+                logger.warning("OpenAI chat completion failed: %s", exc)
+                # Signal error to frontend via SSE
+                raise RuntimeError(
+                    f"LLM service unavailable: {str(exc)}"
+                ) from exc
         else:
             answer = context or f"You asked: {q}"
             for token in answer.split():
@@ -504,8 +502,13 @@ async def chat_stream(
                 ) + "\n\n"
             yield "event: done\n" + "data: " + json.dumps({"usage": usage}) + "\n\n"
         except Exception as e:
-            msg = str(e).replace("\n", " ")
-            yield f"event: error\ndata: {msg}\n\n"
+            logger.error("Chat stream error: %s", e)
+            error_msg = str(e).replace("\n", " ")
+            error_data = json.dumps(
+                {"error": error_msg, "type": type(e).__name__},
+                ensure_ascii=False,
+            )
+            yield f"event: error\ndata: {error_data}\n\n"
 
     return StreamingResponse(
         event_stream(),
