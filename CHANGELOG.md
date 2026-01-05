@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- AI-assisted development documentation infrastructure (`docs/`)
+  - STATUS.md — Current project status and health indicators
+  - ARCHITECTURE.md — Comprehensive system architecture documentation
+  - ROADMAP.md — Development roadmap with phases and milestones
+  - BACKLOG.md — Prioritized development backlog with effort estimates
+  - TECHNICAL_DEBT.md — Technical debt registry with remediation plans
+  - TECH_STACK_STANDARDS.md — Coding conventions and standards
+  - Prompt templates (01-ANALYSIS.md, 02-UPDATE.md, 03-IMPLEMENT.md)
+  - Updated AGENTS.md with AI agent development guidelines
 - Rate limiting e proteção contra infinite loops no AuthProvider (ISSUE-003)
   - Timeout de 10 segundos para requisições de refresh
   - Mínimo de 5 segundos entre tentativas de refresh

@@ -9,4 +9,7 @@ frontend/dist/
 .env
 /docs
 !docs/issues/
+!docs/development/
+!docs/prompts/
+!docs/TECH_STACK_STANDARDS.md
 .env
